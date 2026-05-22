@@ -1,0 +1,21 @@
+# Mengabaikan Virtual Environment Python
+venv/
+ENV/
+env/
+
+# Mengabaikan konfigurasi rahasia
+.env
+
+# Mengabaikan database lokal Flask
+instance/
+*.db
+
+# Mengabaikan sampah sisa running Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Mengabaikan folder log atau debug
+*.log
+.vscode/
