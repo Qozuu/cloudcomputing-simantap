@@ -20,11 +20,15 @@ def create_app(config_class=Config):
     from app.blueprints.super_admin.routes import super_admin_bp
     from app.blueprints.keuangan.routes import keuangan_bp
     from app.blueprints.pemeliharaan.routes import pemeliharaan_bp
+    from app.blueprints.fasilitas.routes import fasilitas_bp
+    from app.blueprints.keamanan.routes import keamanan_bp
 
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(super_admin_bp, url_prefix='/api/super_admin')
     app.register_blueprint(keuangan_bp, url_prefix='/api/keuangan')
     app.register_blueprint(pemeliharaan_bp, url_prefix='/api/pemeliharaan')
+    app.register_blueprint(fasilitas_bp, url_prefix='/api/fasilitas')
+    app.register_blueprint(keamanan_bp, url_prefix='/api/keamanan')
 
     with app.app_context():
         from app import models

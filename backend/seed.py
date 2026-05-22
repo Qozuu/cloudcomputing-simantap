@@ -27,6 +27,15 @@ with app.app_context():
     t2 = Tagihan(unit_id=unit2.id, bulan="Mei 2026", jumlah_tagihan=60000000.0, status="paid")
     t3 = Tagihan(unit_id=unit1.id, bulan="Mei 2026", jumlah_tagihan=25500000.0, status="unpaid")
     db.session.add_all([t1, t2, t3])
+
+    print("Menyuntikkan data fasilitas dummy...")
+    from app.models.fasilitas import Fasilitas
+    f1 = Fasilitas(nama_fasilitas="Kolam Renang Tower A", kapasitas=15, status_fasilitas="Tersedia")
+    f2 = Fasilitas(nama_fasilitas="Lapangan Tenis lt. 5", kapasitas=4, status_fasilitas="Tersedia")
+    db.session.add_all([f1, f2])
+    
+    db.session.commit()
+    print("🟢 SEEDING DATA PARIPURNA BERHASIL!")
     
     db.session.commit()
     print("🟢 SEEDING DATA BERHASIL! Database SiManTap siap digunakan.")
