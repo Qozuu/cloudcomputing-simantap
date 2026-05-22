@@ -34,6 +34,17 @@ with app.app_context():
     f2 = Fasilitas(nama_fasilitas="Lapangan Tenis lt. 5", kapasitas=4, status_fasilitas="Tersedia")
     db.session.add_all([f1, f2])
     
+    print("Menyuntikkan data staff dan jadwal tugas...")
+    from app.models.jadwal import Staff, JadwalTugas
+    st1 = Staff(nama_staff="Pak Bambang", posisi="Satpam", nomer_hp="08123456789")
+    st2 = Staff(nama_staff="Mbak Sri", posisi="Cleaning Service", nomer_hp="08987654321")
+    db.session.add_all([st1, st2])
+    db.session.flush() # Ambil ID secara real-time sebelum commit
+    
+    j1 = JadwalTugas(staff_id=st1.id, area="Pintu Gerbang Utama", hari_tugas="Senin", shift="Malam (15:00 - 23:00)")
+    j2 = JadwalTugas(staff_id=st2.id, area="Kolam Renang Tower A", hari_tugas="Selasa", shift="Pagi (07:00 - 15:00)")
+    db.session.add_all([j1, j2])
+    
     db.session.commit()
     print("🟢 SEEDING DATA PARIPURNA BERHASIL!")
     
