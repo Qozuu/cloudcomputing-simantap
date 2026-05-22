@@ -5,3 +5,4 @@ from app.models.laporan import Laporan
 from app.models.fasilitas import Fasilitas, Reservasi
 from app.models.visitor import Visitor
 from app.models.jadwal import Staff, JadwalTugas
+from app.models.incident import Incident

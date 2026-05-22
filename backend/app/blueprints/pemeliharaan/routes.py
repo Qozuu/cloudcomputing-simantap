@@ -1,50 +1,53 @@
 from flask import Blueprint, request
 from app import db
-from app.models.laporan import Laporan
+from app.models.incident import Incident
 from app.middleware.auth import token_required
 from app.utils.response_helper import success_response, error_response
 
-pemeliharaan_bp = Blueprint('pemeliharaan', __name__)
+pemeliharaan_bp = Blueprint('pemeliharaan_fitur', __name__)
 
-# 1. Fitur Penghuni: Kirim Laporan Kerusakan
+@pemeliharaan_bp.route('/laporan', methods=['GET'])
+@token_required()
+def get_all_incidents(current_user):
+    # Kalau dia penghuni, cuma bisa lihat laporan dia sendiri. Kalau admin bisa lihat semua.
+    if current_user.role == 'penghuni':
+        incidents = Incident.query.filter_by(user_id=current_user.id).all()
+    else:
+        incidents = Incident.query.all()
+        
+    return success_response([i.to_dict() for i in incidents], "Daftar laporan insiden berhasil dimuat.")
+
 @pemeliharaan_bp.route('/laporan', methods=['POST'])
 @token_required(allowed_roles=['penghuni', 'super_admin'])
-def kirim_laporan(current_user):
+def buat_laporan_insiden(current_user):
     data = request.get_json() or {}
-    if not data.get('judul') or not data.get('deskripsi') or not data.get('unit_id'):
-        return error_response("Judul, deskripsi, dan unit_id wajib diisi!", 400)
+    if not data.get('judul_laporan') or not data.get('deskripsi') or not data.get('lokasi'):
+        return error_response("Judul, deskripsi, dan lokasi insiden wajib diisi!", 400)
         
-    laporan = Laporan(
+    new_incident = Incident(
         user_id=current_user.id,
-        unit_id=data['unit_id'],
-        judul=data['judul'],
-        deskripsi=data['deskripsi']
+        judul_laporan=data['judul_laporan'],
+        deskripsi=data['deskripsi'],
+        lokasi=data['lokasi'],
+        tingkat_darurat=data.get('tingkat_darurat', 'Sedang')
     )
-    db.session.add(laporan)
+    db.session.add(new_incident)
     db.session.commit()
-    return success_response(laporan.to_dict(), "Laporan kerusakan berhasil dikirim!", 201)
+    return success_response(new_incident.to_dict(), "Laporan insiden berhasil dikirim ke sistem!", 201)
 
-# 2. Fitur Admin: Lihat Semua Laporan Masuk
-@pemeliharaan_bp.route('/laporan', methods=['GET'])
+@pemeliharaan_bp.route('/laporan/<int:incident_id>/status', methods=['PUT'])
 @token_required(allowed_roles=['super_admin'])
-def lihat_semua_laporan(current_user):
-    laporans = Laporan.query.all()
-    return success_response([l.to_dict() for l in laporans], "Semua laporan berhasil dimuat.")
-
-# 3. Fitur Admin: Ubah Status (Pending -> On Progress -> Resolved)
-@pemeliharaan_bp.route('/laporan/<int:id>/status', methods=['PUT'])
-@token_required(allowed_roles=['super_admin'])
-def update_status_laporan(current_user, id):
+def update_status_insiden(current_user, incident_id):
     data = request.get_json() or {}
-    status_baru = data.get('status')
+    status_baru = data.get('status_laporan')
     
-    if status_baru not in ['Pending', 'On Progress', 'Resolved']:
-        return error_response("Status tidak valid!", 400)
+    if not status_baru:
+        return error_response("Status laporan baru wajib dicantumkan!", 400)
         
-    laporan = Laporan.query.get(id)
-    if not laporan:
-        return error_response("Laporan tidak ditemukan!", 404)
+    incident = Incident.query.get(incident_id)
+    if not incident:
+        return error_response("Laporan insiden tidak ditemukan!", 404)
         
-    laporan.status = status_baru
+    incident.status_laporan = status_baru
     db.session.commit()
-    return success_response(laporan.to_dict(), f"Status laporan berhasil diubah menjadi {status_baru}!")
+    return success_response(incident.to_dict(), f"Status laporan berhasil diubah menjadi: {status_baru}")

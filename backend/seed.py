@@ -12,7 +12,7 @@ with app.app_context():
     
     print("Membuat akun pengguna baru...")
     admin = User(username="oliveadmin", email="olive@simantap.com", role="super_admin")
-    admin.set_password("rahasia123") # Password login kamu nanti
+    admin.set_password("rahasia123") 
     db.session.add(admin)
     
     print("Membuat data unit apartemen...")
@@ -20,7 +20,7 @@ with app.app_context():
     unit2 = Unit(nomer_unit="B-205", tower="Bonsai", tipe_unit="Studio", nama_pemilik="Budi Setiadi")
     db.session.add(unit1)
     db.session.add(unit2)
-    db.session.flush() # Ambil ID unit secara instan untuk relasi Foreign Key
+    db.session.flush() 
     
     print("Menyuntikkan data keuangan Rp 124.500.000...")
     t1 = Tagihan(unit_id=unit1.id, bulan="Mei 2026", jumlah_tagihan=64500000.0, status="paid")
@@ -39,12 +39,17 @@ with app.app_context():
     st1 = Staff(nama_staff="Pak Bambang", posisi="Satpam", nomer_hp="08123456789")
     st2 = Staff(nama_staff="Mbak Sri", posisi="Cleaning Service", nomer_hp="08987654321")
     db.session.add_all([st1, st2])
-    db.session.flush() # Ambil ID secara real-time sebelum commit
+    db.session.flush()
     
     j1 = JadwalTugas(staff_id=st1.id, area="Pintu Gerbang Utama", hari_tugas="Senin", shift="Malam (15:00 - 23:00)")
     j2 = JadwalTugas(staff_id=st2.id, area="Kolam Renang Tower A", hari_tugas="Selasa", shift="Pagi (07:00 - 15:00)")
     db.session.add_all([j1, j2])
     
+    print("Menyuntikkan data insiden / laporan kerusakan...")
+
+    from app.models.incident import Incident
+    inc1 = Incident(user_id=2, judul_laporan="Lift Mati Total", deskripsi="Lift sebelah barat Tower A tidak mau terbuka sejak jam 8 malam.", lokasi="Lobby Lift Barat Tower A", tingkat_darurat="Tinggi")
+
     db.session.commit()
     print("🟢 SEEDING DATA PARIPURNA BERHASIL!")
     

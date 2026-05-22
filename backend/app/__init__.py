@@ -24,15 +24,16 @@ def create_app(config_class=Config):
     from app.blueprints.keamanan.routes import keamanan_bp
     from app.blueprints.kebersihan.routes import kebersihan_bp
     from app.blueprints.sdm.routes import sdm_bp
+    from app.blueprints.pemeliharaan.routes import pemeliharaan_bp
 
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(super_admin_bp, url_prefix='/api/super_admin')
     app.register_blueprint(keuangan_bp, url_prefix='/api/keuangan')
-    app.register_blueprint(pemeliharaan_bp, url_prefix='/api/pemeliharaan')
     app.register_blueprint(fasilitas_bp, url_prefix='/api/fasilitas')
     app.register_blueprint(keamanan_bp, url_prefix='/api/keamanan')
     app.register_blueprint(kebersihan_bp, url_prefix='/api/kebersihan')
     app.register_blueprint(sdm_bp, url_prefix='/api/sdm')
+    app.register_blueprint(pemeliharaan_bp, url_prefix='/api/pemeliharaan')
 
     with app.app_context():
         from app import models
