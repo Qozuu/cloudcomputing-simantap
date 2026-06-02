@@ -6,3 +6,6 @@ from app.models.fasilitas import Fasilitas, Reservasi
 from app.models.visitor import Visitor
 from app.models.jadwal import Staff, JadwalTugas
 from app.models.incident import Incident
+from app.models.audit_log import AuditLogs
+from app.models.notification import Notifications
+from app.models.conversation import Conversations, ConversationParticipants, Messages
