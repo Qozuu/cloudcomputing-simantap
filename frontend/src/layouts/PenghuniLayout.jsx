@@ -61,7 +61,8 @@ export default function PenghuniLayout() {
       icon: Building
     },
     {
-      name: 'Customer Service',
+      // ✨ PERUBAHAN: Nama menu diubah menjadi 'Kontak Pengelola' agar selaras dengan halaman utama
+      name: 'Kontak Pengelola',
       path: '/penghuni/cs',
       icon: MessageSquare,
       badge: 1

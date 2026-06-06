@@ -2,13 +2,14 @@ import React, { useState } from 'react';
 import { AlertCircle, Calendar, HelpCircle, Loader2, Search, DollarSign } from 'lucide-react';
 
 export default function PendapatanFasilitas() {
+  // Data unit telah disesuaikan dengan format halaman GM (4 digit angka)
   const [reservations, setReservations] = useState([
-    { id: 'RSV-0982', facility: 'Aula Clubhouse', unit: '12A', name: 'Hendra Gunawan', date: '30 Mei 2026', time: '09:00 - 13:00', price: 500000, status: 'Menunggu' },
-    { id: 'RSV-0981', facility: 'Lapangan Tenis', unit: '05B', name: 'Maya Sari', date: '29 Mei 2026', time: '16:00 - 18:00', price: 150000, status: 'Lunas' },
-    { id: 'RSV-0980', facility: 'Area BBQ Rooftop', unit: '18C', name: 'Rudi Hartono', date: '28 Mei 2026', time: '18:00 - 22:00', price: 300000, status: 'Menunggu' },
-    { id: 'RSV-0979', facility: 'Lapangan Tenis', unit: '22B', name: 'Fajar Nugraha', date: '27 Mei 2026', time: '08:00 - 10:00', price: 150000, status: 'Lunas' },
-    { id: 'RSV-0978', facility: 'Ruang Serbaguna', unit: '11B', name: 'Anita Kusuma', date: '26 Mei 2026', time: '13:00 - 17:00', price: 400000, status: 'Lunas' },
-    { id: 'RSV-0977', facility: 'Area BBQ Rooftop', unit: '09C', name: 'Bima Rahardjo', date: '25 Mei 2026', time: '17:00 - 21:00', price: 300000, status: 'Menunggu' }
+    { id: 'RSV-0982', facility: 'Aula Clubhouse', unit: '1012', name: 'Hendra Gunawan', date: '30 Mei 2026', time: '09:00 - 13:00', price: 500000, status: 'Menunggu' },
+    { id: 'RSV-0981', facility: 'Lapangan Tenis', unit: '1005', name: 'Maya Sari', date: '29 Mei 2026', time: '16:00 - 18:00', price: 150000, status: 'Lunas' },
+    { id: 'RSV-0980', facility: 'Area BBQ Rooftop', unit: '1218', name: 'Rudi Hartono', date: '28 Mei 2026', time: '18:00 - 22:00', price: 300000, status: 'Menunggu' },
+    { id: 'RSV-0979', facility: 'Lapangan Tenis', unit: '1022', name: 'Fajar Nugraha', date: '27 Mei 2026', time: '08:00 - 10:00', price: 150000, status: 'Lunas' },
+    { id: 'RSV-0978', facility: 'Ruang Serbaguna', unit: '1102', name: 'Anita Kusuma', date: '26 Mei 2026', time: '13:00 - 17:00', price: 400000, status: 'Lunas' },
+    { id: 'RSV-0977', facility: 'Area BBQ Rooftop', unit: '1093', name: 'Bima Rahardjo', date: '25 Mei 2026', time: '17:00 - 21:00', price: 300000, status: 'Menunggu' }
   ]);
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -41,13 +42,9 @@ export default function PendapatanFasilitas() {
     const targetFacility = confirmTarget.facility;
     const targetName = confirmTarget.name;
 
-    // Close confirmation dialog
     setConfirmTarget(null);
-
-    // Set row loading state
     setLoadingId(targetId);
 
-    // Simulate 1.5s lag
     setTimeout(() => {
       setReservations(prev =>
         prev.map(r => {
@@ -67,7 +64,6 @@ export default function PendapatanFasilitas() {
     setTimeout(() => setSuccessToast(''), 3000);
   };
 
-  // Filter reservations
   const filteredReservations = reservations.filter(r => {
     const matchesFacility = facilityFilter === 'Semua' || r.facility === facilityFilter;
     const matchesSearch = 
@@ -77,7 +73,6 @@ export default function PendapatanFasilitas() {
     return matchesFacility && matchesSearch;
   });
 
-  // Calculation for stats
   const totalIncome = reservations.reduce((sum, r) => sum + r.price, 0);
   const lunasIncome = reservations.filter(r => r.status === 'Lunas').reduce((sum, r) => sum + r.price, 0);
   const pendingIncome = reservations.filter(r => r.status === 'Menunggu').reduce((sum, r) => sum + r.price, 0);
@@ -115,16 +110,16 @@ export default function PendapatanFasilitas() {
             <option value="Ruang Serbaguna">Ruang Serbaguna</option>
           </select>
 
-          {/* Search box */}
-          <div className="relative">
+          {/* Kolom Pencarian dengan Fleksibilitas Struktur Mandiri */}
+          <div className="flex items-center bg-white border border-[#E5E7EB] rounded-xl px-3 py-1.5 w-60 shadow-sm focus-within:ring-1 focus-within:ring-gray-400">
+            <Search className="text-gray-400 mr-2 flex-shrink-0" size={14} />
             <input
               type="text"
               placeholder="Cari ID, unit, atau nama..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="input-modern pl-8 w-56 py-2 text-xs"
+              className="w-full bg-transparent outline-none border-none p-0 text-xs text-gray-700 placeholder-gray-400"
             />
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" size={14} />
           </div>
         </div>
 

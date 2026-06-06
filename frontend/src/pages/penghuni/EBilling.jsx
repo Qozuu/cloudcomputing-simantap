@@ -64,13 +64,13 @@ export default function EBilling() {
         
         <div>
           <span className="text-[10px] font-extrabold text-[#FAF6F0]/80 uppercase tracking-widest block mb-1">
-            Tagihan Bulan April 2026 — Unit 12A Tower A
+            Tagihan Bulan April 2026 — Unit 1012 Tower A
           </span>
           <h2 className="text-4xl font-extrabold tracking-tight text-white">Rp 920.000</h2>
         </div>
         
         <p className="text-[11px] text-[#FAF6F0]/80 font-medium tracking-wide mt-4">
-          Sudah dibayar · 11 April 2026 via Transfer Bank
+          Lunas · 11 April 2026
         </p>
       </div>
 
@@ -108,21 +108,7 @@ export default function EBilling() {
             <span className="text-base font-extrabold text-ink">Rp 920.000</span>
           </div>
         </div>
-
-        {/* Confirmation Banner */}
-        <div className="bg-[#E8FAF3] border border-soft rounded-2xl px-4 py-3.5 flex items-start gap-3">
-          <div className="w-6 h-6 rounded-full bg-emerald-500/15 text-emerald-700 flex items-center justify-center flex-shrink-0 mt-0.5">
-            <CheckCircle2 size={14} className="stroke-[3]" />
-          </div>
-          <div>
-            <p className="text-xs font-bold text-emerald-800">
-              IPL & Parkir Sudah Dikonfirmasi
-            </p>
-            <p className="text-[10px] text-muted font-medium mt-0.5">
-              ID TRX-202004-0012 · 19 Apr 2026 · Transfer Bank BCA
-            </p>
-          </div>
-        </div>
+        {/* Banner konfirmasi verifikasi manual di bagian ini telah dihapus sepenuhnya */}
       </div>
 
       {/* Histori Pembayaran IPL */}
@@ -207,7 +193,7 @@ export default function EBilling() {
               <div className="bg-app-bg p-4 rounded-2xl border border-soft space-y-3 font-semibold text-xs text-ink">
                 <div className="flex justify-between">
                   <span className="text-muted">Hunian</span>
-                  <span className="text-ink">Unit 12A (Tower A)</span>
+                  <span className="text-ink">Unit 1012 (Tower A)</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted">Periode Tagihan</span>

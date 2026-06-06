@@ -60,19 +60,20 @@ export default function Pengumuman() {
     <div className="space-y-6 animate-fade-up">
       {/* Search & Filter Header */}
       <div className="card-section p-6 flex flex-col md:flex-row gap-4 items-stretch md:items-center justify-between">
-        {/* Search */}
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" size={16} />
+        
+        {/* Search - FIXED: Teks digeser ke kanan agar tidak menabrak ikon */}
+        <div className="relative flex-1 max-w-md flex items-center">
+          <Search className="absolute left-3.5 text-muted pointer-events-none" size={16} />
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Cari pengumuman..."
-            className="input-modern pl-9"
+            className="input-modern w-full !pl-10"
           />
         </div>
 
-        {/* Category Filters */}
+        {/* Category Filters - FIXED: Bersih dari typo kurung kurawal */}
         <div className="flex flex-wrap gap-1.5">
           {categories.map((cat) => (
             <button

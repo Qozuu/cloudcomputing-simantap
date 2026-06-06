@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User, CheckCircle2, Shield, X, Save } from 'lucide-react';
+import { User, CheckCircle2, Shield, X, Save, AlertCircle } from 'lucide-react';
 
 export default function ProfilSaya() {
   const [successToast, setSuccessToast] = useState('');
@@ -7,51 +7,93 @@ export default function ProfilSaya() {
 
   // Profile data state
   const [profile, setProfile] = useState({
-    ktp: '3578xxxx12345678',
-    phone: '0889-7528-5486',
+    name: 'Hendra Gunawan', 
+    ktp: 'Belum diisi',     
+    phone: '0889-7528-5486', 
     email: 'hendrag@email.com',
     whatsapp: '0889-7528-5486',
-    emergencyContact: 'Dewi Gunawan · 082345678901',
-    emergencyName: 'Dewi Gunawan',
-    emergencyPhone: '082345678901'
+    emergencyContact: 'Belum diatur',
+    emergencyName: '',
+    emergencyPhone: '',
+    vehicle: '-', // ✨ SEKARANG BISA DIEDIT: Masuk ke data personal penghuni
+    
+    // Data Hunian di bawah dikunci mati (Sistem / Admin Keuangan)
+    unit: '12A',
+    tower: 'Tower A',
+    layer: 'Lantai 12',
+    space: '42 m²',
+    joinDate: '28 Mei 2026'
   });
 
   const [tempProfile, setTempProfile] = useState({ ...profile });
 
   const handleOpenEdit = () => {
-    setTempProfile({ ...profile });
+    setTempProfile({ 
+      ...profile,
+      ktp: profile.ktp === 'Belum diisi' ? '' : profile.rawKtp || profile.ktp,
+      vehicle: profile.vehicle === '-' ? '' : profile.vehicle
+    });
     setEditModalOpen(true);
   };
 
   const handleEditSubmit = (e) => {
     e.preventDefault();
+
+    // Logic menyamarkan KTP (Sensor xxxx)
+    let formattedKtp = tempProfile.ktp;
+    let rawKtpSaved = tempProfile.ktp;
+    if (tempProfile.ktp && tempProfile.ktp.length >= 8) {
+      formattedKtp = `${tempProfile.ktp.substring(0, 4)}xxxx${tempProfile.ktp.substring(tempProfile.ktp.length - 8)}`;
+    }
+
     setProfile({
       ...profile,
+      ktp: formattedKtp || 'Belum diisi',
+      rawKtp: rawKtpSaved, 
       phone: tempProfile.phone,
       email: tempProfile.email,
       whatsapp: tempProfile.whatsapp,
+      vehicle: tempProfile.vehicle || '-', // ✨ Simpan data kendaraan baru
       emergencyName: tempProfile.emergencyName,
       emergencyPhone: tempProfile.emergencyPhone,
-      emergencyContact: `${tempProfile.emergencyName} · ${tempProfile.emergencyPhone}`
+      emergencyContact: tempProfile.emergencyName && tempProfile.emergencyPhone
+        ? `${tempProfile.emergencyName} · ${tempProfile.emergencyPhone}`
+        : 'Belum diatur'
     });
+    
     setEditModalOpen(false);
     setSuccessToast('Profil berhasil diperbarui!');
     setTimeout(() => setSuccessToast(''), 3000);
   };
 
+  const getInitials = (name) => {
+    return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+  };
+
   return (
     <div className="space-y-6 animate-fade-up relative">
       
+      {/* Banner Notifikasi */}
+      {profile.ktp === 'Belum diisi' && (
+        <div className="flex items-center gap-3 p-4 bg-amber-50 border border-amber-200 rounded-2xl text-amber-800">
+          <AlertCircle size={20} className="shrink-0 text-amber-600" />
+          <div className="text-xs font-semibold">
+            <p className="font-bold text-amber-950">Profil Anda belum lengkap!</p>
+            <p className="opacity-90 mt-0.5">Mohon lengkapi No. KTP, Kontak Darurat, dan Data Kendaraan Anda demi validasi hunian.</p>
+          </div>
+        </div>
+      )}
+
       {/* Profile Header Row */}
       <div className="card-section p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="flex flex-col sm:flex-row items-center gap-4 text-center sm:text-left">
           <div className="avatar w-16 h-16 text-2xl font-black avatar-lavender border border-soft shadow-inner flex-shrink-0">
-            HG
+            {getInitials(profile.name)}
           </div>
           <div>
-            <h2 className="text-xl font-extrabold text-ink leading-none">Hendra Gunawan</h2>
+            <h2 className="text-xl font-extrabold text-ink leading-none">{profile.name}</h2>
             <p className="text-xs text-muted font-semibold mt-2">
-              Unit 12A · Tower A · Lantai 12
+              Unit {profile.unit} · {profile.tower} · {profile.layer}
             </p>
           </div>
         </div>
@@ -67,7 +109,7 @@ export default function ProfilSaya() {
       {/* Two Column Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
-        {/* LEFT PANEL - Data Pribadi */}
+        {/* LEFT PANEL - Data Pribadi (Bisa diedit via modal) */}
         <div className="card-section p-6 space-y-4">
           <h3 className="text-sm font-bold text-ink uppercase tracking-wider pb-3 border-b border-soft flex items-center gap-2">
             <User size={16} />
@@ -77,7 +119,7 @@ export default function ProfilSaya() {
           <div className="divide-y divide-soft text-xs font-semibold text-ink">
             <div className="flex py-3.5 items-center">
               <span className="text-muted w-40 flex-shrink-0 uppercase text-[9px] font-bold tracking-widest">No. KTP</span>
-              <span className="text-active">{profile.ktp}</span>
+              <span className={profile.ktp === 'Belum diisi' ? 'text-rose-500 italic' : 'text-active'}>{profile.ktp}</span>
             </div>
             <div className="flex py-3.5 items-center">
               <span className="text-muted w-40 flex-shrink-0 uppercase text-[9px] font-bold tracking-widest">No. Telepon</span>
@@ -93,12 +135,21 @@ export default function ProfilSaya() {
             </div>
             <div className="flex py-3.5 items-center">
               <span className="text-muted w-40 flex-shrink-0 uppercase text-[9px] font-bold tracking-widest">Kontak Darurat</span>
-              <span className="text-active font-bold">{profile.emergencyContact}</span>
+              <span className={profile.emergencyContact === 'Belum diatur' ? 'text-muted/60 italic font-medium' : 'text-active font-bold'}>
+                {profile.emergencyContact}
+              </span>
+            </div>
+            {/* ✨ Baris Kendaraan dipindah ke Data Pribadi */}
+            <div className="flex py-3.5 items-center">
+              <span className="text-muted w-40 flex-shrink-0 uppercase text-[9px] font-bold tracking-widest">Kendaraan</span>
+              <span className={profile.vehicle === '-' ? 'text-muted/60 italic font-medium' : 'text-active font-bold'}>
+                {profile.vehicle}
+              </span>
             </div>
           </div>
         </div>
 
-        {/* RIGHT PANEL - Data Hunian */}
+        {/* RIGHT PANEL - Data Hunian (Murni Lock Sistem / Read Only) */}
         <div className="card-section p-6 space-y-4">
           <h3 className="text-sm font-bold text-ink uppercase tracking-wider pb-3 border-b border-soft flex items-center gap-2">
             <Shield size={16} />
@@ -106,29 +157,27 @@ export default function ProfilSaya() {
           </h3>
 
           <div className="divide-y divide-soft text-xs font-semibold text-ink">
-            <div className="flex py-3.5 items-center">
+            <div className="flex py-3.5 items-center bg-slate-50/50 px-2 rounded-lg">
               <span className="text-muted w-40 flex-shrink-0 uppercase text-[9px] font-bold tracking-widest">No. Unit</span>
-              <span className="text-active font-bold">12A</span>
+              <span className="text-muted font-bold flex items-center gap-1.5">
+                {profile.unit} <span className="text-[10px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded font-normal">Sistem</span>
+              </span>
             </div>
-            <div className="flex py-3.5 items-center">
+            <div className="flex py-3.5 items-center bg-slate-50/50 px-2 rounded-lg">
               <span className="text-muted w-40 flex-shrink-0 uppercase text-[9px] font-bold tracking-widest">Tower</span>
-              <span className="text-active">Tower A</span>
+              <span className="text-muted">{profile.tower}</span>
             </div>
-            <div className="flex py-3.5 items-center">
+            <div className="flex py-3.5 items-center bg-slate-50/50 px-2 rounded-lg">
               <span className="text-muted w-40 flex-shrink-0 uppercase text-[9px] font-bold tracking-widest">Lantai</span>
-              <span className="text-active">Lantai 12</span>
+              <span className="text-muted">{profile.layer}</span>
             </div>
-            <div className="flex py-3.5 items-center">
+            <div className="flex py-3.5 items-center bg-slate-50/50 px-2 rounded-lg">
               <span className="text-muted w-40 flex-shrink-0 uppercase text-[9px] font-bold tracking-widest">Luas Unit</span>
-              <span className="text-active">42 m²</span>
+              <span className="text-muted">{profile.space}</span>
             </div>
-            <div className="flex py-3.5 items-center">
+            <div className="flex py-3.5 items-center bg-slate-50/50 px-2 rounded-lg">
               <span className="text-muted w-40 flex-shrink-0 uppercase text-[9px] font-bold tracking-widest">Tgl Masuk</span>
-              <span className="text-active">15 Januari 2023</span>
-            </div>
-            <div className="flex py-3.5 items-center">
-              <span className="text-muted w-40 flex-shrink-0 uppercase text-[9px] font-bold tracking-widest">Kendaraan</span>
-              <span className="text-active font-bold">L 1234 AB (Mobil)</span>
+              <span className="text-muted">{profile.joinDate}</span>
             </div>
           </div>
         </div>
@@ -141,27 +190,31 @@ export default function ProfilSaya() {
           <div className="fixed inset-0 bg-active/40 backdrop-blur-sm" onClick={() => setEditModalOpen(false)}></div>
           <div className="modal-box max-w-sm relative z-10 animate-scale-in">
             
-            {/* Header */}
             <div className="modal-header">
               <h3 className="text-xs font-bold text-ink uppercase tracking-wider">
                 Edit Profil Saya
               </h3>
-              <button
-                onClick={() => setEditModalOpen(false)}
-                className="text-muted hover:text-ink transition"
-              >
+              <button onClick={() => setEditModalOpen(false)} className="text-muted hover:text-ink transition">
                 <X size={18} />
               </button>
             </div>
 
-            {/* Form */}
             <form onSubmit={handleEditSubmit} className="modal-body space-y-4">
               
-              {/* Phone number */}
               <div>
-                <label className="label-modern">
-                  No. Telepon
-                </label>
+                <label className="label-modern">No. KTP</label>
+                <input
+                  type="text"
+                  maxLength={16}
+                  placeholder="Masukkan 16 digit No. KTP"
+                  value={tempProfile.ktp}
+                  onChange={(e) => setTempProfile(prev => ({ ...prev, ktp: e.target.value.replace(/\D/g, '') }))}
+                  className="input-modern"
+                />
+              </div>
+
+              <div>
+                <label className="label-modern">No. Telepon</label>
                 <input
                   type="text"
                   required
@@ -171,11 +224,8 @@ export default function ProfilSaya() {
                 />
               </div>
 
-              {/* Email */}
               <div>
-                <label className="label-modern">
-                  Email
-                </label>
+                <label className="label-modern">Email</label>
                 <input
                   type="email"
                   required
@@ -185,11 +235,8 @@ export default function ProfilSaya() {
                 />
               </div>
 
-              {/* WhatsApp */}
               <div>
-                <label className="label-modern">
-                  WhatsApp
-                </label>
+                <label className="label-modern">WhatsApp</label>
                 <input
                   type="text"
                   required
@@ -199,48 +246,47 @@ export default function ProfilSaya() {
                 />
               </div>
 
-              {/* Emergency Contact */}
+              {/* ✨ Input Baru: Kendaraan & Nomor Pelat */}
+              <div>
+                <label className="label-modern">Data Kendaraan Utama</label>
+                <input
+                  type="text"
+                  placeholder="Contoh: L 1234 AB (Mobil)"
+                  value={tempProfile.vehicle}
+                  onChange={(e) => setTempProfile(prev => ({ ...prev, vehicle: e.target.value }))}
+                  className="input-modern"
+                />
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="label-modern">
-                    Nama Kontak Darurat
-                  </label>
+                  <label className="label-modern">Nama Kontak Darurat</label>
                   <input
                     type="text"
-                    required
                     value={tempProfile.emergencyName}
                     onChange={(e) => setTempProfile(prev => ({ ...prev, emergencyName: e.target.value }))}
                     className="input-modern"
+                    placeholder="Nama"
                   />
                 </div>
                 <div>
-                  <label className="label-modern">
-                    No. Telp Darurat
-                  </label>
+                  <label className="label-modern">No. Telp Darurat</label>
                   <input
                     type="text"
-                    required
                     value={tempProfile.emergencyPhone}
                     onChange={(e) => setTempProfile(prev => ({ ...prev, emergencyPhone: e.target.value }))}
                     className="input-modern"
+                    placeholder="No. HP"
                   />
                 </div>
               </div>
 
-              {/* Submit Buttons */}
               <div className="flex gap-3 pt-3 border-t border-soft">
-                <button
-                  type="submit"
-                  className="flex-1 btn-primary py-2.5 px-4 text-xs flex items-center justify-center gap-1.5"
-                >
+                <button type="submit" className="flex-1 btn-primary py-2.5 px-4 text-xs flex items-center justify-center gap-1.5">
                   <Save size={13} />
                   <span>Simpan Perubahan</span>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setEditModalOpen(false)}
-                  className="btn-ghost text-xs border-none"
-                >
+                <button type="button" onClick={() => setEditModalOpen(false)} className="btn-ghost text-xs border-none">
                   Batal
                 </button>
               </div>

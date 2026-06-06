@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { TrendingUp, FileDown, Calendar, Percent, CheckCircle, BarChart3, Filter } from 'lucide-react';
+import { TrendingUp, FileDown, Calendar, Percent, CheckCircle, BarChart3, Filter, Copy, Check } from 'lucide-react';
 
 export default function LaporanPendapatan() {
   const [year, setYear] = useState('2026');
   const [quarter, setQuarter] = useState('Q1');
   const [successToast, setSuccessToast] = useState('');
+  const [copied, setCopied] = useState(false); // State tambahan untuk efek feedback copy button
 
   // Q1 Target vs Realisasi hardcoded data
   const revenueDataQ1 = [
@@ -74,6 +75,23 @@ export default function LaporanPendapatan() {
 
   const percentageAchieved = (totals.totalRealisasi / totals.totalTarget) * 100;
 
+  // Dinamisasi perhitungan persentase spesifik untuk teks naratif di panel kanan
+  const fasilsPct = (totals.realisasiFasilitas / totals.targetFasilitas * 100).toFixed(1);
+  const iplPct = (totals.realisasiIpl / totals.targetIpl * 100).toFixed(1);
+
+  // Fungsi Copy text ringkasan untuk mempermudah share laporan ke WhatsApp pengelola
+  const handleCopyNotes = () => {
+    const textToCopy = `📝 CATATAN KEUANGAN ${quarter} (${year}):\n\n` +
+      `1. Pendapatan sewa fasilitas melampaui target sebesar ${fasilsPct}% berkat tingginya reservasi lapangan tenis & clubhouse di akhir pekan.\n` +
+      `2. Penagihan IPL berjalan lancar dengan tingkat kedisiplinan pembayaran mencapai ${iplPct}%.\n` +
+      `3. Selisih pembayaran parkir di bulan Januari diselesaikan sepenuhnya pada penagihan bulan berikutnya.`;
+
+    navigator.clipboard.writeText(textToCopy);
+    setCopied(true);
+    showToast('Catatan ringkasan keuangan berhasil disalin ke clipboard!');
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   return (
     <div className="space-y-6 animate-fade-up relative">
       {/* Filters Card */}
@@ -118,7 +136,6 @@ export default function LaporanPendapatan() {
 
       {/* Stats Cards Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Card 1: Pink */}
         <div className="card-pink flex flex-col justify-between hover:shadow-soft transition">
           <div>
             <span className="text-[#8A857F] font-semibold text-xs uppercase tracking-wider block">Total Target Kuartal</span>
@@ -127,7 +144,6 @@ export default function LaporanPendapatan() {
           <span className="text-[10px] text-[#8A857F] font-semibold mt-1">Est. IPL, Parkir & Fasilitas</span>
         </div>
 
-        {/* Card 2: Yellow */}
         <div className="card-yellow flex flex-col justify-between hover:shadow-soft transition">
           <div>
             <span className="text-[#8A857F] font-semibold text-xs uppercase tracking-wider block">Total Realisasi Kuartal</span>
@@ -139,7 +155,6 @@ export default function LaporanPendapatan() {
           </div>
         </div>
 
-        {/* Card 3: Lavender */}
         <div className="card-lavender flex flex-col justify-between hover:shadow-soft transition">
           <div>
             <span className="text-[#8A857F] font-semibold text-xs uppercase tracking-wider block">Persentase Capaian</span>
@@ -151,7 +166,6 @@ export default function LaporanPendapatan() {
           </div>
         </div>
 
-        {/* Card 4: Mint */}
         <div className="card-mint flex flex-col justify-between hover:shadow-soft transition">
           <div>
             <span className="text-[#8A857F] font-semibold text-xs uppercase tracking-wider block">Sisa Tunggakan Q1</span>
@@ -175,7 +189,7 @@ export default function LaporanPendapatan() {
               </p>
             </div>
             <span className="badge-base badge-mint">
-              Q1 Aktif
+              {quarter} Aktif
             </span>
           </div>
 
@@ -226,7 +240,7 @@ export default function LaporanPendapatan() {
                 })}
                 {/* Total Row */}
                 <tr className="bg-app-bg font-extrabold text-ink border-t-2 border-soft">
-                  <td className="p-3 font-bold" colSpan={2}>GRAND TOTAL (Q1)</td>
+                  <td className="p-3 font-bold" colSpan={2}>GRAND TOTAL ({quarter})</td>
                   <td className="p-3 text-right font-mono text-muted">{formatRupiah(totals.totalTarget)}</td>
                   <td className="p-3 text-right font-mono text-ink">{formatRupiah(totals.totalRealisasi)}</td>
                   <td className="p-3 text-right">
@@ -247,16 +261,16 @@ export default function LaporanPendapatan() {
               Kinerja Tiap Sektor
             </h3>
 
-            {/* Sector 1: IPL */}
+            {/* Sektor IPL */}
             <div className="space-y-2">
               <div className="flex justify-between text-xs font-bold">
                 <span className="text-muted">Iuran Pengelola Lingkungan (IPL)</span>
-                <span className="text-ink">{(totals.realisasiIpl / totals.targetIpl * 100).toFixed(1)}%</span>
+                <span className="text-ink">{iplPct}%</span>
               </div>
               <div className="progress-track">
                 <div 
                   className="progress-fill progress-pink" 
-                  style={{ width: `${Math.min(100, (totals.realisasiIpl / totals.targetIpl * 100))}%` }}
+                  style={{ width: `${Math.min(100, parseFloat(iplPct))}%` }}
                 ></div>
               </div>
               <div className="flex justify-between text-[10px] text-muted font-bold">
@@ -265,7 +279,7 @@ export default function LaporanPendapatan() {
               </div>
             </div>
 
-            {/* Sector 2: Parkir */}
+            {/* Sektor Parkir */}
             <div className="space-y-2">
               <div className="flex justify-between text-xs font-bold">
                 <span className="text-muted">Sewa Parkir Bulanan</span>
@@ -283,16 +297,16 @@ export default function LaporanPendapatan() {
               </div>
             </div>
 
-            {/* Sector 3: Fasilitas */}
+            {/* Sektor Fasilitas */}
             <div className="space-y-2">
               <div className="flex justify-between text-xs font-bold">
                 <span className="text-muted">Sewa Fasilitas Apartemen</span>
-                <span className="text-[#187050]">{(totals.realisasiFasilitas / totals.targetFasilitas * 100).toFixed(1)}%</span>
+                <span className="text-[#187050]">{fasilsPct}%</span>
               </div>
               <div className="progress-track">
                 <div 
                   className="progress-fill progress-mint" 
-                  style={{ width: `${Math.min(100, (totals.realisasiFasilitas / totals.targetFasilitas * 100))}%` }}
+                  style={{ width: `${Math.min(100, parseFloat(fasilsPct))}%` }}
                 ></div>
               </div>
               <div className="flex justify-between text-[10px] text-muted font-bold">
@@ -302,23 +316,43 @@ export default function LaporanPendapatan() {
             </div>
           </div>
 
-          <div className="card-section p-6 space-y-4">
-            <h3 className="text-sm font-bold text-ink uppercase tracking-wider border-b border-soft pb-3 flex items-center gap-1.5">
-              <BarChart3 size={15} />
-              <span>Catatan Keuangan Q1</span>
-            </h3>
+          {/* PANEL SISI KANAN INTERAKTIF */}
+          <div className="card-section p-6 space-y-4 relative group">
+            <div className="flex items-center justify-between border-b border-soft pb-3">
+              <div className="flex items-center gap-1.5">
+                <BarChart3 size={15} className="text-ink" />
+                <h3 className="text-sm font-bold text-ink uppercase tracking-wider">
+                  Catatan Keuangan {quarter}
+                </h3>
+              </div>
+              {/* Tombol Salin Cepat */}
+              <button
+                onClick={handleCopyNotes}
+                className="p-1.5 rounded-lg border border-soft bg-app-bg text-muted hover:text-ink hover:bg-soft transition-all duration-200"
+                title="Salin rangkuman teks catatan"
+              >
+                {copied ? <Check size={13} className="text-emerald-600" /> : <Copy size={13} />}
+              </button>
+            </div>
+            
             <ul className="space-y-3 text-xs font-bold text-muted">
               <li className="flex gap-2.5 items-start">
                 <CheckCircle size={14} className="text-[#187050] mt-0.5 flex-shrink-0" />
-                <span>Pendapatan sewa fasilitas melampaui target sebesar <strong className="text-ink">117.7%</strong> berkat tingginya reservasi lapangan tenis & clubhouse di akhir pekan.</span>
+                <span>
+                  Pendapatan sewa fasilitas melampaui target sebesar <strong className="text-ink">{fasilsPct}%</strong> berkat tingginya reservasi lapangan tenis & clubhouse di akhir pekan.
+                </span>
               </li>
               <li className="flex gap-2.5 items-start">
                 <CheckCircle size={14} className="text-[#187050] mt-0.5 flex-shrink-0" />
-                <span>Penagihan IPL berjalan lancar dengan tingkat kedisiplinan pembayaran mencapai <strong className="text-ink">99.7%</strong>.</span>
+                <span>
+                  Penagihan IPL berjalan lancar dengan tingkat kedisiplinan pembayaran mencapai <strong className="text-ink">{iplPct}%</strong>.
+                </span>
               </li>
               <li className="flex gap-2.5 items-start">
                 <CheckCircle size={14} className="text-[#B06020] mt-0.5 flex-shrink-0" />
-                <span>Selisih pembayaran parkir di bulan Januari diselesaikan sepenuhnya pada penagihan bulan berikutnya.</span>
+                <span>
+                  Selisih pembayaran parkir di bulan Januari diselesaikan sepenuhnya pada penagihan bulan berikutnya.
+                </span>
               </li>
             </ul>
           </div>

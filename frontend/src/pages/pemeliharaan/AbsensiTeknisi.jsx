@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 export default function AbsensiTeknisi() {
-  // Initial attendance state
+  // 1. State Utama Absensi (Tabel)
   const [attendance, setAttendance] = useState([
     { name: 'Doni Prasetya', role: 'Admin Pemeliharaan', checkIn: '07:55', checkOut: '-', status: 'Hadir' },
     { name: 'Agus Maulana', role: 'Teknisi Listrik', checkIn: '08:00', checkOut: '-', status: 'Hadir' },
@@ -11,19 +11,47 @@ export default function AbsensiTeknisi() {
     { name: 'Riko Prabowo', role: 'Teknisi Umum', checkIn: '07:58', checkOut: '-', status: 'Hadir' }
   ]);
 
+  // 2. Master Data Karyawan / Teknisi (Database Internal)
+  const masterTeknisi = [
+    { id: 'T-01', name: 'Doni Prasetya', role: 'Admin Pemeliharaan' },
+    { id: 'T-02', name: 'Agus Maulana', role: 'Teknisi Listrik' },
+    { id: 'T-03', name: 'Ridwan Saputra', role: 'Teknisi AC & Plumbing' },
+    { id: 'T-04', name: 'Fajar Kurniawan', role: 'Teknisi Lift & Mekanikal' },
+    { id: 'T-05', name: 'Hendra Setiawan', role: 'Teknisi Umum' },
+    { id: 'T-06', name: 'Riko Prabowo', role: 'Teknisi Umum' },
+    { id: 'T-07', name: 'Ahmad Fauzi', role: 'Staff Kasir & EBilling' },
+    { id: 'T-08', name: 'Sri Wahyuni', role: 'Staff Akunting & Pajak' },
+    { id: 'T-09', name: 'Rina Kurnia', role: 'Supervisor Keuangan' }
+  ];
+
+  // 3. State UI Tambahan
   const [activeMonth, setActiveMonth] = useState('April 2026');
   const [monthDropdownOpen, setMonthDropdownOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
-  const [modalMode, setModalMode] = useState('create'); // 'create' or 'edit'
+  const [modalMode, setModalMode] = useState('create'); // 'create' atau 'edit'
   const [selectedTechIndex, setSelectedTechIndex] = useState(null);
 
-  // Form states
-  const [formName, setFormName] = useState('');
-  const [formRole, setFormRole] = useState('');
-  const [formCheckIn, setFormCheckIn] = useState('');
-  const [formCheckOut, setFormCheckOut] = useState('');
+  // 4. Form States
+  const [selectedTech, setSelectedTech] = useState(null); // Menyimpan objek teknisi yang terpilih
+  const [searchQuery, setSearchQuery] = useState(''); // Menyimpan teks pencarian
+  const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState(false); // Mengontrol buka/tutup list pencarian
+  const [formCheckIn, setFormCheckIn] = useState('08:00');
+  const [formCheckOut, setFormCheckOut] = useState('-');
   const [formStatus, setFormStatus] = useState('Hadir');
+
+  const searchDropdownRef = useRef(null);
+
+  // Menutup dropdown pencarian jika mendeteksi klik di luar komponen
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (searchDropdownRef.current && !searchDropdownRef.current.contains(event.target)) {
+        setIsSearchDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleExport = () => {
     showToast('Absensi_Teknisi.xlsx berhasil diunduh!');
@@ -31,15 +59,13 @@ export default function AbsensiTeknisi() {
 
   const showToast = (message) => {
     setToastMessage(message);
-    setTimeout(() => {
-      setToastMessage('');
-    }, 3000);
+    setTimeout(() => setToastMessage(''), 3000);
   };
 
   const openCreateModal = () => {
     setModalMode('create');
-    setFormName('');
-    setFormRole('Teknisi Listrik');
+    setSelectedTech(null);
+    setSearchQuery('');
     setFormCheckIn('08:00');
     setFormCheckOut('-');
     setFormStatus('Hadir');
@@ -50,8 +76,11 @@ export default function AbsensiTeknisi() {
     const tech = attendance[index];
     setModalMode('edit');
     setSelectedTechIndex(index);
-    setFormName(tech.name);
-    setFormRole(tech.role);
+    
+    const matchedMaster = masterTeknisi.find(m => m.name === tech.name);
+    setSelectedTech(matchedMaster || { name: tech.name, role: tech.role });
+    setSearchQuery(tech.name);
+    
     setFormCheckIn(tech.checkIn);
     setFormCheckOut(tech.checkOut);
     setFormStatus(tech.status);
@@ -60,32 +89,38 @@ export default function AbsensiTeknisi() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (!selectedTech) {
+      alert('Silakan pilih nama teknisi terlebih dahulu!');
+      return;
+    }
+
+    const recordData = {
+      name: selectedTech.name,
+      role: selectedTech.role,
+      checkIn: formStatus === 'Izin' || formStatus === 'Sakit' || formStatus === 'Alpa' ? '-' : formCheckIn,
+      checkOut: formStatus === 'Izin' || formStatus === 'Sakit' || formStatus === 'Alpa' ? '-' : formCheckOut,
+      status: formStatus
+    };
+
     if (modalMode === 'create') {
-      const newRecord = {
-        name: formName,
-        role: formRole,
-        checkIn: formStatus === 'Izin' ? '-' : formCheckIn,
-        checkOut: formStatus === 'Izin' ? '-' : formCheckOut,
-        status: formStatus
-      };
-      setAttendance([...attendance, newRecord]);
+      setAttendance([...attendance, recordData]);
       showToast('Absensi berhasil dicatat');
     } else {
       const updated = [...attendance];
-      updated[selectedTechIndex] = {
-        name: formName,
-        role: formRole,
-        checkIn: formStatus === 'Izin' ? '-' : formCheckIn,
-        checkOut: formStatus === 'Izin' ? '-' : formCheckOut,
-        status: formStatus
-      };
+      updated[selectedTechIndex] = recordData;
       setAttendance(updated);
-      showToast('Data diedit');
+      showToast('Data berhasil diperbarui');
     }
     setModalOpen(false);
   };
 
-  // Stats calculations
+  // Filter list master berdasarkan apa yang diketik oleh pengguna
+  const filteredKaryawan = masterTeknisi.filter(tech =>
+    tech.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    tech.role.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  // Kalkulasi statistik data widget atas
   const totalTeknisi = attendance.length;
   const hadirCount = attendance.filter(a => a.status === 'Hadir').length;
   const izinCount = attendance.filter(a => a.status === 'Izin' || a.status === 'Sakit').length;
@@ -96,7 +131,6 @@ export default function AbsensiTeknisi() {
       
       {/* Controls Row */}
       <div className="card-section p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        
         {/* Month Dropdown Selector */}
         <div className="relative">
           <button
@@ -134,20 +168,14 @@ export default function AbsensiTeknisi() {
 
         {/* Action Buttons */}
         <div className="flex items-center gap-3">
-          <button
-            onClick={openCreateModal}
-            className="btn-primary btn-sm flex items-center gap-1.5"
-          >
+          <button onClick={openCreateModal} className="btn-primary btn-sm flex items-center gap-1.5">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
             </svg>
             <span>Catat Absensi</span>
           </button>
           
-          <button
-            onClick={handleExport}
-            className="btn-ghost btn-sm flex items-center gap-1.5"
-          >
+          <button onClick={handleExport} className="btn-ghost btn-sm flex items-center gap-1.5">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
             </svg>
@@ -158,7 +186,6 @@ export default function AbsensiTeknisi() {
 
       {/* Stats Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Card 1: Pink */}
         <div className="card-pink flex items-center justify-between">
           <div>
             <span className="text-[#8A857F] font-semibold text-xs uppercase tracking-wider">Total Teknisi</span>
@@ -172,7 +199,6 @@ export default function AbsensiTeknisi() {
           </div>
         </div>
 
-        {/* Card 2: Yellow */}
         <div className="card-yellow flex items-center justify-between">
           <div>
             <span className="text-[#8A857F] font-semibold text-xs uppercase tracking-wider">Hadir Hari Ini</span>
@@ -186,7 +212,6 @@ export default function AbsensiTeknisi() {
           </div>
         </div>
 
-        {/* Card 3: Lavender */}
         <div className="card-lavender flex items-center justify-between">
           <div>
             <span className="text-[#8A857F] font-semibold text-xs uppercase tracking-wider">Izin / Sakit</span>
@@ -200,7 +225,6 @@ export default function AbsensiTeknisi() {
           </div>
         </div>
 
-        {/* Card 4: Mint */}
         <div className="card-mint flex items-center justify-between">
           <div>
             <span className="text-[#8A857F] font-semibold text-xs uppercase tracking-wider">Rata-rata Kehadiran</span>
@@ -236,7 +260,6 @@ export default function AbsensiTeknisi() {
             <tbody className="divide-y divide-gray-100 text-xs font-semibold text-gray-800">
               {attendance.map((row, idx) => (
                 <tr key={idx}>
-                  {/* Name */}
                   <td>
                     <div className="flex items-center gap-2.5">
                       <div className="avatar avatar-sm avatar-lavender">
@@ -245,41 +268,16 @@ export default function AbsensiTeknisi() {
                       <span className="font-bold text-ink">{row.name}</span>
                     </div>
                   </td>
-                  
-                  {/* Role */}
-                  <td className="text-muted">
-                    {row.role}
-                  </td>
-                  
-                  {/* Jam Masuk */}
-                  <td className="font-mono text-ink">
-                    {row.checkIn}
-                  </td>
-                  
-                  {/* Jam Keluar */}
-                  <td className="font-mono text-muted">
-                    {row.checkOut}
-                  </td>
-                  
-                  {/* Status */}
+                  <td className="text-muted">{row.role}</td>
+                  <td className="font-mono text-ink">{row.checkIn}</td>
+                  <td className="font-mono text-muted">{row.checkOut}</td>
                   <td>
-                    {row.status === 'Hadir' ? (
-                      <span className="badge-base badge-mint">
-                        Hadir
-                      </span>
-                    ) : (
-                      <span className="badge-base badge-yellow">
-                        {row.status}
-                      </span>
-                    )}
+                    <span className={`badge-base ${row.status === 'Hadir' ? 'badge-mint' : 'badge-yellow'}`}>
+                      {row.status}
+                    </span>
                   </td>
-                  
-                  {/* Action */}
                   <td className="text-right">
-                    <button
-                      onClick={() => openEditModal(idx)}
-                      className="text-ink hover:underline font-bold"
-                    >
+                    <button onClick={() => openEditModal(idx)} className="text-ink hover:underline font-bold">
                       Edit
                     </button>
                   </td>
@@ -290,10 +288,10 @@ export default function AbsensiTeknisi() {
         </div>
       </div>
 
-      {/* ATTENDANCE MODAL */}
+      {/* ATTENDANCE MODAL (SUDAH FIX FITUR PENCARIANNYA) */}
       {modalOpen && (
         <div className="modal-overlay">
-          <div className="modal-box">
+          <div className="modal-box max-w-md w-full">
             <div className="modal-header">
               <h3 className="text-sm font-bold text-ink uppercase tracking-wider">
                 {modalMode === 'create' ? 'Catat Absensi Baru' : 'Edit Absensi'}
@@ -306,53 +304,84 @@ export default function AbsensiTeknisi() {
             </div>
 
             <form onSubmit={handleSubmit} className="modal-body space-y-4">
-              {/* Name */}
-              <div>
-                <label className="label-modern">Nama Teknisi</label>
+              
+              {/* CUSTOM SEARCHABLE DROPDOWN COMPONENT */}
+              <div className="relative" ref={searchDropdownRef}>
+                <label className="label-modern">Pilih Nama Karyawan / Teknisi</label>
+                
                 {modalMode === 'create' ? (
-                  <input
-                    type="text"
-                    required
-                    value={formName}
-                    onChange={(e) => setFormName(e.target.value)}
-                    placeholder="Nama lengkap teknisi..."
-                    className="input-modern font-semibold"
-                  />
+                  <>
+                    {/* Input teks pembungkus yang berfungsi sebagai kolom ketik sekaligus pemicu dropdown */}
+                    <div className="relative flex items-center">
+                      <input
+                        type="text"
+                        className="input-modern font-semibold pr-10 text-xs"
+                        placeholder="Ketik untuk mencari nama karyawan..."
+                        value={searchQuery}
+                        onChange={(e) => {
+                          setSearchQuery(e.target.value);
+                          setIsSearchDropdownOpen(true);
+                        }}
+                        onFocus={() => setIsSearchDropdownOpen(true)}
+                      />
+                      <div className="absolute right-3 pointer-events-none text-gray-400">
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </div>
+                    </div>
+
+                    {/* Menu Pilihan Dropdown Hasil Pencarian */}
+                    {isSearchDropdownOpen && (
+                      <div className="absolute left-0 right-0 mt-1 max-h-56 bg-white border border-gray-200 rounded-xl shadow-xl overflow-y-auto z-50 py-1 divide-y divide-gray-50">
+                        {filteredKaryawan.length > 0 ? (
+                          filteredKaryawan.map((tech) => (
+                            <button
+                              key={tech.id}
+                              type="button"
+                              className="w-full text-left px-4 py-2.5 hover:bg-gray-50 text-xs flex flex-col transition"
+                              onClick={() => {
+                                setSelectedTech(tech);
+                                setSearchQuery(tech.name);
+                                setIsSearchDropdownOpen(false);
+                              }}
+                            >
+                              <span className="font-bold text-gray-900">{tech.name}</span>
+                              <span className="text-[10px] text-gray-500 font-medium">{tech.role}</span>
+                            </button>
+                          ))
+                        ) : (
+                          <div className="px-4 py-3 text-xs text-center text-gray-400 font-medium">
+                            Karyawan tidak ditemukan...
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
                 ) : (
+                  // Jika mode EDIT, tidak bisa diubah namanya (Read Only)
                   <input
                     type="text"
                     readOnly
-                    value={formName}
-                    className="input-modern bg-gray-50 border border-soft text-muted font-semibold outline-none cursor-not-allowed"
+                    value={selectedTech ? `${selectedTech.name} — ${selectedTech.role}` : ''}
+                    className="input-modern bg-gray-50 border border-soft text-muted font-bold cursor-not-allowed outline-none text-xs"
                   />
                 )}
               </div>
 
-              {/* Role */}
+              {/* JABATAN / SPESIALISASI OTOMATIS */}
               <div>
-                <label className="label-modern">Spesialisasi</label>
-                {modalMode === 'create' ? (
-                  <select
-                    value={formRole}
-                    onChange={(e) => setFormRole(e.target.value)}
-                    className="select-modern input-modern font-semibold"
-                  >
-                    <option value="Teknisi Listrik">Teknisi Listrik</option>
-                    <option value="Teknisi AC & Plumbing">Teknisi AC & Plumbing</option>
-                    <option value="Teknisi Lift & Mekanikal">Teknisi Lift & Mekanikal</option>
-                    <option value="Teknisi Umum">Teknisi Umum</option>
-                  </select>
-                ) : (
-                  <input
-                    type="text"
-                    readOnly
-                    value={formRole}
-                    className="input-modern bg-gray-50 border border-soft text-muted font-semibold outline-none cursor-not-allowed"
-                  />
-                )}
+                <label className="label-modern">Spesialisasi / Divisi Kerja</label>
+                <input
+                  type="text"
+                  readOnly
+                  placeholder="Terisi otomatis sesuai pilihan di atas..."
+                  value={selectedTech ? selectedTech.role : ''}
+                  className="input-modern bg-gray-50 border border-soft text-gray-500 font-bold cursor-not-allowed outline-none text-xs"
+                />
               </div>
 
-              {/* Status */}
+              {/* Status Kehadiran */}
               <div>
                 <label className="label-modern">Status Kehadiran</label>
                 <select
@@ -389,7 +418,7 @@ export default function AbsensiTeknisi() {
                       required
                       value={formCheckOut}
                       onChange={(e) => setFormCheckOut(e.target.value)}
-                      placeholder="-"
+                      placeholder="17:00"
                       className="input-modern font-mono font-semibold"
                     />
                   </div>
@@ -417,7 +446,7 @@ export default function AbsensiTeknisi() {
         </div>
       )}
 
-      {/* Toast Messages Bottom-Right */}
+      {/* Toast Messages */}
       {toastMessage && (
         <div className="toast-modern toast-success">
           <div className="w-5 h-5 rounded-full bg-white/20 text-white flex items-center justify-center flex-shrink-0">

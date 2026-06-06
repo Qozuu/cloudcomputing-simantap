@@ -204,7 +204,7 @@ export default function LoginPage() {
       
       {/* LEFT DECORATIVE BLOCK - Hidden on Mobile */}
       <aside className="hidden md:flex md:w-5/12 h-full flex-col justify-between p-12 bg-[#EEEDFB] rounded-r-[3rem] shadow-sm">
-        {/* Header Logo - PENYESUAIAN INDENSI KIRI & FIX GEPMAN */}
+        {/* Header Logo */}
         <div className="flex items-center gap-1.5">
           <img 
             src={LogoSiManTap} 
@@ -238,7 +238,7 @@ export default function LoginPage() {
         {/* Form Container */}
         <div className="bg-white rounded-3xl shadow-soft max-w-sm w-full p-8 flex flex-col justify-center animate-fade-up relative">
           
-          {/* Mobile Branding Badge (< md) - PENYESUAIAN INDENSI KIRI & FIX GEPMAN */}
+          {/* Mobile Branding Badge (< md) */}
           <div className="flex md:hidden items-center gap-1.5 mb-6 justify-center">
             <img 
               src={LogoSiManTap} 
@@ -384,23 +384,11 @@ export default function LoginPage() {
                 </button>
               </div>
 
-              {/* Footer Conditional Render */}
+              {/* Footer Modern — Murni teks info/bantuan tanpa opsi registrasi */}
               <div className="pt-6 mt-6 border-t border-soft text-center">
-                {roleParam === 'penghuni' ? (
-                  <p className="text-xs text-[#8A857F] font-semibold">
-                    Belum punya akun?{' '}
-                    <span 
-                      onClick={() => navigate('/register')}
-                      className="text-sm font-semibold text-[#1E1E1E] hover:underline cursor-pointer inline-block ml-1"
-                    >
-                      Daftar di sini
-                    </span>
-                  </p>
-                ) : (
-                  <p className="text-[11px] text-[#8A857F] font-medium max-w-xs mx-auto leading-relaxed">
-                    Butuh akses tambahan? Silakan hubungi <span className="font-bold text-[#1E1E1E]">Super Admin Utama</span> atau IT Support manajemen.
-                  </p>
-                )}
+                <p className="text-[11px] text-[#8A857F] font-medium max-w-xs mx-auto leading-relaxed">
+                  Butuh akses tambahan? Silakan hubungi <span className="font-bold text-[#1E1E1E]">Super Admin Utama</span> atau IT Support manajemen.
+                </p>
               </div>
             </>
           )}

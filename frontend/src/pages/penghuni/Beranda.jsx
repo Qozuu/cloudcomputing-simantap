@@ -6,7 +6,6 @@ export default function Beranda() {
   const navigate = useNavigate();
 
   // 🛡️ KUNCI ANTI-KEDIPAN RESIDU:
-  // Mengamankan perpindahan halaman internal agar tidak memicu Route Guard secara tidak sengaja
   const handleQuickRedirect = (path) => {
     navigate(path);
   };
@@ -34,11 +33,12 @@ export default function Beranda() {
       <div className="card-section p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-extrabold text-ink flex items-center gap-1.5">
-            <span>Halo, Hendra</span>
-            <span className="animate-wiggle inline-block">👋</span>
+            {/* Tanda seru sudah ditambahkan di sini */}
+            <span>Halo, Hendra!</span>
+            <span className="animate-wiggle inline-block"></span>
           </h2>
           <p className="text-xs text-muted font-medium mt-1">
-            Unit 12A · Tower A · Lantai 12 — Selamat datang di SiManTap
+            Unit 1012 · Tower A · Lantai 10 — Selamat datang di SiManTap
           </p>
         </div>
         <div className="flex items-center gap-4 border-l border-soft pl-0 md:pl-6">
@@ -46,9 +46,7 @@ export default function Beranda() {
             <p className="text-lg font-extrabold text-ink leading-none">Rp 920.000</p>
             <p className="text-[10px] text-muted font-bold uppercase mt-1">Tagihan April</p>
           </div>
-          <span className="badge-base badge-mint">
-            1 Hari Aktif
-          </span>
+          {/* Badge "1 Hari Aktif" sudah dihapus dari sini */}
         </div>
       </div>
 

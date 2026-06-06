@@ -1,10 +1,16 @@
-// Service module containing API calls for apartment units inventory and occupancy.
-// import api from './api';
+import { supabase } from '../lib/supabase';
 
 export const unitService = {
-  getAll: async () => {},
-  getById: async (id) => {},
-  create: async (data) => {},
-  update: async (id, data) => {},
-  delete: async (id) => {},
+  getTowers: async () => {
+    /* TODO: await supabase.from('towers').select('*') */
+    return [{ id: 1, nama: 'Tower Alpha', jumlah_lantai: 20, jumlah_unit: 120 }];
+  },
+  getUnits: async () => {
+    /* TODO: await supabase.from('units').select('*, towers(nama)') */
+    return [{ id: 1, no_unit: 'A-102', tower_id: 1, lantai: 1, status: 'dihuni', ipl_bulan: 770000 }];
+  },
+  createUnit: async (unitData) => {
+    /* TODO: await supabase.from('units').insert(unitData) */
+    return { success: true };
+  }
 };

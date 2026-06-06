@@ -10,14 +10,12 @@ import {
   Dumbbell,
   Users,
   UserCog,
-  UserCheck,
   CalendarCheck,
   TrendingUp,
   BarChart2,
   ScrollText,
   Megaphone,
   LogOut,
-  Bell,
   Menu,
   X
 } from 'lucide-react';
@@ -54,15 +52,10 @@ export default function SuperAdminLayout() {
     },
     {
       title: 'PENGGUNA',
+      // ✨ PERUBAHAN: Menghapus item 'Aktivasi Akun' / 'Verifikasi Akun Baru' karena sudah otomatis aktif di sisi Keuangan
       items: [
         { name: 'Data Penghuni', path: '/super-admin/penghuni', icon: Users },
-        { name: 'Data Admin Divisi', path: '/super-admin/admin', icon: UserCog },
-        { 
-          name: 'Verifikasi Akun Baru', 
-          path: '/super-admin/verifikasi', 
-          icon: UserCheck,
-          badge: 3 
-        }
+        { name: 'Data Admin Divisi', path: '/super-admin/admin', icon: UserCog }
       ]
     },
     {
@@ -112,15 +105,13 @@ export default function SuperAdminLayout() {
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         } sidebar`}
       >
-        {/* AREA BRANDING: Diperbarui dengan gaya rapat kiri dan efek glow bayangan tebal */}
+        {/* AREA BRANDING */}
         <div className="sidebar-branding flex items-center justify-start gap-1 pl-1 select-none">
-          {/* LOGO ASSET DENGAN SHADOW GLOW TEBAL */}
           <img 
             src={LogoSiManTap} 
             alt="Logo SiManTap" 
             className="w-10 h-10 aspect-square object-contain shrink-0 filter drop-shadow-[0_4px_8px_rgba(30,58,138,0.38)]"
           />
-          {/* TEKS DENGAN TRACKING TIGHTER YANG SOLID */}
           <span className="sidebar-brand-name font-bold text-[#1E1E1E] tracking-tighter text-lg ml-0.5">
             SiManTap
           </span>
@@ -224,13 +215,14 @@ export default function SuperAdminLayout() {
           <Outlet />
         </main>
       </div>
+      
       {/* Logout Confirmation Modal */}
       <LogoutModal 
         isOpen={showLogout}
         onConfirm={() => {
           setShowLogout(false);
           localStorage.removeItem('userRole');
-          sessionStorage.clear();
+          sessionSession.clear();
           navigate('/login');
         }}
         onCancel={() => setShowLogout(false)}

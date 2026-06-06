@@ -1,50 +1,20 @@
 import React, { useState } from 'react';
-import { Plus, X, Search } from 'lucide-react';
+import { X, Search, User, Phone, Mail, Calendar, Home } from 'lucide-react';
 
 export default function DataPenghuni() {
   const [residents, setResidents] = useState([
-    { id: 1, name: 'Hendra Gunawan', unit: '12A', tower: 'Tower A', phone: '0889-7528-5486', email: 'hendra.g@email.com', dateIn: '15 Jan 2023', status: 'Aktif' },
-    { id: 2, name: 'Maya Sari', unit: '05B', tower: 'Tower A', phone: '0823-4567-8901', email: 'maya.s@email.com', dateIn: '01 Mar 2022', status: 'Aktif' },
-    { id: 3, name: 'Rudi Hartono', unit: '18C', tower: 'Tower B', phone: '0834-5678-9012', email: 'rudi.h@email.com', dateIn: '10 Jun 2023', status: 'Aktif' }
+    { id: 1, name: 'Hendra Gunawan', unit: '1012', tower: 'Tower A', phone: '0889-7528-5486', email: 'hendra.g@email.com', dateIn: '15 Jan 2023' },
+    { id: 2, name: 'Maya Sari', unit: '1005', tower: 'Tower A', phone: '0823-4567-8901', email: 'maya.s@email.com', dateIn: '01 Mar 2022' },
+    { id: 3, name: 'Rudi Hartono', unit: '1218', tower: 'Tower B', phone: '0834-5678-9012', email: 'rudi.h@email.com', dateIn: '10 Jun 2023' }
   ]);
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [modalOpen, setModalOpen] = useState(false);
-  const [newResident, setNewResident] = useState({
-    name: '',
-    unit: '',
-    tower: 'Tower A',
-    phone: '',
-    email: '',
-    dateIn: ''
-  });
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [selectedResident, setSelectedResident] = useState(null);
 
-  const handleAddResident = (e) => {
-    e.preventDefault();
-    if (!newResident.name || !newResident.unit || !newResident.phone) return;
-
-    // Formatting date input to human readable (e.g. 15 Jan 2023)
-    const rawDate = new Date(newResident.dateIn || Date.now());
-    const formattedDate = rawDate.toLocaleDateString('id-ID', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric'
-    });
-
-    const added = {
-      id: Date.now(),
-      name: newResident.name,
-      unit: newResident.unit,
-      tower: newResident.tower,
-      phone: newResident.phone,
-      email: newResident.email || '—',
-      dateIn: formattedDate,
-      status: 'Aktif'
-    };
-
-    setResidents(prev => [added, ...prev]);
-    setModalOpen(false);
-    setNewResident({ name: '', unit: '', tower: 'Tower A', phone: '', email: '', dateIn: '' });
+  const openDetail = (res) => {
+    setSelectedResident(res);
+    setDetailOpen(true);
   };
 
   const filteredResidents = residents.filter(res => {
@@ -58,7 +28,7 @@ export default function DataPenghuni() {
 
   return (
     <div className="space-y-6 animate-fade-up">
-      {/* Controls and Stats Header */}
+      {/* Controls row */}
       <div className="card-section p-6 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
         <div className="relative flex-1 max-w-md">
           <input
@@ -66,56 +36,42 @@ export default function DataPenghuni() {
             placeholder="Cari nama, unit, telepon..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9 pr-4 py-2 input-modern font-semibold w-full"
+            className="pl-10 pr-4 py-2 input-modern font-semibold w-full text-xs"
+            style={{ paddingLeft: '40px' }} 
           />
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" size={14} />
         </div>
-
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-muted font-bold hidden md:inline">
-            412 penghuni aktif
-          </span>
-          <button
-            onClick={() => setModalOpen(true)}
-            className="btn-primary py-2.5 px-4 text-xs font-bold"
-          >
-            <Plus size={14} />
-            <span>Tambah Penghuni</span>
-          </button>
-        </div>
+        {/* Tombol Tambah Penghuni Sudah Dihapus dari Sini */}
       </div>
 
       {/* Table Section */}
-      <div className="card-section p-6 overflow-hidden">
-        <div className="table-wrap">
-          <table className="table-modern">
-            <thead>
+      <div className="card-section !p-0 overflow-hidden shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead className="bg-[#FAF9F7] border-b border-soft">
               <tr>
-                <th>Nama</th>
-                <th>Unit</th>
-                <th>Tower</th>
-                <th>No. Telepon</th>
-                <th>Tanggal Masuk</th>
-                <th>Status</th>
-                <th className="text-right">Aksi</th>
+                <th className="p-4 text-[10px] font-black text-muted uppercase tracking-widest">Nama Lengkap</th>
+                <th className="p-4 text-[10px] font-black text-muted uppercase tracking-widest">No. Unit</th>
+                <th className="p-4 text-[10px] font-black text-muted uppercase tracking-widest">Tower</th>
+                <th className="p-4 text-[10px] font-black text-muted uppercase tracking-widest">No. Telepon</th>
+                <th className="p-4 text-[10px] font-black text-muted uppercase tracking-widest">Terdaftar</th>
+                <th className="p-4 text-[10px] font-black text-muted uppercase tracking-widest text-right">Aksi</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-gray-50">
               {filteredResidents.length > 0 ? (
                 filteredResidents.map((res) => (
-                  <tr key={res.id}>
-                    <td className="font-bold text-ink">{res.name}</td>
-                    <td className="text-ink font-bold">{res.unit}</td>
-                    <td className="text-muted">{res.tower}</td>
-                    <td className="font-mono text-muted">{res.phone}</td>
-                    <td className="text-muted">{res.dateIn}</td>
-                    <td>
-                      <span className="badge-base badge-mint">
-                        {res.status}
-                      </span>
-                    </td>
-                    <td className="text-right">
-                      <button className="text-ink hover:underline font-bold text-xs">
+                  <tr key={res.id} className="hover:bg-[#FDFDFD] transition-colors group">
+                    <td className="p-4 text-xs font-black text-ink">{res.name}</td>
+                    <td className="p-4 text-xs font-bold text-ink">{res.unit}</td>
+                    <td className="p-4 text-xs text-muted font-medium">{res.tower}</td>
+                    <td className="p-4 text-xs font-mono text-muted">{res.phone}</td>
+                    <td className="p-4 text-xs text-muted font-medium">{res.dateIn}</td>
+                    <td className="p-4 text-right">
+                      <button 
+                        onClick={() => openDetail(res)}
+                        className="text-[10px] font-black uppercase text-ink hover:underline tracking-tighter"
+                      >
                         Detail
                       </button>
                     </td>
@@ -123,8 +79,8 @@ export default function DataPenghuni() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={7} className="p-8 text-center text-muted font-bold">
-                    Tidak ada data penghuni yang cocok dengan pencarian.
+                  <td colSpan={6} className="p-12 text-center text-muted font-bold italic text-xs">
+                    Data penghuni tidak ditemukan.
                   </td>
                 </tr>
               )}
@@ -133,110 +89,39 @@ export default function DataPenghuni() {
         </div>
       </div>
 
-      {/* Tambah Penghuni Modal */}
-      {modalOpen && (
-        <div className="modal-overlay">
-          <div className="modal-box">
-            {/* Modal Header */}
-            <div className="modal-header">
-              <h3 className="text-xs font-bold text-ink uppercase tracking-wider">Tambah Penghuni Baru</h3>
-              <button onClick={() => setModalOpen(false)} className="text-muted hover:text-ink transition">
-                <X size={18} />
-              </button>
+      {/* Modal Detail Penghuni */}
+      {detailOpen && selectedResident && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/40 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl overflow-hidden animate-scale-up">
+            <div className="relative h-24 bg-[#EAE6E1]">
+              <button onClick={() => setDetailOpen(false)} className="absolute top-4 right-4 w-8 h-8 bg-white/50 backdrop-blur-md rounded-full flex items-center justify-center text-ink hover:bg-white transition-all"><X size={16}/></button>
+              <div className="absolute -bottom-10 left-6 w-20 h-20 bg-white rounded-2xl shadow-lg flex items-center justify-center border-4 border-white">
+                <User size={32} className="text-[#C8C2BC]" />
+              </div>
             </div>
-
-            {/* Modal Form */}
-            <form onSubmit={handleAddResident} className="modal-body space-y-4">
+            <div className="pt-14 p-8 space-y-6">
               <div>
-                <label className="label-modern">Nama Lengkap</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Contoh: Eko Prasetyo"
-                  value={newResident.name}
-                  onChange={(e) => setNewResident(prev => ({ ...prev, name: e.target.value }))}
-                  className="input-modern font-semibold"
-                />
+                <h4 className="text-lg font-black text-ink tracking-tight">{selectedResident.name}</h4>
+                <p className="text-xs font-bold text-muted flex items-center gap-1.5 mt-1">
+                  <Home size={12}/> {selectedResident.tower} — Unit {selectedResident.unit}
+                </p>
               </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="label-modern">No. Unit</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Contoh: 12A"
-                    value={newResident.unit}
-                    onChange={(e) => setNewResident(prev => ({ ...prev, unit: e.target.value }))}
-                    className="input-modern font-semibold"
-                  />
+              <div className="space-y-4">
+                <div className="flex items-center gap-4">
+                  <div className="w-9 h-9 rounded-xl bg-[#F8F7F5] flex items-center justify-center text-muted"><Phone size={16}/></div>
+                  <div><p className="text-[10px] font-black text-[#C8C2BC] uppercase tracking-widest">WhatsApp / Call</p><p className="text-xs font-bold text-ink">{selectedResident.phone}</p></div>
                 </div>
-                <div>
-                  <label className="label-modern">Tower</label>
-                  <select
-                    value={newResident.tower}
-                    onChange={(e) => setNewResident(prev => ({ ...prev, tower: e.target.value }))}
-                    className="select-modern input-modern font-semibold"
-                  >
-                    <option value="Tower A">Tower A</option>
-                    <option value="Tower B">Tower B</option>
-                    <option value="Tower C">Tower C</option>
-                  </select>
+                <div className="flex items-center gap-4">
+                  <div className="w-9 h-9 rounded-xl bg-[#F8F7F5] flex items-center justify-center text-muted"><Mail size={16}/></div>
+                  <div><p className="text-[10px] font-black text-[#C8C2BC] uppercase tracking-widest">Alamat Email</p><p className="text-xs font-bold text-ink">{selectedResident.email}</p></div>
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="w-9 h-9 rounded-xl bg-[#F8F7F5] flex items-center justify-center text-muted"><Calendar size={16}/></div>
+                  <div><p className="text-[10px] font-black text-[#C8C2BC] uppercase tracking-widest">Mulai Menetap</p><p className="text-xs font-bold text-ink">{selectedResident.dateIn}</p></div>
                 </div>
               </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="label-modern">No. Telepon</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Contoh: 08123456789"
-                    value={newResident.phone}
-                    onChange={(e) => setNewResident(prev => ({ ...prev, phone: e.target.value }))}
-                    className="input-modern font-semibold"
-                  />
-                </div>
-                <div>
-                  <label className="label-modern">Tanggal Masuk</label>
-                  <input
-                    type="date"
-                    required
-                    value={newResident.dateIn}
-                    onChange={(e) => setNewResident(prev => ({ ...prev, dateIn: e.target.value }))}
-                    className="input-modern font-semibold"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="label-modern">Email</label>
-                <input
-                  type="email"
-                  placeholder="Contoh: email@domain.com"
-                  value={newResident.email}
-                  onChange={(e) => setNewResident(prev => ({ ...prev, email: e.target.value }))}
-                  className="input-modern font-semibold"
-                />
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex items-center gap-3 pt-3 border-t border-soft">
-                <button
-                  type="submit"
-                  className="flex-1 btn-primary justify-center py-2.5 rounded-xl text-xs font-bold"
-                >
-                  Tambah
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setModalOpen(false)}
-                  className="flex-1 btn-ghost justify-center py-2.5 rounded-xl text-xs font-bold"
-                >
-                  Batal
-                </button>
-              </div>
-            </form>
+              <button onClick={() => setDetailOpen(false)} className="w-full btn-primary py-3.5 rounded-2xl text-[11px] font-black uppercase tracking-widest">Tutup Detail</button>
+            </div>
           </div>
         </div>
       )}

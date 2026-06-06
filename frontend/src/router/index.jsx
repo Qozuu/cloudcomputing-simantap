@@ -40,7 +40,7 @@ import LaporanKerusakan from '../pages/penghuni/LaporanKerusakan';
 import Pengumuman from '../pages/penghuni/Pengumuman';
 import PusatInformasiPenghuni from '../pages/penghuni/PusatInformasi';
 import FasilitasApartemen from '../pages/penghuni/FasilitasApartemen';
-import CustomerService from '../pages/penghuni/CustomerService';
+import KontakPengelola from '../pages/penghuni/CustomerService';
 import ProfilSaya from '../pages/penghuni/ProfilSaya';
 
 import DashboardKeamanan from '../pages/keamanan/DashboardKeamanan';
@@ -51,7 +51,8 @@ import AbsensiSatpam from '../pages/keamanan/AbsensiSatpam';
 
 import LoginPage from '../pages/auth/LoginPage';
 import OnboardingPage from '../pages/auth/OnboardingPage';
-import RegisterPage from '../pages/auth/RegisterPage';
+// RegisterPage sengaja tetap di-import agar tidak error di sidebar Explorer VS Code kamu, tapi tidak dipakai di rute manapun.
+import RegisterPage from '../pages/auth/RegisterPage'; 
 import ForgotPassword from '../pages/auth/ForgotPassword';
 import RolePickerPage from '../pages/auth/RolePickerPage';
 import Unauthorized from '../pages/Unauthorized';
@@ -65,6 +66,9 @@ import LaporanPendapatan from '../pages/keuangan/LaporanPendapatan';
 import PendapatanFasilitas from '../pages/keuangan/PendapatanFasilitas';
 import AbsensiKaryawan from '../pages/keuangan/AbsensiKaryawan';
 import AbsensiCheckInKeuangan from '../pages/keuangan/AbsensiCheckIn';
+import ChatKeuangan  from '../pages/keuangan/ChatKeuangan';
+import ChatFasilitas from '../pages/fasilitas/ChatFasilitas';
+import KelolaPenghuniKeuangan from '../pages/keuangan/KelolaPenghuniKeuangan';
 
 import ProtectedRoute from '../components/shared/ProtectedRoute';
 import AttendanceGuard from '../components/shared/AttendanceGuard';
@@ -76,7 +80,6 @@ import DataUnit from '../pages/superadmin/DataUnit';
 import ManajemenFasilitas from '../pages/superadmin/ManajemenFasilitas';
 import DataPenghuni from '../pages/superadmin/DataPenghuni';
 import DataAdminDivisi from '../pages/superadmin/DataAdminDivisi';
-import VerifikasiAkun from '../pages/superadmin/VerifikasiAkun';
 import AbsenKaryawan from '../pages/superadmin/AbsenKaryawan';
 import LaporanKeuangan from '../pages/superadmin/LaporanKeuangan';
 import GrafikMonitoring from '../pages/superadmin/GrafikMonitoring';
@@ -207,6 +210,10 @@ const router = createBrowserRouter([
         element: <TagihanReservasi />,
       },
       {
+        path: 'chat',
+        element: <ChatFasilitas />,
+      },
+      {
         path: 'informasi',
         element: <PusatInformasiFasilitas />,
       },
@@ -246,7 +253,7 @@ const router = createBrowserRouter([
       },
       {
         path: 'cs',
-        element: <CustomerService />,
+        element: <KontakPengelola />,
       },
       {
         path: 'profil',
@@ -287,8 +294,16 @@ const router = createBrowserRouter([
         element: <PendapatanFasilitas />,
       },
       {
+        path: 'chat',
+        element: <ChatKeuangan />,
+      },
+      {
         path: 'absen',
         element: <AbsensiKaryawan />,
+      },
+      {
+        path: 'residents',
+        element: <KelolaPenghuniKeuangan />,
       },
     ],
   },
@@ -339,10 +354,6 @@ const router = createBrowserRouter([
       {
         path: 'admin',
         element: <DataAdminDivisi />,
-      },
-      {
-        path: 'verifikasi',
-        element: <VerifikasiAkun />,
       },
       {
         path: 'absen',
@@ -403,10 +414,6 @@ const router = createBrowserRouter([
         element: <DataAdminDivisi />,
       },
       {
-        path: 'verifikasi',
-        element: <VerifikasiAkun />,
-      },
-      {
         path: 'absen',
         element: <AbsenKaryawan />,
       },
@@ -440,8 +447,9 @@ const router = createBrowserRouter([
         element: <LoginPage />,
       },
       {
+        // ✨ SEKARANG DI-HIDE BERSIDANG: Objek rute register dilempar balik ke Home/Onboarding otomatis
         path: '/register',
-        element: <RegisterPage />,
+        element: <Navigate to="/" replace />,
       },
       {
         path: '/forgot-password',
@@ -460,4 +468,3 @@ const router = createBrowserRouter([
 ]);
 
 export default router;
-

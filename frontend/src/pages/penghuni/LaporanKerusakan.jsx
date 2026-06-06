@@ -7,7 +7,9 @@ import {
   Camera,
   CheckCircle2,
   FileImage,
-  Plus
+  Plus,
+  Eye,
+  X
 } from 'lucide-react';
 
 export default function LaporanKerusakan() {
@@ -15,16 +17,18 @@ export default function LaporanKerusakan() {
   const [successToast, setSuccessToast] = useState('');
   const [selectedFileName, setSelectedFileName] = useState('');
   
+  // State untuk melacak tiket mana yang sedang dibuka di modal detail
+  const [activeModalTicket, setActiveModalTicket] = useState(null);
+
   const [tickets, setTickets] = useState([
     {
       id: 'TK-0088',
-      title: 'AC bocor — air menetes ke lantai',
+      title: 'AC bocor — air menetes ke lantai sangat deras sampai membanjiri karpet kamar utama dan berpotensi merusak kasur jika dibiarkan',
       category: 'AC / Pendingin',
       date: '19 April 2026',
       teknisi: 'Pak Roni',
       estimasi: '1-2 hari',
-      status: 'Proses',
-      updateMsg: 'Teknisi sudah mendiagnosa, spare part sedang dipesan.'
+      status: 'Proses'
     }
   ]);
 
@@ -50,23 +54,26 @@ export default function LaporanKerusakan() {
     e.preventDefault();
     if (!formData.description.trim()) return;
 
-    const ticketId = 'TK-' + Math.floor(1000 + Math.random() * 9000);
+    const lastTicketId = tickets.length > 0 
+      ? parseInt(tickets[0].id.split('-')[1]) 
+      : 87;
+    const nextIdNumber = lastTicketId + 1;
+    const ticketId = `TK-${String(nextIdNumber).padStart(4, '0')}`;
+
     const newTicket = {
       id: ticketId,
-      title: formData.description.substring(0, 45) + (formData.description.length > 45 ? '...' : ''),
+      title: formData.description,
       category: formData.category,
-      date: '23 Mei 2026',
+      date: '03 Juni 2026',
       teknisi: 'Sedang Diplot',
       estimasi: 'Verifikasi Admin',
-      status: 'Proses', // Default matching active state
-      updateMsg: 'Laporan kerusakan baru diterima. Admin sedang menugaskan teknisi.'
+      status: 'Proses'
     };
 
     setTickets(prev => [newTicket, ...prev]);
     setSuccessToast(`Laporan ${ticketId} berhasil terkirim!`);
     setTimeout(() => setSuccessToast(''), 3000);
 
-    // Reset Form
     setFormData({
       category: 'AC / Pendingin',
       description: ''
@@ -95,7 +102,7 @@ export default function LaporanKerusakan() {
             return (
               <div
                 key={ticket.id}
-                className={`${cardClass} relative overflow-hidden flex flex-col justify-between gap-4`}
+                className={`${cardClass} relative overflow-hidden flex flex-col justify-between gap-3`}
               >
                 {/* Top Row */}
                 <div className="flex items-center justify-between">
@@ -105,13 +112,23 @@ export default function LaporanKerusakan() {
                   </span>
                 </div>
 
-                {/* Title */}
-                <h4 className="text-sm font-black text-[#1E1E1E] leading-snug">
-                  {ticket.title}
-                </h4>
+                {/* Title Wrapper dengan batasan Baris Tunggal & Tombol Aksi */}
+                <div className="flex items-start justify-between gap-4">
+                  <h4 className="text-sm font-black text-[#1E1E1E] leading-snug truncate flex-1">
+                    {ticket.title}
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={() => setActiveModalTicket(ticket)}
+                    className="flex items-center gap-1 text-xs font-black text-[#A05820] hover:underline flex-shrink-0 bg-white/40 px-2 py-1 rounded-md"
+                  >
+                    <Eye size={12} />
+                    <span>Detail</span>
+                  </button>
+                </div>
 
                 {/* Meta Rows */}
-                <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[11px] font-semibold text-[#1E1E1E] border-t border-b border-black/5 py-3.5">
+                <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[11px] font-semibold text-[#1E1E1E] border-t border-black/5 pt-3 mb-1">
                   <span className="flex items-center gap-1.5">
                     <Calendar size={13} className="text-[#8A857F]" />
                     <span>Dilaporkan: {ticket.date}</span>
@@ -125,11 +142,6 @@ export default function LaporanKerusakan() {
                     <span>Estimasi: {ticket.estimasi}</span>
                   </span>
                 </div>
-
-                {/* Update Row */}
-                <p className="text-xs text-[#8A857F] font-medium italic">
-                  Update terbaru: {ticket.updateMsg}
-                </p>
               </div>
             );
           })}
@@ -143,11 +155,8 @@ export default function LaporanKerusakan() {
         </h3>
 
         <form onSubmit={handleFormSubmit} className="space-y-4">
-          {/* Kategori Kerusakan */}
           <div>
-            <label className="label-modern">
-              Kategori Kerusakan
-            </label>
+            <label className="label-modern">Kategori Kerusakan</label>
             <select
               value={formData.category}
               onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value }))}
@@ -162,11 +171,8 @@ export default function LaporanKerusakan() {
             </select>
           </div>
 
-          {/* Deskripsi Kerusakan */}
           <div>
-            <label className="label-modern">
-              Deskripsi Kerusakan
-            </label>
+            <label className="label-modern">Deskripsi Kerusakan</label>
             <textarea
               rows={4}
               required
@@ -177,11 +183,8 @@ export default function LaporanKerusakan() {
             ></textarea>
           </div>
 
-          {/* Foto Kerusakan */}
           <div>
-            <label className="label-modern">
-              Foto Kerusakan
-            </label>
+            <label className="label-modern">Foto Kerusakan</label>
             <input
               type="file"
               ref={fileInputRef}
@@ -210,16 +213,76 @@ export default function LaporanKerusakan() {
             </div>
           </div>
 
-          {/* Submit Button */}
-          <button
-            type="submit"
-            className="w-full btn-primary justify-center text-xs"
-          >
+          <button type="submit" className="w-full btn-primary justify-center text-xs">
             <Plus size={14} />
             <span>Kirim Laporan</span>
           </button>
         </form>
       </div>
+
+      {/* 🖥️ MODAL POPUP DETAIL LAPORAN */}
+      {activeModalTicket && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden border border-soft animate-scale-in">
+            {/* Modal Header */}
+            <div className="p-5 border-b border-soft flex items-center justify-between bg-app-bg">
+              <div>
+                <span className="text-[10px] font-bold text-muted uppercase tracking-widest">{activeModalTicket.id}</span>
+                <h3 className="text-sm font-extrabold text-ink">Detail Keluhan Penghuni</h3>
+              </div>
+              <button 
+                onClick={() => setActiveModalTicket(null)}
+                className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-soft text-muted transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+              <div>
+                <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded bg-soft text-ink mb-2">
+                  {activeModalTicket.category}
+                </span>
+                {/* Di sini teks deskripsi panjang dirender secara utuh tanpa terpotong */}
+                <p className="text-sm font-bold text-ink leading-relaxed whitespace-pre-wrap">
+                  {activeModalTicket.title}
+                </p>
+              </div>
+
+              {/* Info Detail Grid */}
+              <div className="bg-app-bg rounded-xl p-4 grid grid-cols-2 gap-3 border border-soft">
+                <div>
+                  <p className="text-[10px] text-muted font-bold uppercase">Tanggal Lapor</p>
+                  <p className="text-xs font-extrabold text-ink mt-0.5">{activeModalTicket.date}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted font-bold uppercase">Status Tiket</p>
+                  <p className="text-xs font-extrabold text-active mt-0.5">{activeModalTicket.status}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted font-bold uppercase">Teknisi</p>
+                  <p className="text-xs font-extrabold text-ink mt-0.5">{activeModalTicket.teknisi}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted font-bold uppercase">Estimasi Kerja</p>
+                  <p className="text-xs font-extrabold text-ink mt-0.5">{activeModalTicket.estimasi}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-soft bg-app-bg flex justify-end">
+              <button
+                onClick={() => setActiveModalTicket(null)}
+                className="px-4 py-2 bg-ink text-white font-bold text-xs rounded-xl hover:opacity-90 transition-opacity"
+              >
+                Tutup Detail
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Success Toast */}
       {successToast && (

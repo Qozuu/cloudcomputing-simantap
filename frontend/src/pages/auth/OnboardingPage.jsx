@@ -28,7 +28,8 @@ export default function OnboardingPage() {
     {
       tag: "Siap Mulai",
       title: "Mulai Kelola\nApartemen Sekarang",
-      desc: "Masuk dengan akun yang telah didaftarkan oleh administrator, atau daftarkan diri Anda sebagai penghuni baru."
+      // ✨ PERUBAHAN 1: Mengubah deskripsi teks agar menghapus opsi pendaftaran mandiri sesuai image_f15524.png
+      desc: "Masuk dengan akun resmi yang telah didaftarkan dan divalidasi oleh administrator pengelolaan gedung apartemen Anda."
     }
   ];
 
@@ -54,7 +55,7 @@ export default function OnboardingPage() {
         currentSlide === 2 ? 'bg-[#EEEDFB]' :
         'bg-[#E8FAF3]'
       }`}>
-        {/* LOGO VERSI DESKTOP - GAP DIKECILKAN & NEGATIVE MARGIN AGAR TULISAN KE KIRI */}
+        {/* LOGO VERSI DESKTOP */}
         <div className="flex items-center gap-1.5">
           <img 
             src={LogoSiManTap} 
@@ -97,7 +98,7 @@ export default function OnboardingPage() {
 
         <div className="max-w-sm w-full mx-auto flex flex-col items-center justify-center">
           
-          {/* LOGO VERSI MOBILE - MERAPAT KE KIRI */}
+          {/* LOGO VERSI MOBILE */}
           <div className="flex md:hidden items-center gap-1.5 mb-6">
             <img 
               src={LogoSiManTap} 
@@ -182,19 +183,13 @@ export default function OnboardingPage() {
               </button>
             ) : (
               <div className="flex flex-col w-full gap-3 mt-6">
+                {/* ✨ PERUBAHAN 2: Menyisakan satu tombol utama saja & menghapus tombol daftar mandiri */}
                 <button
                   onClick={() => navigate('/pilih-role')}
                   className="bg-[#111111] text-white w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-bold text-sm hover:bg-[#222222] transition-all duration-200 active:scale-[0.98] shadow-md"
                 >
                   <span>Masuk ke Akun</span>
                   <ArrowRight size={16} />
-                </button>
-                
-                <button
-                  onClick={() => navigate('/register')}
-                  className="w-full bg-transparent text-[#1E1E1E] font-bold py-3.5 rounded-2xl border-2 border-[#111111]/10 hover:border-[#111111] hover:bg-[#111111]/5 text-sm transition-all duration-200 active:scale-[0.98] flex items-center justify-center"
-                >
-                  Daftar sebagai Penghuni
                 </button>
               </div>
             )}

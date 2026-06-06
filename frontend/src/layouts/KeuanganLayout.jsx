@@ -11,7 +11,9 @@ import {
   Building,
   CalendarCheck,
   LogOut,
-  Bell
+  Bell,
+  MessageSquare,
+  Users // ✨ PERUBAHAN: Import ikon Users untuk Kelola Penghuni
 } from 'lucide-react';
 
 // 1. IMPORT LOGO ASSET BIAR SERAGAM JIRR
@@ -32,6 +34,11 @@ export default function KeuanganLayout() {
       name: 'Dashboard Keuangan',
       path: '/keuangan/dashboard',
       icon: LayoutDashboard
+    },
+    {
+      name: 'Kelola Penghuni', // ✨ PERUBAHAN: Menu Baru disisipkan di sini
+      path: '/keuangan/residents',
+      icon: Users
     },
     {
       name: 'Tagihan (E-Billing)',
@@ -68,6 +75,7 @@ export default function KeuanganLayout() {
   ];
 
   const getPageTitle = () => {
+    if (isActive('/keuangan/chat')) return 'CS Live Chat';
     const item = menuItems.find(i => i.path === currentPath);
     return item ? item.name : 'Keuangan';
   };
@@ -98,7 +106,39 @@ export default function KeuanganLayout() {
               KEUANGAN
             </span>
             <div className="space-y-1 mt-2">
-              {menuItems.map((item) => {
+              {/* ✨ PERUBAHAN: Menyesuaikan slice index karena ada penambahan 1 menu baru di atas */}
+              {menuItems.slice(0, 7).map((item) => {
+                const active = isActive(item.path);
+                const IconComponent = item.icon;
+                return (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    className={`sidebar-item-link ${active ? 'active' : ''}`}
+                  >
+                    <IconComponent size={16} />
+                    <span>{item.name}</span>
+                    {item.badge && (
+                      <span className="sidebar-badge">
+                        {item.badge}
+                      </span>
+                    )}
+                  </Link>
+                );
+              })}
+
+              <div
+                className={`sidebar-item sidebar-item-link ${isActive('/keuangan/chat') ? 'active' : ''}`}
+                onClick={() => navigate('/keuangan/chat')}
+              >
+                <div className="sidebar-item-bg" />
+                <MessageSquare size={16} />
+                <span>CS Live Chat</span>
+                <span className="sidebar-badge">2</span>
+              </div>
+
+              {/* ✨ PERUBAHAN: Menyesuaikan slice index penutup */}
+              {menuItems.slice(7).map((item) => {
                 const active = isActive(item.path);
                 const IconComponent = item.icon;
                 return (

@@ -13,8 +13,8 @@ export default function DataUnit() {
   const [towerFilter, setTowerFilter] = useState('Semua');
   const [statusFilter, setStatusFilter] = useState('Semua');
   const [searchQuery, setSearchQuery] = useState('');
-
   const [modalOpen, setModalOpen] = useState(false);
+
   const [newUnit, setNewUnit] = useState({
     noUnit: '',
     tower: 'Tower A',
@@ -43,7 +43,6 @@ export default function DataUnit() {
     setNewUnit({ noUnit: '', tower: 'Tower A', floor: '', size: '', status: 'Kosong' });
   };
 
-  // Filtering Logic
   const filteredUnits = units.filter(unit => {
     const matchesTower = towerFilter === 'Semua' || unit.tower === towerFilter;
     const matchesStatus = statusFilter === 'Semua' || unit.status === statusFilter;
@@ -58,7 +57,6 @@ export default function DataUnit() {
       {/* Filters and Search Row */}
       <div className="card-section p-6 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-3">
-          {/* Tower Selector */}
           <div className="flex items-center gap-2">
             <span className="text-[10px] font-bold text-muted uppercase tracking-widest">Tower:</span>
             <select
@@ -73,7 +71,6 @@ export default function DataUnit() {
             </select>
           </div>
 
-          {/* Status Selector */}
           <div className="flex items-center gap-2">
             <span className="text-[10px] font-bold text-muted uppercase tracking-widest">Status:</span>
             <select
@@ -87,20 +84,33 @@ export default function DataUnit() {
             </select>
           </div>
 
-          {/* Search Box */}
-          <div className="relative">
+          {/* SEARCH BOX FIXED (Menggunakan Inline Style untuk memaksa posisi) */}
+          <div className="relative flex items-center" style={{ minWidth: '240px' }}>
             <input
               type="text"
               placeholder="Cari unit atau penghuni..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 pr-4 py-2 input-modern font-semibold w-56"
+              className="input-modern font-semibold w-full"
+              style={{ 
+                paddingLeft: '16px', 
+                paddingRight: '40px', // Ruang agar teks tidak menimpa ikon
+                borderRadius: '99px' 
+              }}
             />
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" size={14} />
+            <Search 
+              className="text-muted" 
+              size={16} 
+              style={{ 
+                position: 'absolute', 
+                right: '15px',      // Ikon dikunci di kanan
+                left: 'auto',       // Menghapus paksa settingan CSS global
+                pointerEvents: 'none' 
+              }} 
+            />
           </div>
         </div>
 
-        {/* Add Unit Trigger */}
         <button
           onClick={() => setModalOpen(true)}
           className="btn-primary py-2.5 px-4 text-xs font-bold"
@@ -110,30 +120,21 @@ export default function DataUnit() {
         </button>
       </div>
 
-      {/* Pagination Info */}
-      <div className="flex justify-between items-center px-1">
-        <span className="text-xs font-bold text-muted">
-          Menampilkan {filteredUnits.length} unit
-        </span>
-        <span className="text-[11px] font-bold text-muted uppercase tracking-wider">
-          Halaman 1 dari 1
-        </span>
-      </div>
-
       {/* Table Section */}
       <div className="card-section p-6 overflow-hidden">
         <div className="table-wrap">
-          <table className="table-modern">
+          <table className="table-modern w-full">
             <thead>
               <tr>
-                <th>No. Unit</th>
-                <th>Tower</th>
-                <th>Lantai</th>
-                <th>Luas</th>
-                <th>Penghuni</th>
-                <th>Status</th>
-                <th>IPL / Bulan</th>
-                <th className="text-right">Aksi</th>
+                <th className="text-left">No. Unit</th>
+                <th className="text-left">Tower</th>
+                <th className="text-left">Lantai</th>
+                <th className="text-left">Luas</th>
+                <th className="text-left">Penghuni</th>
+                <th className="text-left">Status</th>
+                <th className="text-left">IPL / Bulan</th>
+                {/* HEAD AKSI TENGAH */}
+                <th style={{ textAlign: 'center', width: '100px' }}>Aksi</th>
               </tr>
             </thead>
             <tbody>
@@ -146,19 +147,17 @@ export default function DataUnit() {
                     <td className="text-muted font-mono">{row.size}</td>
                     <td className="text-ink font-bold">{row.resident}</td>
                     <td>
-                      {row.status === 'Dihuni' ? (
-                        <span className="badge-base badge-mint">
-                          Dihuni
-                        </span>
-                      ) : (
-                        <span className="badge-base badge-gray">
-                          Kosong
-                        </span>
-                      )}
+                      <span className={`badge-base ${row.status === 'Dihuni' ? 'badge-mint' : 'badge-gray'}`}>
+                        {row.status}
+                      </span>
                     </td>
                     <td className="text-ink font-bold font-mono">{row.ipl}</td>
-                    <td className="text-right">
-                      <button className="text-ink hover:underline font-bold text-xs">
+                    {/* ISI AKSI TENGAH */}
+                    <td style={{ textAlign: 'center' }}>
+                      <button 
+                        className="text-ink hover:underline font-bold text-xs"
+                        style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}
+                      >
                         Detail
                       </button>
                     </td>
@@ -176,19 +175,16 @@ export default function DataUnit() {
         </div>
       </div>
 
-      {/* Add Unit Modal */}
+      {/* Modal Add Unit tetap seperti kode asli Anda */}
       {modalOpen && (
         <div className="modal-overlay">
           <div className="modal-box">
-            {/* Modal Header */}
             <div className="modal-header">
               <h3 className="text-xs font-bold text-ink uppercase tracking-wider">Tambah Unit Apartemen</h3>
               <button onClick={() => setModalOpen(false)} className="text-muted hover:text-ink transition">
                 <X size={18} />
               </button>
             </div>
-
-            {/* Modal Form */}
             <form onSubmit={handleAddUnit} className="modal-body space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -196,7 +192,6 @@ export default function DataUnit() {
                   <input
                     type="text"
                     required
-                    placeholder="Contoh: 25A"
                     value={newUnit.noUnit}
                     onChange={(e) => setNewUnit(prev => ({ ...prev, noUnit: e.target.value }))}
                     className="input-modern font-semibold"
@@ -215,14 +210,12 @@ export default function DataUnit() {
                   </select>
                 </div>
               </div>
-
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="label-modern">Lantai</label>
                   <input
                     type="number"
                     required
-                    placeholder="Contoh: 12"
                     value={newUnit.floor}
                     onChange={(e) => setNewUnit(prev => ({ ...prev, floor: e.target.value }))}
                     className="input-modern font-semibold"
@@ -233,14 +226,12 @@ export default function DataUnit() {
                   <input
                     type="number"
                     required
-                    placeholder="Contoh: 42"
                     value={newUnit.size}
                     onChange={(e) => setNewUnit(prev => ({ ...prev, size: e.target.value }))}
                     className="input-modern font-semibold"
                   />
                 </div>
               </div>
-
               <div>
                 <label className="label-modern">Status Unit</label>
                 <select
@@ -252,20 +243,11 @@ export default function DataUnit() {
                   <option value="Dihuni">Dihuni</option>
                 </select>
               </div>
-
-              {/* Action Buttons */}
               <div className="flex items-center gap-3 pt-3 border-t border-soft">
-                <button
-                  type="submit"
-                  className="flex-1 btn-primary justify-center py-2.5 rounded-xl text-xs font-bold"
-                >
+                <button type="submit" className="flex-1 btn-primary justify-center py-2.5 rounded-xl text-xs font-bold">
                   Tambah Unit
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setModalOpen(false)}
-                  className="flex-1 btn-ghost justify-center py-2.5 rounded-xl text-xs font-bold"
-                >
+                <button type="button" onClick={() => setModalOpen(false)} className="flex-1 btn-ghost justify-center py-2.5 rounded-xl text-xs font-bold border border-gray-200">
                   Batal
                 </button>
               </div>

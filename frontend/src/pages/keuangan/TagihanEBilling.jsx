@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, FileDown, Plus, X, Loader2, HelpCircle } from 'lucide-react';
+import { Search, FileDown, Plus, X, Loader2, HelpCircle, Printer } from 'lucide-react';
 
 export default function TagihanEBilling() {
   const [bills, setBills] = useState([
@@ -16,9 +16,8 @@ export default function TagihanEBilling() {
   const [statusFilter, setStatusFilter] = useState('Semua');
   const [searchQuery, setSearchQuery] = useState('');
   
-  // Dialog and loading states
-  const [confirmTarget, setConfirmTarget] = useState(null); // bill object when confirm dialog is open
-  const [loadingId, setLoadingId] = useState(null); // id of bill currently executing "lunas" loading
+  const [confirmTarget, setConfirmTarget] = useState(null);
+  const [loadingId, setLoadingId] = useState(null);
   const [successToast, setSuccessToast] = useState('');
 
   const handleOpenConfirm = (bill) => {
@@ -34,13 +33,9 @@ export default function TagihanEBilling() {
     const targetId = confirmTarget.id;
     const targetName = confirmTarget.name;
     
-    // Close confirm dialog
     setConfirmTarget(null);
-    
-    // Set loading
     setLoadingId(targetId);
 
-    // Simulate 1.5 second loading
     setTimeout(() => {
       setBills(prev => 
         prev.map(b => {
@@ -82,7 +77,6 @@ export default function TagihanEBilling() {
     }).format(val);
   };
 
-  // Filter Logic
   const filteredBills = bills.filter(bill => {
     const matchesStatus = statusFilter === 'Semua' || bill.status === statusFilter;
     const matchesSearch = 
@@ -96,7 +90,6 @@ export default function TagihanEBilling() {
       {/* Controls Row */}
       <div className="card-section p-6 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-3">
-          {/* Period selector */}
           <div className="relative">
             <select
               value={period}
@@ -108,7 +101,6 @@ export default function TagihanEBilling() {
             </select>
           </div>
 
-          {/* Status selector */}
           <div className="relative">
             <select
               value={statusFilter}
@@ -122,20 +114,22 @@ export default function TagihanEBilling() {
             </select>
           </div>
 
-          {/* Search box */}
-          <div className="relative">
+          {/* 🔥 SEKSI INPUT PENCARIAN YANG SUDAH DIPERBAIKI AGAR TIDAK TUMPUK */}
+          <div className="relative flex items-center">
+            <div className="absolute left-3 pointer-events-none z-10 text-muted flex items-center justify-center">
+              <Search size={14} />
+            </div>
             <input
               type="text"
               placeholder="Cari unit atau nama..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="input-modern pl-9 pr-4 py-2 text-xs font-semibold w-52"
+              className="input-modern pr-4 py-2 text-xs font-semibold w-52"
+              style={{ paddingLeft: '2.25rem' }}
             />
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" size={14} />
           </div>
         </div>
 
-        {/* Generate Invoice triggers */}
         <button
           onClick={handleGenerateInvoice}
           className="btn-primary btn-sm flex items-center justify-center gap-1.5"
@@ -147,7 +141,6 @@ export default function TagihanEBilling() {
 
       {/* Stats Cards Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Card 1: Pink */}
         <div className="card-pink flex flex-col justify-between">
           <div>
             <span className="text-[#8A857F] font-semibold text-xs uppercase tracking-wider">Total Tagihan</span>
@@ -156,7 +149,6 @@ export default function TagihanEBilling() {
           <span className="text-[10px] text-[#8A857F] font-semibold mt-1 block">April 2026</span>
         </div>
 
-        {/* Card 2: Yellow */}
         <div className="card-yellow flex flex-col justify-between">
           <div>
             <span className="text-[#8A857F] font-semibold text-xs uppercase tracking-wider">Sudah Lunas</span>
@@ -165,7 +157,6 @@ export default function TagihanEBilling() {
           <span className="text-[10px] text-[#8A857F] font-semibold mt-1 block">Rp 248 Jt terkumpul</span>
         </div>
 
-        {/* Card 3: Lavender */}
         <div className="card-lavender flex flex-col justify-between">
           <div>
             <span className="text-[#8A857F] font-semibold text-xs uppercase tracking-wider">Menunggu</span>
@@ -174,7 +165,6 @@ export default function TagihanEBilling() {
           <span className="text-[10px] text-[#8A857F] font-semibold mt-1 block">Rp 44.6 Jt pending</span>
         </div>
 
-        {/* Card 4: Mint */}
         <div className="card-mint flex flex-col justify-between">
           <div>
             <span className="text-[#8A857F] font-semibold text-xs uppercase tracking-wider">Terlambat</span>
@@ -191,9 +181,6 @@ export default function TagihanEBilling() {
             <h3 className="text-sm font-bold text-ink uppercase tracking-wider">
               Daftar E-Billing Seluruh Penghuni
             </h3>
-            <p className="text-[11px] text-muted font-medium mt-0.5">
-              Rata-rata IPL Rp 770.000/unit/Bulan · Parkir Rp 150.000/kendaraan
-            </p>
           </div>
           <button
             onClick={() => showToast('Data tagihan berhasil diexport ke format Excel!')}
@@ -204,7 +191,6 @@ export default function TagihanEBilling() {
           </button>
         </div>
 
-        {/* E-Billing table */}
         <div className="card-section-body p-0 overflow-x-auto">
           <table className="table-modern">
             <thead>
@@ -218,7 +204,8 @@ export default function TagihanEBilling() {
                 <th>Total</th>
                 <th>Status</th>
                 <th>Tgl Bayar</th>
-                <th className="text-right">Aksi</th>
+                <th className="text-center w-16">Nota</th>
+                <th className="text-right pr-6 w-32">Aksi Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 text-xs font-semibold text-gray-800">
@@ -233,38 +220,34 @@ export default function TagihanEBilling() {
                   <td className="font-mono text-ink font-bold">{formatRupiah(row.total)}</td>
                   <td>
                     {row.status === 'Lunas' ? (
-                      <span className="badge-base badge-mint">
-                        Lunas
-                      </span>
+                      <span className="badge-base badge-mint">Lunas</span>
                     ) : row.status === 'Menunggu' ? (
-                      <span className="badge-base badge-yellow">
-                        Menunggu
-                      </span>
+                      <span className="badge-base badge-yellow">Menunggu</span>
                     ) : (
-                      <span className="badge-base badge-pink">
-                        Terlambat
-                      </span>
+                      <span className="badge-base badge-pink">Terlambat</span>
                     )}
                   </td>
                   <td className="text-muted font-medium">{row.payDate}</td>
-                  <td className="text-right">
-                    <div className="flex items-center justify-end gap-3 font-bold text-[10px] tracking-wider uppercase">
-                      <button
-                        onClick={() => showToast(`Mencetak invoice unit ${row.unit} (Simulasi)...`)}
-                        className="text-ink hover:text-ink/80 hover:underline"
-                      >
-                        Print
-                      </button>
-                      
-                      <span className="text-muted">/</span>
+                  
+                  <td className="text-center">
+                    <button
+                      onClick={() => showToast(`Mencetak invoice unit ${row.unit} (Simulasi)...`)}
+                      className="p-2 text-ink hover:text-ink/70 hover:bg-gray-100 rounded-lg inline-flex items-center justify-center transition"
+                      title="Print Invoice"
+                    >
+                      <Printer size={15} />
+                    </button>
+                  </td>
 
+                  <td className="text-right pr-6">
+                    <div className="flex justify-end font-bold text-[10px] tracking-wider uppercase">
                       {row.status === 'Lunas' ? (
-                        <span className="badge-base badge-mint">Lunas</span>
+                        <span className="badge-base badge-mint py-1 px-2.5">Selesai</span>
                       ) : (
                         <button
                           onClick={() => handleOpenConfirm(row)}
                           disabled={loadingId === row.id}
-                          className={`px-2.5 py-1 rounded-full text-white transition flex items-center gap-1 ${
+                          className={`px-3 py-1.5 rounded-full text-white font-bold transition flex items-center gap-1 shadow-sm ${
                             loadingId === row.id 
                               ? 'bg-gray-300 cursor-not-allowed' 
                               : row.status === 'Menunggu' 
@@ -287,27 +270,24 @@ export default function TagihanEBilling() {
           </table>
         </div>
 
-        {/* Table footer note */}
         <p className="p-4 border-t border-soft italic text-[11px] text-muted">
           * Rata-rata tagihan IPL: Rp 770.000/unit/Bulan · Parkir: Rp 150.000/kendaraan
         </p>
       </div>
 
-      {/* UI Safety Dialog Confirmation Modal */}
+      {/* Confirmation Modal */}
       {confirmTarget && (
         <div className="modal-overlay">
           <div className="modal-box text-center p-6 space-y-4">
             <div className="w-12 h-12 rounded-full bg-[#EEEDFB] text-[#4840B0] flex items-center justify-center mx-auto shadow-sm">
               <HelpCircle size={24} />
             </div>
-            
             <div className="space-y-1">
               <h4 className="text-sm font-bold text-ink uppercase tracking-wider">Konfirmasi Pembayaran</h4>
               <p className="text-xs text-muted font-medium leading-relaxed">
                 Apakah Anda yakin ingin menyatakan tagihan unit <strong className="text-ink font-bold">{confirmTarget.unit}</strong> ({confirmTarget.name}) sebesar <strong className="text-ink font-bold">{formatRupiah(confirmTarget.total)}</strong> telah <strong className="text-ink font-bold">LUNAS</strong>?
               </p>
             </div>
-
             <div className="flex items-center gap-3 pt-2">
               <button
                 onClick={handleExecuteLunas}

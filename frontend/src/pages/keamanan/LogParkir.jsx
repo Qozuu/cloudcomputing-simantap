@@ -7,6 +7,37 @@ import {
   CheckCircle2
 } from 'lucide-react';
 
+// Fungsi Hitung Biaya Parkir (Tetap dipertahankan)
+const calculateParkingFee = (masukStr, keluarStr, isPenghuni) => {
+  if (isPenghuni) return '-';
+  if (!masukStr || !keluarStr || keluarStr === '-') return '-';
+
+  const parseTime = (timeStr) => {
+    const today = new Date();
+    const cleanTime = timeStr.replace('.', ':');
+    const [hours, minutes] = cleanTime.split(':').map(Number);
+    
+    today.setHours(hours || 0, minutes || 0, 0, 0);
+    return today;
+  };
+
+  const masukTime = parseTime(masukStr);
+  const keluarTime = parseTime(keluarStr);
+
+  const durationMs = keluarTime - masukTime;
+  let durationHours = durationMs / (1000 * 60 * 60);
+
+  if (durationHours < 0) {
+    durationHours += 24;
+  }
+
+  const RATE_PER_HOUR = 5000;
+  const totalHours = Math.max(1, Math.ceil(durationHours));
+  const calculatedFee = totalHours * RATE_PER_HOUR;
+
+  return `Rp ${calculatedFee.toLocaleString('id-ID')}`;
+};
+
 export default function LogParkir() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('Semua');
@@ -18,7 +49,7 @@ export default function LogParkir() {
       value: '312/380',
       subtitle: '82.1% kapasitas',
       icon: Car,
-      colorClass: 'stat-pink',
+      colorClass: 'bg-[#FDF2F0]', // Mengembalikan warna soft background ikon
       textClass: 'text-[#B85040]'
     },
     {
@@ -26,7 +57,7 @@ export default function LogParkir() {
       value: 'Rp 34 Jt',
       subtitle: 'Bulan April',
       icon: DollarSign,
-      colorClass: 'stat-yellow',
+      colorClass: 'bg-[#FEF9F3]', 
       textClass: 'text-[#A05820]'
     },
     {
@@ -34,7 +65,7 @@ export default function LogParkir() {
       value: '48',
       subtitle: 'Tamu / harian',
       icon: TrendingUp,
-      colorClass: 'stat-lavender',
+      colorClass: 'bg-[#F5F3FF]', 
       textClass: 'text-[#4840B0]'
     }
   ];
@@ -69,6 +100,26 @@ export default function LogParkir() {
       masuk: '07:00',
       keluar: '09:00',
       biaya: 'Rp 10.000'
+    },
+    {
+      id: 4,
+      plat: 'B 456 XY',
+      jenis: 'Mobil',
+      penghuni: 'Tamu',
+      isPenghuni: false,
+      masuk: '10:00',
+      keluar: '-',
+      biaya: '-'
+    },
+    {
+      id: 5,
+      plat: 'N 789 MZ',
+      jenis: 'Motor',
+      penghuni: 'Tamu',
+      isPenghuni: false,
+      masuk: '09:30',
+      keluar: '-',
+      biaya: '-'
     }
   ]);
 
@@ -82,7 +133,7 @@ export default function LogParkir() {
           ? {
               ...item,
               keluar: timeStr,
-              biaya: item.isPenghuni ? '-' : 'Rp 10.000'
+              biaya: calculateParkingFee(item.masuk, timeStr, item.isPenghuni)
             }
           : item
       )
@@ -102,30 +153,31 @@ export default function LogParkir() {
   return (
     <div className="space-y-6 animate-fade-up relative">
       
-      {/* Stats row */}
+      {/* Stats Row - PERBAIKAN STRUKTUR IKON */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         {stats.map((stat, idx) => {
           const IconComponent = stat.icon;
           return (
             <div
               key={idx}
-              className="stat-card flex flex-col justify-between min-h-[135px] transition hover:translate-y-[-2px] duration-150 shadow-sm"
+              className="bg-white p-5 rounded-2xl flex flex-col justify-between min-h-[135px] transition hover:translate-y-[-2px] duration-150 shadow-sm border border-gray-100/50"
             >
               <div className="flex justify-between items-start">
                 <div>
-                  <div className={`stat-icon-wrap ${stat.colorClass}`}>
-                    <IconComponent size={18} className="stroke-[2.5]" />
+                  {/* Container Bundar untuk Ikon */}
+                  <div className={`w-9 h-9 rounded-full flex items-center justify-center mb-3 ${stat.colorClass}`}>
+                    <IconComponent size={18} className={`${stat.textClass} stroke-[2.5]`} />
                   </div>
-                  <p className="stat-label">
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
                     {stat.title}
                   </p>
-                  <p className={`stat-value ${stat.textClass} mt-1`}>
+                  <p className={`text-2xl font-extrabold ${stat.textClass} mt-1`}>
                     {stat.value}
                   </p>
                 </div>
               </div>
               
-              <p className="text-xs text-muted font-semibold tracking-wide mt-2">
+              <p className="text-xs text-gray-400 font-medium tracking-wide mt-2">
                 {stat.subtitle}
               </p>
             </div>
@@ -133,30 +185,30 @@ export default function LogParkir() {
         })}
       </div>
 
-      {/* Filter Row */}
-      <div className="card-section p-6 flex flex-col sm:flex-row gap-4 items-center justify-between">
-        {/* Search */}
+      {/* Filter Row - PERBAIKAN BUG TUMPANG TINDIH & TOMBOL HILANG */}
+      <div className="bg-white p-4 rounded-2xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 shadow-sm border border-gray-100/50">
+        {/* Kolom Cari Plat Nomor */}
         <div className="relative w-full sm:max-w-xs">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" size={15} />
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Cari plat nomor / nama..."
-            className="w-full pl-10 pr-4 py-2 input-modern font-semibold"
+            className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold text-gray-700 placeholder-gray-400 focus:outline-none focus:border-gray-400 transition-all"
           />
         </div>
 
-        {/* Filter types */}
-        <div className="flex gap-2">
+        {/* Kolom Tombol Filter (Aman dari Tumpang Tindih) */}
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
           {['Semua', 'Mobil', 'Motor'].map((type) => (
             <button
               key={type}
               onClick={() => setFilterType(type)}
-              className={`px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider transition ${
+              className={`px-5 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap ${
                 filterType === type
-                  ? 'bg-[#1E1E1E] text-white shadow-sm'
-                  : 'bg-[#FAF6F0] text-muted border border-soft hover:bg-[#F0EDE8]'
+                  ? 'bg-[#1E1E1E] text-white shadow-md shadow-black/10'
+                  : 'bg-gray-50 text-gray-400 border border-gray-200 hover:bg-gray-100 hover:text-gray-600'
               }`}
             >
               {type}
@@ -166,57 +218,57 @@ export default function LogParkir() {
       </div>
 
       {/* Table section */}
-      <div className="card-section p-6 overflow-hidden">
-        <h3 className="text-xs font-bold text-ink uppercase tracking-wider mb-5">
+      <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100/50 overflow-hidden">
+        <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider mb-5">
           Log Parkir Real-time
         </h3>
 
-        <div className="table-wrap">
-          <table className="table-modern">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
             <thead>
-              <tr>
-                <th>Plat</th>
-                <th>Jenis</th>
-                <th>Penghuni</th>
-                <th>Masuk</th>
-                <th>Keluar</th>
-                <th>Biaya</th>
-                <th className="text-right">Aksi</th>
+              <tr className="border-b border-gray-100 text-[11px] font-bold text-gray-400 uppercase tracking-wider">
+                <th className="pb-3">Plat</th>
+                <th className="pb-3">Jenis</th>
+                <th className="pb-3">Penghuni</th>
+                <th className="pb-3">Masuk</th>
+                <th className="pb-3">Keluar</th>
+                <th className="pb-3">Biaya</th>
+                <th className="pb-3 text-right">Aksi</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-gray-50 text-sm">
               {filteredParkir.map((item) => (
-                <tr key={item.id}>
-                  <td className="font-bold text-ink">{item.plat}</td>
-                  <td>{item.jenis}</td>
-                  <td>
+                <tr key={item.id} className="hover:bg-gray-50/50 transition-colors">
+                  <td className="py-3.5 font-bold text-gray-800">{item.plat}</td>
+                  <td className="py-3.5 text-gray-500">{item.jenis}</td>
+                  <td className="py-3.5">
                     {item.isPenghuni ? (
-                      <span className="text-ink font-bold">{item.penghuni}</span>
+                      <span className="text-gray-800 font-semibold">{item.penghuni}</span>
                     ) : (
-                      <span className="badge-base badge-yellow">
+                      <span className="px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide bg-amber-50 text-amber-700 border border-amber-200 rounded-lg">
                         Tamu
                       </span>
                     )}
                   </td>
-                  <td className="font-bold text-ink">{item.masuk}</td>
-                  <td className="text-muted">{item.keluar}</td>
-                  <td>
+                  <td className="py-3.5 font-semibold text-gray-800">{item.masuk}</td>
+                  <td className="py-3.5 text-gray-400">{item.keluar}</td>
+                  <td className="py-3.5">
                     {item.biaya === '-' ? (
-                      <span className="text-muted font-bold">-</span>
+                      <span className="text-gray-300 font-bold">-</span>
                     ) : (
-                      <span className="text-ink font-extrabold">{item.biaya}</span>
+                      <span className="text-gray-900 font-extrabold">{item.biaya}</span>
                     )}
                   </td>
-                  <td className="text-right">
+                  <td className="py-3.5 text-right">
                     {item.keluar === '-' ? (
                       <button
                         onClick={() => handleCheckoutParkir(item.id)}
-                        className="text-[#E06E5D] hover:underline font-bold text-xs"
+                        className="text-[#E06E5D] hover:text-[#c45647] hover:underline font-bold text-xs bg-red-50/50 px-3 py-1.5 rounded-lg transition-all"
                       >
                         Check-Out
                       </button>
                     ) : (
-                      <span className="text-muted font-semibold text-xs">-</span>
+                      <span className="text-gray-300 font-semibold text-xs pr-4">-</span>
                     )}
                   </td>
                 </tr>
@@ -228,13 +280,11 @@ export default function LogParkir() {
 
       {/* Success Toast */}
       {successToast && (
-        <div className="toast-modern toast-success">
+        <div className="fixed bottom-5 right-5 bg-emerald-600 text-white px-4 py-3 rounded-xl shadow-lg flex items-center gap-3 animate-fade-in z-50">
           <div className="w-5 h-5 rounded-full bg-white/20 text-white flex items-center justify-center flex-shrink-0">
             <CheckCircle2 size={14} className="stroke-[3]" />
           </div>
-          <div>
-            <p className="text-xs font-bold">{successToast}</p>
-          </div>
+          <p className="text-xs font-bold">{successToast}</p>
         </div>
       )}
     </div>

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import LogoutModal from '../components/shared/LogoutModal';
 import NotificationBell from '../components/shared/NotificationBell';
+import { MessageSquare } from 'lucide-react';
 
 // 1. IMPORT LOGO ASSET
 import LogoSiManTap from '../assets/logo.png';
@@ -77,6 +78,7 @@ export default function FasilitasLayout() {
   ];
 
   const getPageTitle = () => {
+    if (isActive('/fasilitas/chat')) return 'CS Live Chat';
     const item = menuItems.find(i => i.path === currentPath);
     return item ? item.name : 'Fasilitas';
   };
@@ -106,7 +108,36 @@ export default function FasilitasLayout() {
               FASILITAS
             </span>
             <div className="space-y-1 mt-2">
-              {menuItems.map((item) => {
+              {menuItems.slice(0, 5).map((item) => {
+                const active = isActive(item.path);
+                return (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    className={`sidebar-item-link ${active ? 'active' : ''}`}
+                  >
+                    {item.icon}
+                    <span>{item.name}</span>
+                    {item.badge && (
+                      <span className="sidebar-badge">
+                        {item.badge}
+                      </span>
+                    )}
+                  </Link>
+                );
+              })}
+
+              <div
+                className={`sidebar-item sidebar-item-link ${isActive('/fasilitas/chat') ? 'active' : ''}`}
+                onClick={() => navigate('/fasilitas/chat')}
+              >
+                <div className="sidebar-item-bg" />
+                <MessageSquare size={16} />
+                <span>CS Live Chat</span>
+                <span className="sidebar-badge">2</span>
+              </div>
+
+              {menuItems.slice(5).map((item) => {
                 const active = isActive(item.path);
                 return (
                   <Link

@@ -1,29 +1,31 @@
 import React, { useState } from 'react';
 import { Check } from 'lucide-react';
 
-export default function VerifikasiAkun() {
-  const [pendingAccounts, setPendingAccounts] = useState([
-    { id: 1, name: 'Eko Prasetyo', unit: '#9A', email: 'eko.p@email.com', dateReg: '21 Apr 2026', status: 'Menunggu' },
-    { id: 2, name: 'Anita Kusuma', unit: '31B', email: 'anita.k@email.com', dateReg: '21 Apr 2026', status: 'Menunggu' },
-    { id: 3, name: 'Bima Rahardjo', unit: '22C', email: 'bima.r@email.com', dateReg: '21 Apr 2026', status: 'Menunggu' }
+export default function AktivasiAkun() {
+  // Mengubah status awal menjadi 'Menunggu Aktivasi'
+  const [pendingActivation, setPendingActivation] = useState([
+    { id: 1, name: 'Eko Prasetyo', unit: '9A', email: 'eko.p@email.com', dateReg: '21 Apr 2026', status: 'Menunggu Aktivasi' },
+    { id: 2, name: 'Anita Kusuma', unit: '31B', email: 'anita.k@email.com', dateReg: '21 Apr 2026', status: 'Menunggu Aktivasi' },
+    { id: 3, name: 'Bima Rahardjo', unit: '22C', email: 'bima.r@email.com', dateReg: '21 Apr 2026', status: 'Menunggu Aktivasi' }
   ]);
 
-  const [verifiedAccounts, setVerifiedAccounts] = useState([
-    { id: 101, name: 'Hendra Gunawan', unit: '12A', email: 'hendra.g@email.com', dateVerif: '20 Apr 2026', status: 'Aktif' },
-    { id: 102, name: 'Maya Sari', unit: '05B', email: 'maya.s@email.com', dateVerif: '19 Apr 2026', status: 'Aktif' },
-    { id: 103, name: 'Rudi Hartono', unit: '18C', email: 'rudi.h@email.com', dateVerif: '18 Apr 2026', status: 'Aktif' }
+  const [activeAccounts, setActiveAccounts] = useState([
+    { id: 101, name: 'Hendra Gunawan', unit: '12A', email: 'hendra.g@email.com', dateActive: '20 Apr 2026', status: 'Aktif' },
+    { id: 102, name: 'Maya Sari', unit: '05B', email: 'maya.s@email.com', dateActive: '19 Apr 2026', status: 'Aktif' },
+    { id: 103, name: 'Rudi Hartono', unit: '18C', email: 'rudi.h@email.com', dateActive: '18 Apr 2026', status: 'Aktif' }
   ]);
 
   const [toastMessage, setToastMessage] = useState('');
 
-  const handleApprove = (id) => {
-    const target = pendingAccounts.find(acc => acc.id === id);
+  // Handler untuk menyetujui aktivasi akun
+  const handleActivate = (id) => {
+    const target = pendingActivation.find(acc => acc.id === id);
     if (!target) return;
 
-    // Remove from pending
-    setPendingAccounts(prev => prev.filter(acc => acc.id !== id));
+    // Hapus dari daftar tunggu aktivasi
+    setPendingActivation(prev => prev.filter(acc => acc.id !== id));
 
-    // Prepend to verified
+    // Format tanggal aktivasi hari ini
     const today = new Date();
     const formattedDate = today.toLocaleDateString('id-ID', {
       day: 'numeric',
@@ -31,27 +33,28 @@ export default function VerifikasiAkun() {
       year: 'numeric'
     });
 
-    const approved = {
+    const activated = {
       id: target.id,
       name: target.name,
       unit: target.unit,
       email: target.email,
-      dateVerif: formattedDate,
+      dateActive: formattedDate,
       status: 'Aktif'
     };
 
-    setVerifiedAccounts(prev => [approved, ...prev]);
-    showToast(`Akun ${target.name} berhasil diverifikasi!`);
+    setActiveAccounts(prev => [activated, ...prev]);
+    showToast(`Akun ${target.name} berhasil diaktifkan!`);
   };
 
-  const handleReject = (id) => {
-    const target = pendingAccounts.find(acc => acc.id === id);
+  // Handler untuk menolak atau membatalkan permintaan aktivasi
+  const handleRejectActivation = (id) => {
+    const target = pendingActivation.find(acc => acc.id === id);
     if (!target) return;
 
-    const confirmReject = window.confirm(`Apakah Anda yakin ingin menolak pendaftaran akun oleh ${target.name}?`);
+    const confirmReject = window.confirm(`Apakah Anda yakin ingin menolak permintaan aktivasi akun untuk ${target.name}?`);
     if (confirmReject) {
-      setPendingAccounts(prev => prev.filter(acc => acc.id !== id));
-      showToast(`Pendaftaran ${target.name} ditolak.`);
+      setPendingActivation(prev => prev.filter(acc => acc.id !== id));
+      showToast(`Permintaan aktivasi akun ${target.name} ditolak.`);
     }
   };
 
@@ -62,21 +65,22 @@ export default function VerifikasiAkun() {
 
   return (
     <div className="space-y-6 animate-fade-up relative">
-      {/* Header controls & Pending notification */}
+      {/* Teks dobel "Aktivasi Akun" dan "General Manager" di sini sudah dihapus */}
+      {/* Konten langsung dimulai dari Banner Sub-Section */}
       <div className="card-section p-6 flex items-center justify-between">
         <div>
-          <h2 className="text-base font-bold text-ink">Verifikasi Registrasi Penghuni</h2>
-          <p className="text-xs text-muted">Tinjau dokumen identitas KTP & KK untuk aktivasi akun portal penghuni</p>
+          <h2 className="text-base font-bold text-ink">Aktivasi Akun Penghuni</h2>
+          <p className="text-xs text-muted">Tinjau dokumen kelengkapan untuk aktivasi akun portal penghuni baru</p>
         </div>
         <span className="badge-base badge-pink animate-pulse">
-          {pendingAccounts.length} Menunggu
+          {pendingActivation.length} Menunggu Aktivasi
         </span>
       </div>
 
-      {/* Section 1: Verifikasi Akun Baru */}
+      {/* SEKSI 1: Permintaan Aktivasi Akun */}
       <div className="card-section p-6 overflow-hidden space-y-4">
         <h3 className="text-xs font-bold text-ink uppercase tracking-wider border-b border-soft pb-3">
-          Permintaan Verifikasi Menunggu
+          Permintaan Aktivasi Menunggu
         </h3>
 
         <div className="table-wrap">
@@ -86,15 +90,15 @@ export default function VerifikasiAkun() {
                 <th>Nama</th>
                 <th>Unit</th>
                 <th>Email</th>
-                <th>Dokumen</th>
-                <th>Tgl Daftar</th>
+                <th>Dokumen Syarat</th>
+                <th>Tgl Ajuan</th>
                 <th>Status</th>
                 <th className="text-right">Aksi</th>
               </tr>
             </thead>
             <tbody>
-              {pendingAccounts.length > 0 ? (
-                pendingAccounts.map((acc) => (
+              {pendingActivation.length > 0 ? (
+                pendingActivation.map((acc) => (
                   <tr key={acc.id}>
                     <td className="font-bold text-ink">{acc.name}</td>
                     <td className="text-ink font-bold">{acc.unit}</td>
@@ -120,13 +124,13 @@ export default function VerifikasiAkun() {
                     <td className="text-right">
                       <div className="inline-flex gap-2">
                         <button
-                          onClick={() => handleApprove(acc.id)}
+                          onClick={() => handleActivate(acc.id)}
                           className="btn-primary py-1.5 px-3.5 text-[10px] font-bold rounded-xl"
                         >
-                          Setujui
+                          Aktifkan
                         </button>
                         <button
-                          onClick={() => handleReject(acc.id)}
+                          onClick={() => handleRejectActivation(acc.id)}
                           className="btn-ghost hover:bg-pastel-pink-bg hover:text-[#B85040] hover:border-pastel-pink/30 py-1.5 px-3.5 text-[10px] font-bold rounded-xl"
                         >
                           Tolak
@@ -138,7 +142,7 @@ export default function VerifikasiAkun() {
               ) : (
                 <tr>
                   <td colSpan={7} className="p-8 text-center text-muted font-bold">
-                    Tidak ada permintaan verifikasi yang menunggu.
+                    Tidak ada permintaan aktivasi akun yang menunggu.
                   </td>
                 </tr>
               )}
@@ -147,10 +151,10 @@ export default function VerifikasiAkun() {
         </div>
       </div>
 
-      {/* Section 2: Akun Sudah Diverifikasi */}
+      {/* SEKSI 2: Daftar Akun yang Sudah Aktif */}
       <div className="card-section p-6 overflow-hidden space-y-4">
         <h3 className="text-xs font-bold text-ink uppercase tracking-wider border-b border-soft pb-3">
-          Akun Sudah Diverifikasi (Aktif)
+          Akun Sudah Diaktivasi (Aktif)
         </h3>
 
         <div className="table-wrap">
@@ -160,17 +164,17 @@ export default function VerifikasiAkun() {
                 <th>Nama</th>
                 <th>Unit</th>
                 <th>Email</th>
-                <th>Tgl Verifikasi</th>
-                <th>Status</th>
+                <th>Tgl Aktivasi</th>
+                <th>Status Portal</th>
               </tr>
             </thead>
             <tbody>
-              {verifiedAccounts.map((acc) => (
+              {activeAccounts.map((acc) => (
                 <tr key={acc.id}>
                   <td className="font-bold text-ink">{acc.name}</td>
                   <td className="text-ink font-bold">{acc.unit}</td>
                   <td className="font-mono text-muted">{acc.email}</td>
-                  <td className="text-muted">{acc.dateVerif}</td>
+                  <td className="text-muted">{acc.dateActive}</td>
                   <td>
                     <span className="badge-base badge-mint">
                       <Check size={10} className="stroke-[3]" />
@@ -184,7 +188,7 @@ export default function VerifikasiAkun() {
         </div>
       </div>
 
-      {/* Success Toast */}
+      {/* Toast Notifikasi Berhasil */}
       {toastMessage && (
         <div className="toast-modern toast-success">
           <div className="w-5 h-5 rounded-full bg-white/20 text-white flex items-center justify-center flex-shrink-0">

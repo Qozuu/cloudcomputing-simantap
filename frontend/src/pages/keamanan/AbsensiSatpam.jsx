@@ -6,13 +6,15 @@ import {
   CheckCircle2,
   X,
   Save,
-  Check
+  Check,
+  Search
 } from 'lucide-react';
 
 export default function AbsensiSatpam() {
   const [successToast, setSuccessToast] = useState('');
   const [month, setMonth] = useState('April 2026');
-  
+  const [searchTerm, setSearchTerm] = useState('');
+
   // Modals state
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -25,6 +27,14 @@ export default function AbsensiSatpam() {
   const [formKeluar, setFormKeluar] = useState('14:00');
   const [formStatus, setFormStatus] = useState('Hadir');
 
+  // State untuk mengontrol dropdown kustom (Anti-Bug)
+  const [openDropdownPetugas, setOpenDropdownPetugas] = useState(false);
+  const [openDropdownShift, setOpenDropdownShift] = useState(false);
+  const [openDropdownStatus, setOpenDropdownStatus] = useState(false);
+
+  // State pencarian nama petugas di dalam dropdown modal
+  const [searchPetugasInput, setSearchPetugasInput] = useState('');
+
   const petugasList = [
     'Eko Susanto',
     'Tanto Wirawan',
@@ -35,6 +45,9 @@ export default function AbsensiSatpam() {
     'Agus Setiadi',
     'Prasetyo Utomo'
   ];
+
+  const shiftList = ['Pagi 06-14', 'Siang 14-22', 'Malam 22-06'];
+  const statusList = ['Hadir', 'Izin'];
 
   const [attendance, setAttendance] = useState([
     { id: 1, nama: 'Eko Susanto', shift: 'Pagi 06-14', masuk: '05:58', keluar: '14:05', status: 'Hadir' },
@@ -72,6 +85,8 @@ export default function AbsensiSatpam() {
     setFormKeluar(item.keluar);
     setFormStatus(item.status);
     setEditModalOpen(true);
+    setOpenDropdownShift(false);
+    setOpenDropdownStatus(false);
   };
 
   const handleEditSave = (e) => {
@@ -84,8 +99,6 @@ export default function AbsensiSatpam() {
       )
     );
     setEditModalOpen(false);
-    
-    // Edit Save Toast
     setSuccessToast('Data diedit');
     setTimeout(() => setSuccessToast(''), 3000);
   };
@@ -103,12 +116,15 @@ export default function AbsensiSatpam() {
 
     setAttendance(prev => [...prev, newAbs]);
     setAddModalOpen(false);
-
+    setSearchPetugasInput('');
     setSuccessToast('Absensi petugas berhasil dicatat.');
     setTimeout(() => setSuccessToast(''), 3000);
   };
 
-  // Recalculating stats based on local state
+  const filteredAttendance = attendance.filter(item =>
+    item.nama.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   const totalPetugas = 8;
   const hadirHariIni = attendance.filter(a => a.status === 'Hadir').length;
   const izinHariIni = attendance.filter(a => a.status === 'Izin' || a.status === 'Sakit').length;
@@ -119,20 +135,56 @@ export default function AbsensiSatpam() {
       
       {/* Controls row */}
       <div className="card-section p-6 flex flex-wrap items-center justify-between gap-4">
-        <div className="relative w-44">
-          <select
-            value={month}
-            onChange={(e) => setMonth(e.target.value)}
-            className="w-full pl-4 pr-10 py-2 input-modern select-modern text-xs font-bold shadow-sm"
-          >
-            <option value="April 2026">April 2026</option>
-            <option value="Maret 2026">Maret 2026</option>
-          </select>
+        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+          <div className="relative w-44">
+            <select
+              value={month}
+              onChange={(e) => setMonth(e.target.value)}
+              className="w-full pl-4 pr-10 py-2 input-modern select-modern text-xs font-bold shadow-sm"
+            >
+              <option value="April 2026">April 2026</option>
+              <option value="Maret 2026">Maret 2026</option>
+            </select>
+          </div>
+
+          {/* Search Bar - SOLVED OVERLAP BUG */}
+          <div className="relative flex items-center w-full sm:w-64">
+            <div className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none text-[#8A857F]">
+              <Search size={14} className="stroke-[2.5]" />
+            </div>
+            <input
+              type="text"
+              placeholder="Cari nama petugas..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pr-10 py-2 input-modern text-xs font-semibold shadow-sm"
+              style={{ paddingLeft: '2.75rem' }} 
+            />
+            {searchTerm && (
+              <button 
+                onClick={() => setSearchTerm('')} 
+                className="absolute inset-y-0 right-3 flex items-center text-muted hover:text-ink"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="flex items-center gap-3">
           <button
-            onClick={() => setAddModalOpen(true)}
+            onClick={() => {
+              setFormPetugas('Eko Susanto');
+              setFormShift('Pagi 06-14');
+              setFormStatus('Hadir');
+              setFormMasuk('06:00');
+              setFormKeluar('14:00');
+              setOpenDropdownPetugas(false);
+              setOpenDropdownShift(false);
+              setOpenDropdownStatus(false);
+              setSearchPetugasInput('');
+              setAddModalOpen(true);
+            }}
             className="btn-primary py-2.5 px-4 text-xs font-bold"
           >
             <Plus size={14} className="stroke-[3]" />
@@ -151,7 +203,6 @@ export default function AbsensiSatpam() {
 
       {/* Stats Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        {/* Stat 1 */}
         <div className="card-pink flex flex-col justify-between min-h-[120px]">
           <div>
             <p className="text-[#8A857F] font-semibold text-xs">Total Petugas</p>
@@ -160,7 +211,6 @@ export default function AbsensiSatpam() {
           <p className="text-[#8A857F] font-semibold text-xs mt-1">Satpam aktif</p>
         </div>
 
-        {/* Stat 2 */}
         <div className="card-yellow flex flex-col justify-between min-h-[120px]">
           <div>
             <p className="text-[#8A857F] font-semibold text-xs">Hadir Hari Ini</p>
@@ -174,7 +224,6 @@ export default function AbsensiSatpam() {
           <p className="text-[#8A857F] font-semibold text-xs mt-1">Absensi masuk</p>
         </div>
 
-        {/* Stat 3 */}
         <div className="card-lavender flex flex-col justify-between min-h-[120px]">
           <div>
             <p className="text-[#8A857F] font-semibold text-xs">Izin / Sakit</p>
@@ -183,7 +232,6 @@ export default function AbsensiSatpam() {
           <p className="text-[#8A857F] font-semibold text-xs mt-1">Hari ini</p>
         </div>
 
-        {/* Stat 4 */}
         <div className="card-mint flex flex-col justify-between min-h-[120px]">
           <div>
             <p className="text-[#8A857F] font-semibold text-xs">Rata-rata Kehadiran</p>
@@ -212,34 +260,42 @@ export default function AbsensiSatpam() {
               </tr>
             </thead>
             <tbody>
-              {attendance.map((item) => (
-                <tr key={item.id}>
-                  <td className="font-bold text-ink">{item.nama}</td>
-                  <td className={`font-extrabold ${getShiftColor(item.shift)}`}>{item.shift}</td>
-                  <td className="font-bold text-ink">{item.masuk}</td>
-                  <td className="text-muted">{item.keluar}</td>
-                  <td>
-                    {item.status === 'Hadir' ? (
-                      <span className="badge-base badge-mint">
-                        <Check size={10} className="stroke-[3]" />
-                        <span>Hadir</span>
-                      </span>
-                    ) : (
-                      <span className="badge-base badge-pink">
-                        <span>Izin</span>
-                      </span>
-                    )}
-                  </td>
-                  <td className="text-right">
-                    <button
-                      onClick={() => handleOpenEdit(item)}
-                      className="text-ink hover:underline font-bold text-xs"
-                    >
-                      Edit
-                    </button>
+              {filteredAttendance.length > 0 ? (
+                filteredAttendance.map((item) => (
+                  <tr key={item.id}>
+                    <td className="font-bold text-ink">{item.nama}</td>
+                    <td className={`font-extrabold ${getShiftColor(item.shift)}`}>{item.shift}</td>
+                    <td className="font-bold text-ink">{item.masuk}</td>
+                    <td className="text-muted">{item.keluar}</td>
+                    <td>
+                      {item.status === 'Hadir' ? (
+                        <span className="badge-base badge-mint">
+                          <Check size={10} className="stroke-[3]" />
+                          <span>Hadir</span>
+                        </span>
+                      ) : (
+                        <span className="badge-base badge-pink">
+                          <span>Izin</span>
+                        </span>
+                      )}
+                    </td>
+                    <td className="text-right">
+                      <button
+                        onClick={() => handleOpenEdit(item)}
+                        className="text-ink hover:underline font-bold text-xs"
+                      >
+                        Edit
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="6" className="text-center py-4 text-xs font-semibold text-muted">
+                    Petugas dengan nama "{searchTerm}" tidak ditemukan.
                   </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>
@@ -260,13 +316,9 @@ export default function AbsensiSatpam() {
                   <span className="font-bold">{item.nama}</span>
                   <span className="font-extrabold">{item.persen}%</span>
                 </div>
-                
-                {/* Horizontal Progress Bar */}
                 <div className="progress-track">
                   <div
-                    className={`progress-fill ${
-                      isGreen ? 'progress-mint' : 'progress-pink'
-                    }`}
+                    className={`progress-fill ${isGreen ? 'progress-mint' : 'progress-pink'}`}
                     style={{ width: `${item.persen}%` }}
                   ></div>
                 </div>
@@ -279,7 +331,7 @@ export default function AbsensiSatpam() {
       {/* EDIT MODAL */}
       {editModalOpen && selectedAbsensi && (
         <div className="modal-overlay">
-          <div className="modal-box">
+          <div className="modal-box !overflow-visible">
             <div className="modal-header">
               <h3 className="text-xs font-bold text-ink uppercase tracking-wider">
                 Edit Absensi: {selectedAbsensi.nama}
@@ -290,26 +342,39 @@ export default function AbsensiSatpam() {
             </div>
 
             <form onSubmit={handleEditSave} className="modal-body space-y-4">
-              <div>
-                <label className="label-modern">
-                  Shift Kerja
-                </label>
-                <select
-                  value={formShift}
-                  onChange={(e) => setFormShift(e.target.value)}
-                  className="select-modern input-modern font-semibold"
+              {/* Custom Dropdown: Shift Kerja */}
+              <div className="relative">
+                <label className="label-modern">Shift Kerja</label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpenDropdownShift(!openDropdownShift);
+                    setOpenDropdownStatus(false);
+                  }}
+                  className="w-full flex items-center justify-between input-modern text-xs font-semibold bg-[#FAFAFA]"
                 >
-                  <option value="Pagi 06-14">Pagi 06-14</option>
-                  <option value="Siang 14-22">Siang 14-22</option>
-                  <option value="Malam 22-06">Malam 22-06</option>
-                </select>
+                  <span>{formShift}</span>
+                  <ChevronDown size={14} className={`text-muted transition-transform ${openDropdownShift ? 'rotate-180' : ''}`} />
+                </button>
+                {openDropdownShift && (
+                  <div className="absolute left-0 right-0 mt-1 bg-white border border-soft rounded-xl shadow-xl z-[9999] overflow-hidden">
+                    {shiftList.map((shift, i) => (
+                      <div
+                        key={i}
+                        onClick={() => { setFormShift(shift); setOpenDropdownShift(false); }}
+                        className="px-4 py-2.5 text-xs font-semibold text-ink hover:bg-soft cursor-pointer transition text-left"
+                      >
+                        {shift}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
+              {/* Grid Jam Masuk dan Keluar */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="label-modern">
-                    Jam Masuk
-                  </label>
+                  <label className="label-modern">Jam Masuk</label>
                   <input
                     type="text"
                     required
@@ -319,9 +384,7 @@ export default function AbsensiSatpam() {
                   />
                 </div>
                 <div>
-                  <label className="label-modern">
-                    Jam Keluar
-                  </label>
+                  <label className="label-modern">Jam Keluar</label>
                   <input
                     type="text"
                     required
@@ -332,18 +395,33 @@ export default function AbsensiSatpam() {
                 </div>
               </div>
 
-              <div>
-                <label className="label-modern">
-                  Status
-                </label>
-                <select
-                  value={formStatus}
-                  onChange={(e) => setFormStatus(e.target.value)}
-                  className="select-modern input-modern font-semibold"
+              {/* Custom Dropdown: Status */}
+              <div className="relative">
+                <label className="label-modern">Status</label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpenDropdownStatus(!openDropdownStatus);
+                    setOpenDropdownShift(false);
+                  }}
+                  className="w-full flex items-center justify-between input-modern text-xs font-semibold bg-[#FAFAFA]"
                 >
-                  <option value="Hadir">Hadir</option>
-                  <option value="Izin">Izin</option>
-                </select>
+                  <span>{formStatus}</span>
+                  <ChevronDown size={14} className={`text-muted transition-transform ${openDropdownStatus ? 'rotate-180' : ''}`} />
+                </button>
+                {openDropdownStatus && (
+                  <div className="absolute left-0 right-0 mt-1 bg-white border border-soft rounded-xl shadow-xl z-[9999] overflow-hidden">
+                    {statusList.map((st, i) => (
+                      <div
+                        key={i}
+                        onClick={() => { setFormStatus(st); setOpenDropdownStatus(false); }}
+                        className="px-4 py-2.5 text-xs font-semibold text-ink hover:bg-soft cursor-pointer transition text-left"
+                      >
+                        {st}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="flex gap-3 pt-3 border-t border-soft">
@@ -367,55 +445,123 @@ export default function AbsensiSatpam() {
         </div>
       )}
 
-      {/* ADD MODAL */}
+      {/* ADD MODAL — WITH SEARCH BAR IN DROPDOWN */}
       {addModalOpen && (
         <div className="modal-overlay">
-          <div className="modal-box">
+          <div className="modal-box !overflow-visible">
             <div className="modal-header">
               <h3 className="text-xs font-bold text-ink uppercase tracking-wider">
                 Catat Absensi Petugas Baru
               </h3>
-              <button onClick={() => setAddModalOpen(false)} className="text-muted hover:text-ink transition">
+              <button 
+                onClick={() => {
+                  setAddModalOpen(false);
+                  setSearchPetugasInput('');
+                }} 
+                className="text-muted hover:text-ink transition"
+              >
                 <X size={18} />
               </button>
             </div>
 
             <form onSubmit={handleAddAbsensi} className="modal-body space-y-4">
-              <div>
-                <label className="label-modern">
-                  Nama Petugas
-                </label>
-                <select
-                  value={formPetugas}
-                  onChange={(e) => setFormPetugas(e.target.value)}
-                  className="select-modern input-modern font-semibold"
+              {/* Custom Dropdown: Nama Petugas + Fitur Search */}
+              <div className="relative">
+                <label className="label-modern">Nama Petugas</label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpenDropdownPetugas(!openDropdownPetugas);
+                    setOpenDropdownShift(false);
+                    setOpenDropdownStatus(false);
+                    setSearchPetugasInput('');
+                  }}
+                  className="w-full flex items-center justify-between input-modern text-xs font-semibold bg-[#FAFAFA]"
                 >
-                  {petugasList.map((p, idx) => (
-                    <option key={idx} value={p}>{p}</option>
-                  ))}
-                </select>
+                  <span>{formPetugas}</span>
+                  <ChevronDown size={14} className={`text-muted transition-transform ${openDropdownPetugas ? 'rotate-180' : ''}`} />
+                </button>
+                
+                {openDropdownPetugas && (
+                  <div className="absolute left-0 right-0 mt-1 bg-white border border-soft rounded-xl shadow-xl z-[9999] overflow-hidden flex flex-col max-h-56">
+                    {/* Search Bar Input inside dropdown */}
+                    <div className="p-2 border-b border-soft bg-[#FAFAFA] sticky top-0 z-10 flex items-center gap-2">
+                      <Search size={12} className="text-muted ml-1" />
+                      <input
+                        type="text"
+                        placeholder="Ketik nama petugas..."
+                        value={searchPetugasInput}
+                        onChange={(e) => setSearchPetugasInput(e.target.value)}
+                        className="w-full px-2 py-1 bg-white border border-soft rounded-lg text-xs font-semibold outline-none focus:border-ink"
+                        onClick={(e) => e.stopPropagation()} 
+                      />
+                    </div>
+
+                    {/* Filtered list */}
+                    <div className="overflow-y-auto flex-1 max-h-40">
+                      {petugasList.filter(p => 
+                        p.toLowerCase().includes(searchPetugasInput.toLowerCase())
+                      ).length > 0 ? (
+                        petugasList
+                          .filter(p => p.toLowerCase().includes(searchPetugasInput.toLowerCase()))
+                          .map((p, idx) => (
+                            <div
+                              key={idx}
+                              onClick={() => { 
+                                setFormPetugas(p); 
+                                setOpenDropdownPetugas(false); 
+                                setSearchPetugasInput(''); 
+                              }}
+                              className="px-4 py-2.5 text-xs font-semibold text-ink hover:bg-soft cursor-pointer transition text-left flex justify-between items-center"
+                            >
+                              <span>{p}</span>
+                              {formPetugas === p && <Check size={12} className="text-emerald-600 stroke-[3]" />}
+                            </div>
+                          ))
+                      ) : (
+                        <div className="px-4 py-3 text-center text-[11px] font-medium text-muted">
+                          Nama tidak ditemukan
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
-              <div>
-                <label className="label-modern">
-                  Shift Kerja
-                </label>
-                <select
-                  value={formShift}
-                  onChange={(e) => setFormShift(e.target.value)}
-                  className="select-modern input-modern font-semibold"
+              {/* Custom Dropdown: Shift Kerja */}
+              <div className="relative">
+                <label className="label-modern">Shift Kerja</label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpenDropdownShift(!openDropdownShift);
+                    setOpenDropdownPetugas(false);
+                    setOpenDropdownStatus(false);
+                  }}
+                  className="w-full flex items-center justify-between input-modern text-xs font-semibold bg-[#FAFAFA]"
                 >
-                  <option value="Pagi 06-14">Pagi 06-14</option>
-                  <option value="Siang 14-22">Siang 14-22</option>
-                  <option value="Malam 22-06">Malam 22-06</option>
-                </select>
+                  <span>{formShift}</span>
+                  <ChevronDown size={14} className={`text-muted transition-transform ${openDropdownShift ? 'rotate-180' : ''}`} />
+                </button>
+                {openDropdownShift && (
+                  <div className="absolute left-0 right-0 mt-1 bg-white border border-soft rounded-xl shadow-xl z-[9999] overflow-hidden">
+                    {shiftList.map((shift, i) => (
+                      <div
+                        key={i}
+                        onClick={() => { setFormShift(shift); setOpenDropdownShift(false); }}
+                        className="px-4 py-2.5 text-xs font-semibold text-ink hover:bg-soft cursor-pointer transition text-left"
+                      >
+                        {shift}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
+              {/* Grid Jam Masuk dan Keluar */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="label-modern">
-                    Jam Masuk
-                  </label>
+                  <label className="label-modern">Jam Masuk</label>
                   <input
                     type="text"
                     required
@@ -425,9 +571,7 @@ export default function AbsensiSatpam() {
                   />
                 </div>
                 <div>
-                  <label className="label-modern">
-                    Jam Keluar
-                  </label>
+                  <label className="label-modern">Jam Keluar</label>
                   <input
                     type="text"
                     required
@@ -438,18 +582,34 @@ export default function AbsensiSatpam() {
                 </div>
               </div>
 
-              <div>
-                <label className="label-modern">
-                  Status
-                </label>
-                <select
-                  value={formStatus}
-                  onChange={(e) => setFormStatus(e.target.value)}
-                  className="select-modern input-modern font-semibold"
+              {/* Custom Dropdown: Status */}
+              <div className="relative">
+                <label className="label-modern">Status</label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpenDropdownStatus(!openDropdownStatus);
+                    setOpenDropdownPetugas(false);
+                    setOpenDropdownShift(false);
+                  }}
+                  className="w-full flex items-center justify-between input-modern text-xs font-semibold bg-[#FAFAFA]"
                 >
-                  <option value="Hadir">Hadir</option>
-                  <option value="Izin">Izin</option>
-                </select>
+                  <span>{formStatus}</span>
+                  <ChevronDown size={14} className={`text-muted transition-transform ${openDropdownStatus ? 'rotate-180' : ''}`} />
+                </button>
+                {openDropdownStatus && (
+                  <div className="absolute left-0 right-0 mt-1 bg-white border border-soft rounded-xl shadow-xl z-[9999] overflow-hidden">
+                    {statusList.map((st, i) => (
+                      <div
+                        key={i}
+                        onClick={() => { setFormStatus(st); setOpenDropdownStatus(false); }}
+                        className="px-4 py-2.5 text-xs font-semibold text-ink hover:bg-soft cursor-pointer transition text-left"
+                      >
+                        {st}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="flex gap-3 pt-3 border-t border-soft">
@@ -462,7 +622,10 @@ export default function AbsensiSatpam() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setAddModalOpen(false)}
+                  onClick={() => {
+                    setAddModalOpen(false);
+                    setSearchPetugasInput('');
+                  }}
                   className="flex-1 btn-ghost justify-center py-2.5 rounded-xl text-xs font-bold"
                 >
                   Batal

@@ -1,11 +1,16 @@
-// Service module containing API calls for user accounts management.
-// import api from './api';
-// import { API_ENDPOINTS } from '../constants/apiEndpoints';
+import { supabase } from '../lib/supabase';
 
 export const userService = {
-  getAll: async () => {},
-  getById: async (id) => {},
-  create: async (data) => {},
-  update: async (id, data) => {},
-  delete: async (id) => {},
+  getAll: async () => {
+    /* TODO: await supabase.from('penghuni').select('*, units(no_unit)') */
+    return [{ id: 1, no_ktp: '3578...', email: 'penghuni@mail.com', status: 'aktif' }];
+  },
+  getById: async (id) => {
+    /* TODO: await supabase.from('penghuni').select('*').eq('id', id).single() */
+    return null;
+  },
+  createPenghuni: async (data) => {
+    /* TODO: await supabase.from('penghuni').insert(data) */
+    return { success: true };
+  }
 };

@@ -1,30 +1,24 @@
 import React, { useState } from 'react';
-import { Plus, X, Search, FileDown, Calendar, Users, AlertCircle, CheckCircle } from 'lucide-react';
+import { Search, Calendar, Users, AlertCircle, CheckCircle, X, MapPin, Smartphone, Clock } from 'lucide-react';
 
 export default function AbsenKaryawan() {
   const [employees, setEmployees] = useState([
-    { id: 1, name: 'Rina Kurnia', division: 'Keuangan', checkIn: '08:02', checkOut: '17:05', status: 'Hadir' },
-    { id: 2, name: 'Doni Praetya', division: 'Pemeliharaan', checkIn: '07:55', checkOut: '17:00', status: 'Hadir' },
-    { id: 3, name: 'Agus Wibowo', division: 'Keamanan', checkIn: '08:10', checkOut: '—', status: 'Hadir' },
-    { id: 4, name: 'Siti Rahayu', division: 'Kebersihan', checkIn: '06:00', checkOut: '14:00', status: 'Hadir' },
-    { id: 5, name: 'Pak Heri', division: 'Pemeliharaan', checkIn: '—', checkOut: '—', status: 'Izin' },
-    { id: 6, name: 'Pak Roni', division: 'Pemeliharaan', checkIn: '09:30', checkOut: '—', status: 'Hadir' },
-    { id: 7, name: 'Budi Santoso', division: 'Management', checkIn: '09:00', checkOut: '—', status: 'Hadir' },
-    { id: 8, name: 'Dewi Puspita', division: 'Kebersihan', checkIn: '—', checkOut: '—', status: 'Sakit' }
+    { id: 1, name: 'Rina Kurnia', division: 'Keuangan', checkIn: '08:02', checkOut: '17:05', status: 'Hadir', date: '20 Mei 2026', device: 'iPhone 13 (iOS)', location: 'Area Kantor Pengelola - Lantai 1', notes: 'Masuk tepat waktu' },
+    { id: 2, name: 'Doni Praetya', division: 'Pemeliharaan', checkIn: '07:55', checkOut: '17:00', status: 'Hadir', date: '20 Mei 2026', device: 'Samsung Galaxy S22', location: 'Gedung Tower A - Engineering Room', notes: 'Standby perawatan lift' },
+    { id: 3, name: 'Agus Wibowo', division: 'Keamanan', checkIn: '08:10', checkOut: '—', status: 'Hadir', date: '20 Mei 2026', device: 'Xiaomi Poco X5', location: 'Pos Gerbang Utama Barat', notes: 'Tugas Shift Pagi' },
+    { id: 4, name: 'Siti Rahayu', division: 'Kebersihan', checkIn: '06:00', checkOut: '14:00', status: 'Hadir', date: '20 Mei 2026', device: 'Oppo A78', location: 'Area Lobby & Koridor Tower B', notes: 'Selesai membersihkan sektor tengah' },
+    { id: 5, name: 'Pak Heri', division: 'Pemeliharaan', checkIn: '—', checkOut: '—', status: 'Tidak Hadir', date: '20 Mei 2026', device: '—', location: '—', notes: 'Izin (Sakit dengan surat keterangan dokter)' },
+    { id: 6, name: 'Pak Roni', division: 'Pemeliharaan', checkIn: '09:30', checkOut: '—', status: 'Hadir', date: '20 Mei 2026', device: 'Vivo Y35', location: 'Gedung Parkir P2', notes: 'Terlambat karena kendala pengiriman material' },
+    { id: 7, name: 'Budi Santoso', division: 'Management', checkIn: '09:00', checkOut: '—', status: 'Hadir', date: '20 Mei 2026', device: 'iPad Pro (iPadOS)', location: 'Ruang Direksi Utama', notes: 'Agenda rapat eksternal' },
+    { id: 8, name: 'Dewi Puspita', division: 'Kebersihan', checkIn: '—', checkOut: '—', status: 'Tidak Hadir', date: '20 Mei 2026', device: '—', location: '—', notes: 'Alpa (Tanpa keterangan tanpa respon)' }
   ]);
 
   const [period, setPeriod] = useState('April 2026');
   const [divisionFilter, setDivisionFilter] = useState('Semua');
-  const [modalOpen, setModalOpen] = useState(false);
   const [successToast, setSuccessToast] = useState('');
-
-  const [newAbsence, setNewAbsence] = useState({
-    name: '',
-    division: 'Keuangan',
-    checkIn: '',
-    checkOut: '',
-    status: 'Hadir'
-  });
+  
+  // State baru untuk mengatur modal detail simulasi
+  const [selectedEmployee, setSelectedEmployee] = useState(null);
 
   const getDivisionBadgeClass = (division) => {
     switch (division) {
@@ -40,33 +34,9 @@ export default function AbsenKaryawan() {
   const getStatusClass = (status) => {
     switch (status) {
       case 'Hadir': return 'badge-mint';
-      case 'Izin': return 'badge-yellow';
-      case 'Sakit': return 'badge-pink';
+      case 'Tidak Hadir': return 'badge-pink';
       default: return 'badge-gray';
     }
-  };
-
-  const handleExport = () => {
-    showToast('Rekapitulasi_Karyawan_April_2026.xlsx berhasil diunduh!');
-  };
-
-  const handleManualAbsence = (e) => {
-    e.preventDefault();
-    if (!newAbsence.name) return;
-
-    const added = {
-      id: Date.now(),
-      name: newAbsence.name,
-      division: newAbsence.division,
-      checkIn: newAbsence.checkIn || '—',
-      checkOut: newAbsence.checkOut || '—',
-      status: newAbsence.status
-    };
-
-    setEmployees(prev => [added, ...prev]);
-    setModalOpen(false);
-    showToast(`Absensi manual ${newAbsence.name} berhasil dicatat!`);
-    setNewAbsence({ name: '', division: 'Keuangan', checkIn: '', checkOut: '', status: 'Hadir' });
   };
 
   const showToast = (msg) => {
@@ -74,17 +44,14 @@ export default function AbsenKaryawan() {
     setTimeout(() => setSuccessToast(''), 3000);
   };
 
+  const handleOpenDetail = (emp) => {
+    setSelectedEmployee(emp);
+    showToast(`Membuka detail log ${emp.name}`);
+  };
+
   const filteredEmployees = employees.filter(emp => {
     return divisionFilter === 'Semua' || emp.division === divisionFilter;
   });
-
-  const departmentRecap = [
-    { name: 'Keuangan', pct: 99, progressClass: 'progress-lavender' },
-    { name: 'Pemeliharaan', pct: 93, progressClass: 'progress-pink' },
-    { name: 'Keamanan', pct: 92, progressClass: 'progress-dark' },
-    { name: 'Kebersihan', pct: 88, progressClass: 'progress-mint' },
-    { name: 'Management', pct: 100, progressClass: 'progress-lavender' }
-  ];
 
   return (
     <div className="space-y-6 animate-fade-up relative">
@@ -119,18 +86,10 @@ export default function AbsenKaryawan() {
             </select>
           </div>
         </div>
-
-        <button
-          onClick={handleExport}
-          className="btn-ghost btn-sm"
-        >
-          <FileDown size={14} />
-          <span>Export Rekapitulasi</span>
-        </button>
       </div>
 
-      {/* KPI Stats Row - Rotation Applied */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* KPI Stats Row — Cleaned Up for GM */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="card-pink flex flex-col justify-between min-h-[120px] hover:scale-[1.01] transition">
           <div className="flex justify-between items-start">
             <span className="text-[#8A857F] font-semibold text-xs">Hadir Hari Ini</span>
@@ -139,18 +98,6 @@ export default function AbsenKaryawan() {
             </div>
           </div>
           <h4 className="text-[#1E1E1E] font-black text-2xl mt-2">34 Staff</h4>
-          <span className="text-[10px] text-[#8A857F] font-semibold mt-1">dari 38 karyawan</span>
-        </div>
-
-        <div className="card-yellow flex flex-col justify-between min-h-[120px] hover:scale-[1.01] transition">
-          <div className="flex justify-between items-start">
-            <span className="text-[#8A857F] font-semibold text-xs">Izin / Sakit</span>
-            <div className="card-icon-yellow !mb-0">
-              <Calendar size={16} />
-            </div>
-          </div>
-          <h4 className="text-[#1E1E1E] font-black text-2xl mt-2">3 Karyawan</h4>
-          <span className="text-[10px] text-[#8A857F] font-bold mt-1">2 izin, 1 sakit</span>
         </div>
 
         <div className="card-lavender flex flex-col justify-between min-h-[120px] hover:scale-[1.01] transition">
@@ -160,19 +107,7 @@ export default function AbsenKaryawan() {
               <AlertCircle size={16} />
             </div>
           </div>
-          <h4 className="text-[#1E1E1E] font-black text-2xl mt-2">1 Orang</h4>
-          <span className="text-[10px] text-[#8A857F] font-semibold mt-1">Tanpa keterangan</span>
-        </div>
-
-        <div className="card-mint flex flex-col justify-between min-h-[120px] hover:scale-[1.01] transition">
-          <div className="flex justify-between items-start">
-            <span className="text-[#8A857F] font-semibold text-xs">Rata Kehadiran</span>
-            <div className="card-icon-mint !mb-0">
-              <CheckCircle size={16} />
-            </div>
-          </div>
-          <h4 className="text-[#1E1E1E] font-black text-2xl mt-2">91.4%</h4>
-          <span className="text-[10px] text-[#8A857F] font-semibold mt-1">Bulan April 2026</span>
+          <h4 className="text-[#1E1E1E] font-black text-2xl mt-2">4 Orang</h4>
         </div>
       </div>
 
@@ -185,13 +120,6 @@ export default function AbsenKaryawan() {
             </h3>
             <p className="text-xs text-[#8A857F] font-medium">Data check-in harian yang tercatat di sistem apartemen</p>
           </div>
-          <button
-            onClick={() => setModalOpen(true)}
-            className="btn-primary btn-sm self-start md:self-auto"
-          >
-            <Plus size={14} />
-            <span>+ Input Absen Manual</span>
-          </button>
         </div>
 
         <div className="table-wrap">
@@ -226,7 +154,7 @@ export default function AbsenKaryawan() {
                   </td>
                   <td className="text-right">
                     <button
-                      onClick={() => showToast(`Detail kehadiran ${emp.name} (Simulasi)`)}
+                      onClick={() => handleOpenDetail(emp)}
                       className="text-xs font-bold text-[#1E1E1E] hover:underline"
                     >
                       Detail
@@ -239,133 +167,77 @@ export default function AbsenKaryawan() {
         </div>
       </div>
 
-      {/* Recap Progress Bars Section */}
-      <div className="card-section p-6">
-        <div className="pb-4 border-b border-[#EAE6E1] mb-5">
-          <h3 className="text-sm font-bold text-[#1E1E1E] uppercase tracking-wider font-serif">
-            Rekapitulasi Kehadiran — April 2026
-          </h3>
-          <p className="text-xs text-[#8A857F] font-medium">Persentase tingkat kehadiran karyawan per divisi</p>
-        </div>
-
-        <div className="space-y-5 max-w-2xl">
-          {departmentRecap.map((recap, idx) => (
-            <div key={idx} className="flex items-center justify-between gap-6">
-              <div className="w-1/4 min-w-[120px]">
-                <span className="text-xs font-bold text-[#1E1E1E]">{recap.name}</span>
-              </div>
-              
-              <div className="flex-1 progress-track">
-                <div 
-                  className={`progress-fill ${recap.progressClass}`} 
-                  style={{ width: `${recap.pct}%` }}
-                />
-              </div>
-
-              <div className="w-12 text-right">
-                <span className="text-xs font-bold text-[#1E1E1E]">{recap.pct}%</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Manual Input Modal */}
-      {modalOpen && (
-        <div className="modal-overlay">
-          <div className="modal-box">
-            {/* Modal Header */}
-            <div className="modal-header">
+      {/* POPUP MODAL SIMULASI DETAIL KEHADIRAN (HANYA VIEW UNTUK GM) */}
+      {selectedEmployee && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 animate-fade-in p-4">
+          <div className="bg-[#FAF6F0] border border-[#EAE6E1] rounded-2xl max-w-md w-full shadow-2xl p-6 relative animate-scale-up space-y-4">
+            
+            {/* Header Modal */}
+            <div className="flex items-center justify-between border-b border-[#EAE6E1] pb-3">
               <div>
-                <h3 className="text-sm font-bold uppercase tracking-wider text-[#1E1E1E] font-serif">Input Absen Manual</h3>
-                <p className="text-[10px] text-[#8A857F] font-semibold mt-0.5">Tambah data kehadiran karyawan</p>
+                <h3 className="text-sm font-extrabold text-[#1E1E1E] tracking-tight">Detail Log Keaktifan Karyawan</h3>
+                <p className="text-[11px] text-[#8A857F]">{selectedEmployee.date}</p>
               </div>
-              <button onClick={() => setModalOpen(false)} className="text-[#8A857F] hover:text-[#1E1E1E] transition">
-                <X size={18} />
+              <button 
+                onClick={() => setSelectedEmployee(null)}
+                className="p-1 rounded-lg text-[#8A857F] hover:bg-[#EAE6E1] hover:text-[#1E1E1E] transition"
+              >
+                <X size={16} />
               </button>
             </div>
 
-            {/* Modal Form */}
-            <form onSubmit={handleManualAbsence} className="modal-body space-y-4">
+            {/* Profile Singkat */}
+            <div className="bg-white p-4 rounded-xl border border-[#EAE6E1] flex items-center justify-between">
               <div>
-                <label className="label-modern">Nama Karyawan</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Contoh: Roni Wijaya"
-                  value={newAbsence.name}
-                  onChange={(e) => setNewAbsence(prev => ({ ...prev, name: e.target.value }))}
-                  className="input-modern"
-                />
+                <h4 className="text-sm font-bold text-[#1E1E1E]">{selectedEmployee.name}</h4>
+                <p className="text-xs text-[#8A857F] mt-0.5">Divisi: {selectedEmployee.division}</p>
               </div>
+              <span className={`badge-base ${getStatusClass(selectedEmployee.status)}`}>
+                {selectedEmployee.status}
+              </span>
+            </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="label-modern">Divisi</label>
-                  <select
-                    value={newAbsence.division}
-                    onChange={(e) => setNewAbsence(prev => ({ ...prev, division: e.target.value }))}
-                    className="input-modern select-modern"
-                  >
-                    <option value="Keuangan">Keuangan</option>
-                    <option value="Pemeliharaan">Pemeliharaan</option>
-                    <option value="Keamanan">Keamanan</option>
-                    <option value="Kebersihan">Kebersihan</option>
-                    <option value="Management">Management</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="label-modern">Status Kehadiran</label>
-                  <select
-                    value={newAbsence.status}
-                    onChange={(e) => setNewAbsence(prev => ({ ...prev, status: e.target.value }))}
-                    className="input-modern select-modern"
-                  >
-                    <option value="Hadir">Hadir</option>
-                    <option value="Izin">Izin</option>
-                    <option value="Sakit">Sakit</option>
-                  </select>
+            {/* Data Log Kehadiran Teknis */}
+            <div className="space-y-2.5 text-xs">
+              <div className="flex items-center gap-3 text-[#1E1E1E]">
+                <Clock size={14} className="text-[#8A857F] shrink-0" />
+                <div className="grid grid-cols-2 w-full bg-white px-3 py-2 rounded-lg border border-[#EAE6E1]">
+                  <div><span className="text-[#8A857F]">Masuk:</span> <strong className="font-mono">{selectedEmployee.checkIn}</strong></div>
+                  <div><span className="text-[#8A857F]">Keluar:</span> <strong className="font-mono">{selectedEmployee.checkOut}</strong></div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="label-modern">Jam Masuk (Opsional)</label>
-                  <input
-                    type="time"
-                    value={newAbsence.checkIn}
-                    onChange={(e) => setNewAbsence(prev => ({ ...prev, checkIn: e.target.value }))}
-                    className="input-modern"
-                  />
-                </div>
-                <div>
-                  <label className="label-modern">Jam Keluar (Opsional)</label>
-                  <input
-                    type="time"
-                    value={newAbsence.checkOut}
-                    onChange={(e) => setNewAbsence(prev => ({ ...prev, checkOut: e.target.value }))}
-                    className="input-modern"
-                  />
+              <div className="flex items-center gap-3 text-[#1E1E1E]">
+                <Smartphone size={14} className="text-[#8A857F] shrink-0" />
+                <div className="w-full bg-white px-3 py-2 rounded-lg border border-[#EAE6E1]">
+                  <span className="text-[#8A857F]">Perangkat Absen:</span> <span className="font-medium">{selectedEmployee.device}</span>
                 </div>
               </div>
 
-              {/* Action Buttons */}
-              <div className="flex items-center gap-3 pt-3 border-t border-[#EAE6E1]">
-                <button
-                  type="submit"
-                  className="btn-primary flex-1 justify-center"
-                >
-                  Simpan Absen
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setModalOpen(false)}
-                  className="btn-ghost"
-                >
-                  Batal
-                </button>
+              <div className="flex items-center gap-3 text-[#1E1E1E]">
+                <MapPin size={14} className="text-[#8A857F] shrink-0" />
+                <div className="w-full bg-white px-3 py-2 rounded-lg border border-[#EAE6E1]">
+                  <span className="text-[#8A857F]">Titik Lokasi GPS:</span> <span className="font-medium">{selectedEmployee.location}</span>
+                </div>
               </div>
-            </form>
+            </div>
+
+            {/* Keterangan Tambahan / Catatan Lapangan */}
+            <div className="bg-white p-3 rounded-xl border border-[#EAE6E1] space-y-1">
+              <span className="text-[10px] font-bold text-[#8A857F] uppercase tracking-wider">Catatan Sistem / HRD:</span>
+              <p className="text-xs text-[#1E1E1E] font-medium italic">"{selectedEmployee.notes}"</p>
+            </div>
+
+            {/* Footer Modal */}
+            <div className="pt-2">
+              <button
+                onClick={() => setSelectedEmployee(null)}
+                className="w-full bg-[#1E1E1E] hover:bg-[#2e2e2e] text-white font-bold text-xs py-2.5 rounded-xl transition shadow-sm"
+              >
+                Selesai Meninjau
+              </button>
+            </div>
+
           </div>
         </div>
       )}

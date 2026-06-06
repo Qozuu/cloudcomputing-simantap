@@ -12,10 +12,15 @@ export default function AbsensiPetugas() {
 
   const [month, setMonth] = useState('April 2026');
   const [successToast, setSuccessToast] = useState('');
+  const [mainSearchTerm, setMainSearchTerm] = useState(''); // State untuk filter tabel utama
   
   // Modals state
   const [recordModalOpen, setRecordModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
+  
+  // Dropdown kustom kontrol di dalam modal catat
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [modalSearchTerm, setModalSearchTerm] = useState(''); // State untuk filter di dalam modal
   
   // Forms state
   const [newRecord, setNewRecord] = useState({
@@ -36,7 +41,6 @@ export default function AbsensiPetugas() {
   const handleRecordSubmit = (e) => {
     e.preventDefault();
     setOfficers(prev => {
-      // Find if already exists
       const existsIdx = prev.findIndex(o => o.name === newRecord.name);
       if (existsIdx > -1) {
         const updated = [...prev];
@@ -51,6 +55,7 @@ export default function AbsensiPetugas() {
       return [...prev, { ...newRecord, id: Date.now(), recap: 90 }];
     });
     setRecordModalOpen(false);
+    setModalSearchTerm('');
     setSuccessToast(`Absensi petugas ${newRecord.name} berhasil disimpan!`);
     setTimeout(() => setSuccessToast(''), 3000);
   };
@@ -73,28 +78,66 @@ export default function AbsensiPetugas() {
     setTimeout(() => setSuccessToast(''), 3000);
   };
 
+  // Filter baris tabel utama berdasarkan kolom pencarian atas
+  const filteredOfficers = officers.filter(o =>
+    o.name.toLowerCase().includes(mainSearchTerm.toLowerCase())
+  );
+
   return (
     <div className="space-y-6 animate-fade-up relative">
       
       {/* Controls Row */}
       <div className="card-section p-6 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <label className="label-modern m-0">Pilih Periode:</label>
-          <div className="relative">
-            <select
-              value={month}
-              onChange={(e) => setMonth(e.target.value)}
-              className="select-modern input-modern text-xs font-bold py-2 w-44"
-            >
-              <option value="April 2026">April 2026</option>
-              <option value="Maret 2026">Maret 2026</option>
-            </select>
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex items-center gap-3">
+            <label className="label-modern m-0">Pilih Periode:</label>
+            <div className="relative">
+              <select
+                value={month}
+                onChange={(e) => setMonth(e.target.value)}
+                className="select-modern input-modern text-xs font-bold py-2 w-44"
+              >
+                <option value="April 2026">April 2026</option>
+                <option value="Maret 2026">Maret 2026</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Search Bar Utama - Anti Tumpang Tindih */}
+          <div className="relative flex items-center w-full sm:w-60">
+            <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-[#8A857F]">
+              <svg className="w-4 h-4 stroke-[2.5]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
+            <input
+              type="text"
+              placeholder="Cari nama karyawan..."
+              value={mainSearchTerm}
+              onChange={(e) => setMainSearchTerm(e.target.value)}
+              className="w-full pr-8 py-2 input-modern text-xs font-semibold shadow-sm"
+              style={{ paddingLeft: '2.5rem' }}
+            />
+            {mainSearchTerm && (
+              <button 
+                onClick={() => setMainSearchTerm('')}
+                className="absolute inset-y-0 right-2.5 flex items-center text-gray-400 hover:text-gray-600"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
           </div>
         </div>
 
         <div className="flex items-center gap-2.5">
           <button
-            onClick={() => setRecordModalOpen(true)}
+            onClick={() => {
+              setDropdownOpen(false);
+              setModalSearchTerm('');
+              setRecordModalOpen(true);
+            }}
             className="btn-primary btn-sm flex items-center gap-1.5"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -117,7 +160,6 @@ export default function AbsensiPetugas() {
 
       {/* Stats Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Card 1: Pink */}
         <div className="card-pink flex items-center justify-between">
           <div>
             <span className="text-[#8A857F] font-semibold text-xs uppercase tracking-wider">Total Petugas</span>
@@ -131,7 +173,6 @@ export default function AbsensiPetugas() {
           </div>
         </div>
 
-        {/* Card 2: Yellow */}
         <div className="card-yellow flex items-center justify-between">
           <div>
             <span className="text-[#8A857F] font-semibold text-xs uppercase tracking-wider">Hadir Hari Ini</span>
@@ -145,7 +186,6 @@ export default function AbsensiPetugas() {
           </div>
         </div>
 
-        {/* Card 3: Lavender */}
         <div className="card-lavender flex items-center justify-between">
           <div>
             <span className="text-[#8A857F] font-semibold text-xs uppercase tracking-wider">Izin / Sakit</span>
@@ -159,7 +199,6 @@ export default function AbsensiPetugas() {
           </div>
         </div>
 
-        {/* Card 4: Mint */}
         <div className="card-mint flex items-center justify-between">
           <div>
             <span className="text-[#8A857F] font-semibold text-xs uppercase tracking-wider">Rata-rata Kehadiran</span>
@@ -183,7 +222,7 @@ export default function AbsensiPetugas() {
           </div>
         </div>
 
-        {/* Table */}
+        {/* Table View */}
         <div className="card-section-body p-0 overflow-x-auto">
           <table className="table-modern">
             <thead>
@@ -197,33 +236,37 @@ export default function AbsensiPetugas() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 text-xs font-semibold text-gray-800">
-              {officers.map((off) => (
-                <tr key={off.id}>
-                  <td className="font-bold text-ink">{off.name}</td>
-                  <td className="text-muted font-medium">{off.area}</td>
-                  <td className="font-mono font-bold text-ink">{off.checkIn}</td>
-                  <td className="font-mono text-muted">{off.checkOut}</td>
-                  <td>
-                    {off.status === 'Hadir' ? (
-                      <span className="badge-base badge-mint">
-                        Hadir
-                      </span>
-                    ) : (
-                      <span className="badge-base badge-pink">
-                        Sakit
-                      </span>
-                    )}
-                  </td>
-                  <td className="text-right">
-                    <button
-                      onClick={() => handleOpenEdit(off)}
-                      className="text-ink hover:underline font-bold"
-                    >
-                      Edit
-                    </button>
+              {filteredOfficers.length > 0 ? (
+                filteredOfficers.map((off) => (
+                  <tr key={off.id}>
+                    <td className="font-bold text-ink">{off.name}</td>
+                    <td className="text-muted font-medium">{off.area}</td>
+                    <td className="font-mono font-bold text-ink">{off.checkIn}</td>
+                    <td className="font-mono text-muted">{off.checkOut}</td>
+                    <td>
+                      {off.status === 'Hadir' ? (
+                        <span className="badge-base badge-mint">Hadir</span>
+                      ) : (
+                        <span className="badge-base badge-pink">Sakit</span>
+                      )}
+                    </td>
+                    <td className="text-right">
+                      <button
+                        onClick={() => handleOpenEdit(off)}
+                        className="text-ink hover:underline font-bold"
+                      >
+                        Edit
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="6" className="text-center py-5 text-xs text-muted font-medium">
+                    Karyawan dengan nama "{mainSearchTerm}" tidak ditemukan.
                   </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>
@@ -248,7 +291,6 @@ export default function AbsensiPetugas() {
                   <span className="text-xs font-bold text-ink">{off.name}</span>
                 </div>
                 
-                {/* Progress bar */}
                 <div className="flex-1 progress-track">
                   <div
                     className={`progress-fill ${pColor}`}
@@ -265,11 +307,10 @@ export default function AbsensiPetugas() {
         </div>
       </div>
 
-      {/* RECORD ABSENSI MODAL */}
+      {/* RECORD ABSENSI MODAL (WITH SEARCH INSIDE DROPDOWN) */}
       {recordModalOpen && (
         <div className="modal-overlay">
-          <div className="modal-box">
-            {/* Header */}
+          <div className="modal-box !overflow-visible">
             <div className="modal-header">
               <h3 className="text-sm font-bold text-ink uppercase tracking-wider">Catat Kehadiran Petugas</h3>
               <button onClick={() => setRecordModalOpen(false)} className="text-muted hover:text-ink transition">
@@ -279,26 +320,74 @@ export default function AbsensiPetugas() {
               </button>
             </div>
 
-            {/* Form */}
             <form onSubmit={handleRecordSubmit} className="modal-body space-y-4">
-              <div>
+              {/* Custom Searchable Dropdown */}
+              <div className="relative">
                 <label className="label-modern">Nama Petugas</label>
-                <select
-                  value={newRecord.name}
-                  onChange={(e) => {
-                    const matched = officers.find(o => o.name === e.target.value);
-                    setNewRecord(prev => ({
-                      ...prev,
-                      name: e.target.value,
-                      area: matched ? matched.area : prev.area
-                    }));
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDropdownOpen(!dropdownOpen);
+                    setModalSearchTerm('');
                   }}
-                  className="select-modern input-modern font-semibold"
+                  className="w-full flex items-center justify-between input-modern text-xs font-semibold bg-[#FAFAFA]"
                 >
-                  {officers.map(o => (
-                    <option key={o.id} value={o.name}>{o.name}</option>
-                  ))}
-                </select>
+                  <span>{newRecord.name}</span>
+                  <svg className={`w-3.5 h-3.5 text-muted transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+
+                {dropdownOpen && (
+                  <div className="absolute left-0 right-0 mt-1 bg-white border border-soft rounded-xl shadow-xl z-[9999] overflow-hidden flex flex-col max-h-52">
+                    {/* Input ketik search karyawan di dalam modal */}
+                    <div className="p-2 border-b border-soft bg-[#FAFAFA] sticky top-0 z-10 flex items-center gap-2">
+                      <svg className="w-3.5 h-3.5 text-muted ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                      </svg>
+                      <input
+                        type="text"
+                        placeholder="Ketik nama karyawan..."
+                        value={modalSearchTerm}
+                        onChange={(e) => setModalSearchTerm(e.target.value)}
+                        className="w-full px-2 py-1 bg-white border border-soft rounded-lg text-xs font-semibold outline-none focus:border-gray-500"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </div>
+
+                    {/* Menu Pilihan Hasil Filter */}
+                    <div className="overflow-y-auto flex-1">
+                      {officers.filter(o => 
+                        o.name.toLowerCase().includes(modalSearchTerm.toLowerCase())
+                      ).length > 0 ? (
+                        officers
+                          .filter(o => o.name.toLowerCase().includes(modalSearchTerm.toLowerCase()))
+                          .map((o) => (
+                            <div
+                              key={o.id}
+                              onClick={() => {
+                                setNewRecord(prev => ({ ...prev, name: o.name, area: o.area }));
+                                setDropdownOpen(false);
+                                setModalSearchTerm('');
+                              }}
+                              className="px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-100 cursor-pointer flex justify-between items-center"
+                            >
+                              <span>{o.name}</span>
+                              {newRecord.name === o.name && (
+                                <svg className="w-3.5 h-3.5 text-emerald-600 font-bold" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                </svg>
+                              )}
+                            </div>
+                          ))
+                      ) : (
+                        <div className="px-4 py-2.5 text-center text-[11px] text-muted font-medium">
+                          Nama tidak ditemukan
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -370,7 +459,6 @@ export default function AbsensiPetugas() {
       {editModalOpen && editTarget && (
         <div className="modal-overlay">
           <div className="modal-box">
-            {/* Header */}
             <div className="modal-header">
               <h3 className="text-sm font-bold text-ink uppercase tracking-wider">Edit Absensi Petugas</h3>
               <button onClick={() => setEditModalOpen(false)} className="text-muted hover:text-ink transition">
@@ -380,7 +468,6 @@ export default function AbsensiPetugas() {
               </button>
             </div>
 
-            {/* Form */}
             <form onSubmit={handleEditSubmit} className="modal-body space-y-4">
               <div>
                 <span className="label-modern mb-0.5">Nama Petugas</span>

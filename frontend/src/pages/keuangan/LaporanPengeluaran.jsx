@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, X, FileDown } from 'lucide-react';
+import { Plus, X, FileDown, AlertTriangle } from 'lucide-react'; // Ditambahkan AlertTriangle untuk ikon warning
 
 export default function LaporanPengeluaran() {
   const [expenses, setExpenses] = useState([
@@ -16,12 +16,16 @@ export default function LaporanPengeluaran() {
   const [modalOpen, setModalOpen] = useState(false);
   const [successToast, setSuccessToast] = useState('');
 
+  // 1. STATE BARU: Untuk mengontrol modal konfirmasi status
+  const [confirmModalOpen, setConfirmModalOpen] = useState(false);
+  const [selectedExpense, setSelectedExpense] = useState(null);
+
   // Form states
   const [newExpense, setNewExpense] = useState({
     category: 'Operasional',
     desc: '',
     division: 'Umum',
-    amount: '', // numeric string only
+    amount: '',
     status: 'Selesai'
   });
 
@@ -36,8 +40,8 @@ export default function LaporanPengeluaran() {
 
   const getStatusBadgeClass = (status) => {
     switch (status) {
-      case 'Selesai': return 'badge-base badge-mint';
-      case 'Proses': return 'badge-base badge-yellow';
+      case 'Selesai': return 'badge-base badge-mint cursor-default select-none';
+      case 'Proses': return 'badge-base badge-yellow cursor-pointer hover:brightness-95 active:scale-95 transition-all duration-150 shadow-sm';
       default: return 'badge-base badge-gray';
     }
   };
@@ -50,10 +54,9 @@ export default function LaporanPengeluaran() {
     }).format(val);
   };
 
-  // Lock Non-Numeric Inputs: Regex replaces anything that is NOT a digit
   const handleAmountChange = (e) => {
     const value = e.target.value;
-    const sanitized = value.replace(/\D/g, ''); // Locks non-numeric characters
+    const sanitized = value.replace(/\D/g, '');
     setNewExpense(prev => ({ ...prev, amount: sanitized }));
   };
 
@@ -62,10 +65,7 @@ export default function LaporanPengeluaran() {
     if (!newExpense.desc || !newExpense.amount) return;
 
     const today = new Date();
-    const formattedDate = today.toLocaleDateString('id-ID', {
-      day: '2-digit',
-      month: 'short'
-    });
+    const formattedDate = today.toLocaleDateString('id-ID', { day: '2-digit', month: 'short' });
 
     const added = {
       id: Date.now(),
@@ -81,6 +81,28 @@ export default function LaporanPengeluaran() {
     setModalOpen(false);
     showToast(`Pengeluaran "${newExpense.desc}" berhasil dicatat!`);
     setNewExpense({ category: 'Operasional', desc: '', division: 'Umum', amount: '', status: 'Selesai' });
+  };
+
+  // 2. LOGIKA BARU: Klik badge tidak langsung mengubah data, melainkan membuka modal pengaman dulu
+  const handleRequestToggleStatus = (item) => {
+    if (item.status !== 'Proses') return; // Kunci jika sudah Selesai
+    setSelectedExpense(item);
+    setConfirmModalOpen(true);
+  };
+
+  // 3. LOGIKA BARU: Eksekusi perubahan status HANYA jika disetujui di dalam modal
+  const handleConfirmStatusChange = () => {
+    if (!selectedExpense) return;
+
+    setExpenses(prevExpenses =>
+      prevExpenses.map(item =>
+        item.id === selectedExpense.id ? { ...item, status: 'Selesai' } : item
+      )
+    );
+    
+    setConfirmModalOpen(false);
+    showToast(`Status pengeluaran "${selectedExpense.desc}" berhasil diubah menjadi SELESAI!`);
+    setSelectedExpense(null);
   };
 
   const showToast = (msg) => {
@@ -104,18 +126,11 @@ export default function LaporanPengeluaran() {
         </div>
 
         <div className="flex items-center gap-2.5">
-          <button
-            onClick={() => setModalOpen(true)}
-            className="btn-primary py-2.5 px-4 text-xs"
-          >
+          <button onClick={() => setModalOpen(true)} className="btn-primary py-2.5 px-4 text-xs">
             <Plus size={14} />
             <span>Input Pengeluaran</span>
           </button>
-          
-          <button
-            onClick={() => showToast('Data pengeluaran berhasil diexport ke format Excel!')}
-            className="btn-ghost py-2.5 px-4 text-xs font-bold shadow-softer"
-          >
+          <button onClick={() => showToast('Data pengeluaran berhasil diexport ke format Excel!')} className="btn-ghost py-2.5 px-4 text-xs font-bold shadow-softer">
             <FileDown size={14} />
             <span>Export</span>
           </button>
@@ -124,7 +139,6 @@ export default function LaporanPengeluaran() {
 
       {/* KPI Stats Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Card 1: Pink */}
         <div className="card-pink flex flex-col justify-between hover:shadow-soft transition">
           <div>
             <span className="text-[#8A857F] font-semibold text-xs uppercase tracking-wider block">Total Pengeluaran</span>
@@ -132,8 +146,6 @@ export default function LaporanPengeluaran() {
           </div>
           <span className="text-[10px] text-[#8A857F] font-semibold mt-1">April 2026</span>
         </div>
-
-        {/* Card 2: Yellow */}
         <div className="card-yellow flex flex-col justify-between hover:shadow-soft transition">
           <div>
             <span className="text-[#8A857F] font-semibold text-xs uppercase tracking-wider block">SDM & Gaji</span>
@@ -141,8 +153,6 @@ export default function LaporanPengeluaran() {
           </div>
           <span className="text-[10px] text-[#A05820] font-black mt-1">47.9% dari total</span>
         </div>
-
-        {/* Card 3: Lavender */}
         <div className="card-lavender flex flex-col justify-between hover:shadow-soft transition">
           <div>
             <span className="text-[#8A857F] font-semibold text-xs uppercase tracking-wider block">Operasional</span>
@@ -150,8 +160,6 @@ export default function LaporanPengeluaran() {
           </div>
           <span className="text-[10px] text-[#4840B0] font-black mt-1">29.6% dari total</span>
         </div>
-
-        {/* Card 4: Mint */}
         <div className="card-mint flex flex-col justify-between hover:shadow-soft transition">
           <div>
             <span className="text-[#8A857F] font-semibold text-xs uppercase tracking-wider block">Perbaikan Fasilitas</span>
@@ -164,9 +172,7 @@ export default function LaporanPengeluaran() {
       {/* Table Section */}
       <div className="card-section p-6 overflow-hidden">
         <div className="pb-4 border-b border-soft mb-5">
-          <h3 className="text-sm font-bold text-ink uppercase tracking-wider">
-            Detail Pengeluaran — April 2026
-          </h3>
+          <h3 className="text-sm font-bold text-ink uppercase tracking-wider">Detail Pengeluaran — April 2026</h3>
           <p className="text-xs text-muted font-semibold mt-0.5">Buku jurnal pengeluaran operasional dan pemeliharaan gedung terverifikasi</p>
         </div>
 
@@ -186,16 +192,17 @@ export default function LaporanPengeluaran() {
               {expenses.map((row) => (
                 <tr key={row.id}>
                   <td className="text-muted">{row.date}</td>
-                  <td>
-                    <span className={getCategoryBadgeClass(row.category)}>
-                      {row.category}
-                    </span>
-                  </td>
+                  <td><span className={getCategoryBadgeClass(row.category)}>{row.category}</span></td>
                   <td className="text-ink font-semibold">{row.desc}</td>
                   <td className="text-muted">{row.division}</td>
                   <td className="font-mono text-ink font-bold">{formatRupiah(row.amount)}</td>
                   <td>
-                    <span className={getStatusBadgeClass(row.status)}>
+                    {/* Mengarah ke fungsi penanganan request konfirmasi */}
+                    <span 
+                      onClick={() => handleRequestToggleStatus(row)}
+                      className={getStatusBadgeClass(row.status)}
+                      title={row.status === 'Proses' ? 'Klik untuk verifikasi penyelesaian' : undefined}
+                    >
                       {row.status}
                     </span>
                   </td>
@@ -211,49 +218,29 @@ export default function LaporanPengeluaran() {
         <div className="modal-overlay">
           <div className="fixed inset-0 bg-active/40 backdrop-blur-sm" onClick={() => setModalOpen(false)}></div>
           <div className="modal-box max-w-md relative z-10 animate-scale-in">
-            {/* Header */}
             <div className="modal-header">
               <h3 className="text-sm font-bold uppercase tracking-wider text-ink">Input Pengeluaran Baru</h3>
               <button onClick={() => setModalOpen(false)} className="text-muted hover:text-ink transition">
                 <X size={18} />
               </button>
             </div>
-
-            {/* Form */}
             <form onSubmit={handleAddExpense} className="modal-body space-y-4">
               <div>
                 <label className="label-modern">Kategori</label>
-                <select
-                  value={newExpense.category}
-                  onChange={(e) => setNewExpense(prev => ({ ...prev, category: e.target.value }))}
-                  className="input-modern select-modern"
-                >
+                <select value={newExpense.category} onChange={(e) => setNewExpense(prev => ({ ...prev, category: e.target.value }))} className="input-modern select-modern">
                   <option value="SDM/Gaji">SDM / Gaji</option>
                   <option value="Operasional">Operasional</option>
                   <option value="Perbaikan">Perbaikan</option>
                 </select>
               </div>
-
               <div>
                 <label className="label-modern">Keterangan Pengeluaran</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Misal: Beli solar genset tower C"
-                  value={newExpense.desc}
-                  onChange={(e) => setNewExpense(prev => ({ ...prev, desc: e.target.value }))}
-                  className="input-modern"
-                />
+                <input type="text" required placeholder="Misal: Beli solar genset tower C" value={newExpense.desc} onChange={(e) => setNewExpense(prev => ({ ...prev, desc: e.target.value }))} className="input-modern" />
               </div>
-
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="label-modern">Divisi</label>
-                  <select
-                    value={newExpense.division}
-                    onChange={(e) => setNewExpense(prev => ({ ...prev, division: e.target.value }))}
-                    className="input-modern select-modern"
-                  >
+                  <select value={newExpense.division} onChange={(e) => setNewExpense(prev => ({ ...prev, division: e.target.value }))} className="input-modern select-modern">
                     <option value="Umum">Umum / Semua</option>
                     <option value="Pemeliharaan">Pemeliharaan</option>
                     <option value="Keamanan">Keamanan</option>
@@ -263,47 +250,56 @@ export default function LaporanPengeluaran() {
                 </div>
                 <div>
                   <label className="label-modern">Nominal Anggaran (Rupiah)</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Contoh: 1500000"
-                    value={newExpense.amount}
-                    onChange={handleAmountChange} // Locks non-numeric inputs
-                    className="input-modern font-mono"
-                  />
-                  <p className="text-[9px] text-muted mt-1 font-semibold">*Hanya diperbolehkan memasukkan angka.</p>
+                  <input type="text" required placeholder="Contoh: 1500000" value={newExpense.amount} onChange={handleAmountChange} className="input-modern font-mono" />
                 </div>
               </div>
-
               <div>
                 <label className="label-modern">Status Awal</label>
-                <select
-                  value={newExpense.status}
-                  onChange={(e) => setNewExpense(prev => ({ ...prev, status: e.target.value }))}
-                  className="input-modern select-modern"
-                >
+                <select value={newExpense.status} onChange={(e) => setNewExpense(prev => ({ ...prev, status: e.target.value }))} className="input-modern select-modern">
                   <option value="Selesai">Selesai</option>
                   <option value="Proses">Proses</option>
                 </select>
               </div>
-
-              {/* Action Buttons */}
               <div className="flex items-center gap-3 pt-3 border-t border-soft">
-                <button
-                  type="submit"
-                  className="flex-1 btn-primary py-2.5 text-xs"
-                >
-                  Simpan Pengeluaran
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setModalOpen(false)}
-                  className="btn-ghost text-xs border-none"
-                >
-                  Batal
-                </button>
+                <button type="submit" className="flex-1 btn-primary py-2.5 text-xs">Simpan Pengeluaran</button>
+                <button type="button" onClick={() => setModalOpen(false)} className="btn-ghost text-xs border-none">Batal</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* 4. MODAL BARU: Modal Pengaman Konfirmasi Anti-Salah-Pencet */}
+      {confirmModalOpen && selectedExpense && (
+        <div className="modal-overlay">
+          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm" onClick={() => setConfirmModalOpen(false)}></div>
+          <div className="modal-box max-w-sm relative z-10 p-5 rounded-2xl animate-scale-in bg-white shadow-xl border border-soft">
+            <div className="flex items-center gap-3 text-amber-500 mb-3">
+              <AlertTriangle size={24} className="animate-pulse" />
+              <h3 className="text-sm font-black text-ink uppercase tracking-wide">Konfirmasi Verifikasi</h3>
+            </div>
+            
+            <p className="text-xs text-muted font-medium leading-relaxed">
+              Apakah Anda yakin ingin mengubah status pengeluaran <strong className="text-ink">"{selectedExpense.desc}"</strong> sebesar <strong className="text-ink font-mono">{formatRupiah(selectedExpense.amount)}</strong> menjadi <span className="text-emerald-600 font-bold">Selesai</span>?
+            </p>
+            <p className="text-[10px] text-amber-600 font-semibold bg-amber-50 border border-amber-200/60 p-2 rounded-lg mt-3">
+              ⚠️ Tindakan ini akan mengunci pencatatan jurnal keuangan secara permanen.
+            </p>
+
+            <div className="flex items-center gap-2 mt-4 pt-3 border-t border-soft">
+              <button
+                onClick={handleConfirmStatusChange}
+                className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-2 px-4 rounded-xl transition shadow-sm"
+              >
+                Ya, Selesaikan
+              </button>
+              <button
+                onClick={() => setConfirmModalOpen(false)}
+                className="btn-ghost text-xs border border-soft py-2 px-4 rounded-xl text-muted"
+              >
+                Batal
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -312,7 +308,7 @@ export default function LaporanPengeluaran() {
       {successToast && (
         <div className="toast-modern toast-success">
           <div className="avatar avatar-sm avatar-mint flex items-center justify-center flex-shrink-0">
-            <svg className="w-5 h-5 animate-bounce" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
             </svg>
           </div>

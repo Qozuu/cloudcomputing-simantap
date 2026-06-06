@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { UserCheck, Clock, UserX, Plus, X, Search, Calendar, FileText, CheckCircle2 } from 'lucide-react';
 
 export default function AbsensiKaryawan() {
@@ -23,6 +23,30 @@ export default function AbsensiKaryawan() {
   const [formCheckOut, setFormCheckOut] = useState('17:00');
   const [formNote, setFormNote] = useState('');
 
+  // State pendukung fitur Live Search di dalam dropdown modal
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  // Daftar data staf untuk pencarian
+  const availableEmployees = [
+    { name: 'Ahmad Fauzi', desc: 'Staff Kasir & EBilling' },
+    { name: 'Sri Wahyuni', desc: 'Staff Akunting & Pajak' },
+    { name: 'Rina Kurnia', desc: 'Supervisor Keuangan' }
+  ];
+
+  // Effect pelindung: Klik di luar list dropdown akan otomatis menutup menu pencarian
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsDropdownOpen(false);
+      }
+    }
+    if (isDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isDropdownOpen]);
+
   const formatRupiah = (val) => {
     return new Intl.NumberFormat('id-ID', {
       style: 'currency',
@@ -37,6 +61,7 @@ export default function AbsensiKaryawan() {
     setFormCheckIn('08:00');
     setFormCheckOut('17:00');
     setFormNote('');
+    setIsDropdownOpen(false);
     setIsModalOpen(true);
   };
 
@@ -57,7 +82,7 @@ export default function AbsensiKaryawan() {
       id: Date.now(),
       name: formName,
       role: rolesMap[formName] || 'Staff Keuangan',
-      date: '28 Mei 2026', // Hari ini
+      date: '28 Mei 2026',
       checkIn: formStatus === 'Alpa' || formStatus === 'Izin' || formStatus === 'Sakit' ? '—' : formCheckIn,
       checkOut: formStatus === 'Alpa' || formStatus === 'Izin' || formStatus === 'Sakit' ? '—' : formCheckOut,
       status: formStatus,
@@ -74,12 +99,17 @@ export default function AbsensiKaryawan() {
     setTimeout(() => setSuccessToast(''), 3000);
   };
 
-  // Filter logs
+  // Filter logs utama halaman dashboard
   const filteredLogs = logs.filter(log => {
     const matchesStatus = statusFilter === 'Semua' || log.status === statusFilter || (statusFilter === 'Hadir' && log.status === 'Terlambat');
     const matchesSearch = log.name.toLowerCase().includes(searchQuery.toLowerCase()) || log.role.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesStatus && matchesSearch;
   });
+
+  // Filter list karyawan di dalam modal pencarian berdasarkan ketikan admin
+  const searchedEmployees = availableEmployees.filter(emp =>
+    emp.name.toLowerCase().includes(formName.toLowerCase())
+  );
 
   return (
     <div className="space-y-6 animate-fade-up relative">
@@ -101,16 +131,16 @@ export default function AbsensiKaryawan() {
             </select>
           </div>
 
-          {/* Search box */}
-          <div className="relative">
+          {/* Search bar dashboard utama */}
+          <div className="flex items-center bg-white border border-gray-200 rounded-xl px-3 py-2 w-52 focus-within:border-gray-400 transition-colors shadow-sm">
+            <Search className="text-gray-400 mr-2 flex-shrink-0" size={14} />
             <input
               type="text"
               placeholder="Cari nama staf..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="input-modern pl-9 pr-4 py-2 text-xs font-semibold w-52"
+              className="w-full bg-transparent text-xs font-semibold text-gray-800 outline-none border-none p-0 focus:ring-0 focus:outline-none placeholder-gray-400"
             />
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" size={14} />
           </div>
         </div>
 
@@ -126,7 +156,6 @@ export default function AbsensiKaryawan() {
 
       {/* Stats Cards Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Card 1: Pink */}
         <div className="card-pink flex items-center justify-between">
           <div>
             <span className="text-[#8A857F] font-semibold text-xs uppercase tracking-wider">Total Staf</span>
@@ -138,7 +167,6 @@ export default function AbsensiKaryawan() {
           </div>
         </div>
 
-        {/* Card 2: Yellow */}
         <div className="card-yellow flex items-center justify-between">
           <div>
             <span className="text-[#8A857F] font-semibold text-xs uppercase tracking-wider">Hadir Hari Ini</span>
@@ -150,7 +178,6 @@ export default function AbsensiKaryawan() {
           </div>
         </div>
 
-        {/* Card 3: Lavender */}
         <div className="card-lavender flex items-center justify-between">
           <div>
             <span className="text-[#8A857F] font-semibold text-xs uppercase tracking-wider">Terlambat</span>
@@ -162,7 +189,6 @@ export default function AbsensiKaryawan() {
           </div>
         </div>
 
-        {/* Card 4: Mint */}
         <div className="card-mint flex items-center justify-between">
           <div>
             <span className="text-[#8A857F] font-semibold text-xs uppercase tracking-wider">Absen / Cuti</span>
@@ -255,7 +281,6 @@ export default function AbsensiKaryawan() {
           </div>
 
           <div className="space-y-4">
-            {/* Rina Kurnia */}
             <div className="space-y-2">
               <div className="flex justify-between text-xs font-bold">
                 <span className="text-ink">Rina Kurnia</span>
@@ -267,7 +292,6 @@ export default function AbsensiKaryawan() {
               <p className="text-[10px] text-muted font-semibold">20 Hari Hadir · 0 Cuti/Alpa</p>
             </div>
 
-            {/* Ahmad Fauzi */}
             <div className="space-y-2">
               <div className="flex justify-between text-xs font-bold">
                 <span className="text-ink">Ahmad Fauzi</span>
@@ -279,7 +303,6 @@ export default function AbsensiKaryawan() {
               <p className="text-[10px] text-muted font-semibold">19 Hari Hadir · 1 Izin Sakit</p>
             </div>
 
-            {/* Sri Wahyuni */}
             <div className="space-y-2">
               <div className="flex justify-between text-xs font-bold">
                 <span className="text-ink">Sri Wahyuni</span>
@@ -303,7 +326,6 @@ export default function AbsensiKaryawan() {
       {isModalOpen && (
         <div className="modal-overlay">
           <div className="modal-box">
-            {/* Modal Header */}
             <div className="modal-header">
               <div>
                 <h4 className="text-sm font-bold uppercase tracking-wider text-ink">Input Absensi Manual</h4>
@@ -314,24 +336,56 @@ export default function AbsensiKaryawan() {
               </button>
             </div>
 
-            {/* Form Body */}
             <form onSubmit={handleSaveAbsensi} className="modal-body space-y-4 text-xs font-bold text-gray-700">
               
-              {/* Employee */}
-              <div className="space-y-1.5">
+              {/* PERBAIKAN UTAMA: Searchable Custom Combobox Dropdown */}
+              <div className="space-y-1.5 relative" ref={dropdownRef}>
                 <label className="label-modern">Pilih Nama Karyawan</label>
-                <select
-                  value={formName}
-                  onChange={(e) => setFormName(e.target.value)}
-                  className="select-modern input-modern font-semibold"
-                >
-                  <option value="Ahmad Fauzi">Ahmad Fauzi - Staff Kasir & EBilling</option>
-                  <option value="Sri Wahyuni">Sri Wahyuni - Staff Akunting & Pajak</option>
-                  <option value="Rina Kurnia">Rina Kurnia - Supervisor Keuangan</option>
-                </select>
+                
+                {/* Input Text box sebagai Search Input */}
+                <div className="relative flex items-center">
+                  <input
+                    type="text"
+                    placeholder="Ketik untuk mencari nama staf..."
+                    value={formName}
+                    onChange={(e) => {
+                      setFormName(e.target.value);
+                      setIsDropdownOpen(true);
+                    }}
+                    onFocus={() => setIsDropdownOpen(true)}
+                    className="input-modern w-full pr-10 font-semibold text-gray-800"
+                  />
+                  <Search className="absolute right-3.5 text-gray-400 pointer-events-none" size={14} />
+                </div>
+
+                {/* Floating List hasil filter pencarian nama */}
+                {isDropdownOpen && (
+                  <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto divide-y divide-gray-50 text-xs font-semibold">
+                    {searchedEmployees.map((emp, idx) => (
+                      <div
+                        key={idx}
+                        onClick={() => {
+                          setFormName(emp.name);
+                          setIsDropdownOpen(false);
+                        }}
+                        className="px-4 py-2.5 hover:bg-gray-50 cursor-pointer transition-colors flex flex-col gap-0.5"
+                      >
+                        <span className="text-gray-800">{emp.name}</span>
+                        <span className="text-[10px] text-gray-400 font-medium">{emp.desc}</span>
+                      </div>
+                    ))}
+                    
+                    {/* State Fallback jika input ketikan tidak cocok dengan staf manapun */}
+                    {searchedEmployees.length === 0 && (
+                      <div className="px-4 py-3 text-center text-gray-400 font-medium italic bg-gray-50">
+                        Nama karyawan tidak ditemukan
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
-              {/* Status */}
+              {/* Status Kehadiran */}
               <div className="space-y-1.5">
                 <label className="label-modern">Status Kehadiran</label>
                 <select
@@ -347,7 +401,7 @@ export default function AbsensiKaryawan() {
                 </select>
               </div>
 
-              {/* Check-In & Out Timestamps (only visible if Present or Late) */}
+              {/* Check-In & Out Timestamps */}
               {(formStatus === 'Hadir' || formStatus === 'Terlambat') && (
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1.5">
