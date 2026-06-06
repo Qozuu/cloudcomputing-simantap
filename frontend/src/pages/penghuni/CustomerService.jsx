@@ -13,33 +13,33 @@ import {
   ShieldAlert
 } from 'lucide-react';
 
+// 📞 HOTLINE TUNGGAL PENGELOLA (Satu nomor untuk semua divisi)
+const HOTLINE_WA_PUSAT = '6288975285486';
+
 const DEPT_CONFIG = {
   pemeliharaan: {
     label:       'Pemeliharaan & Kerusakan',
     description: 'Laporan kerusakan unit, perbaikan, teknisi',
     adminLabel:  'Admin Pemeliharaan',
-    wa:          '6288975285486',
     categories:  ['Kerusakan Unit', 'Perbaikan', 'AC & Pendingin', 'Plumbing', 'Lainnya'],
     welcome:     'Halo! Selamat datang di CS SiManTap. Pilih kategori dan sampaikan pertanyaan mengenai kerusakan atau perbaikan unit Anda.',
-    waSubtitle:  'Gunakan WhatsApp untuk kirim foto kerusakan',
+    waSubtitle:  'Gunakan WhatsApp untuk kirim foto kerusakan ke Hotline',
   },
   keuangan: {
     label:       'Keuangan & Tagihan',
     description: 'Tagihan IPL, konfirmasi pembayaran, tunggakan',
     adminLabel:  'Admin Keuangan',
-    wa:          '6285733112200',
     categories:  ['Tagihan IPL', 'Konfirmasi Pembayaran', 'Tunggakan', 'Tagihan Fasilitas', 'Lainnya'],
     welcome:     'Halo! Selamat datang di CS Keuangan SiManTap. Kami siap membantu pertanyaan seputar tagihan dan pembayaran apartemen Anda.',
-    waSubtitle:  'Gunakan WhatsApp untuk kirim foto bukti pembayaran',
+    waSubtitle:  'Gunakan WhatsApp untuk kirim foto bukti pembayaran ke Hotline',
   },
   fasilitas: {
     label:       'Reservasi & Fasilitas',
     description: 'Booking fasilitas, jadwal, pembatalan reservasi',
     adminLabel:  'Admin Fasilitas',
-    wa:          '6285733112211',
     categories:  ['Reservasi Fasilitas', 'Jadwal & Ketersediaan', 'Pembatalan Reservasi', 'Info Fasilitas', 'Lainnya'],
     welcome:     'Halo! Selamat datang di CS Fasilitas SiManTap. Kami siap membantu pertanyaan seputar reservasi dan fasilitas apartemen.',
-    waSubtitle:  'Gunakan WhatsApp untuk kirim foto atau file bukti',
+    waSubtitle:  'Gunakan WhatsApp untuk kirim foto atau file bukti ke Hotline',
   },
 };
 
@@ -51,7 +51,7 @@ export default function KontakPengelola() {
   const [selectedDept, setSelectedDept] = useState('pemeliharaan');
   const dept = DEPT_CONFIG[selectedDept];
   
-  // Panel Kiri - State Live Chat Utama (Aplikasi Penghuni)
+  // Panel Kiri - State Live Chat Utama
   const [csCategory, setCsCategory] = useState(DEPT_CONFIG.pemeliharaan.categories[0]);
   const [csInput, setCsInput] = useState('');
   const [csMessages, setCsMessages] = useState([
@@ -76,23 +76,34 @@ export default function KontakPengelola() {
     }
   ]);
 
-  // Otomatis scroll ke pesan paling bawah
+  // Otomatis scroll ke pesan paling bawah jika ada chat baru
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [csMessages]);
 
-  // Deep link WhatsApp khusus untuk bypass halaman konfirmasi web Browser
-  const getWhatsAppLink = (kategori) => {
-    const nomorAdmin = dept.wa;
-    const templateTeks = `Halo ${dept.adminLabel} SiManTap, saya memerlukan bantuan mengenai keluhan/kebutuhan: *${kategori}*.`;
-    return `whatsapp://send?phone=${nomorAdmin}&text=${encodeURIComponent(templateTeks)}`;
+  // Efek Reset Kategori Utama jika Departemen Berubah
+  useEffect(() => {
+    setCsCategory(DEPT_CONFIG[selectedDept].categories[0]);
+  }, [selectedDept]);
+
+  // Logika Penentu Teks Subtitle Spanduk secara Dinamis
+  const dapatkanTeksSpanduk = () => {
+    if (csCategory === 'Lainnya') {
+      return 'Untuk keluhan umum atau di luar opsi, disarankan langsung chat via WhatsApp Hotline Pusat.';
+    }
+    return dept.waSubtitle;
   };
 
-  // Handler Ganti Departemen
+  // Deep link WhatsApp ke nomor pusat tunggal dengan template pesan otomatis
+  const getWhatsAppLink = (kategori) => {
+    const templateTeks = `Halo Pengelola SiManTap, saya memerlukan bantuan mengenai keluhan/kebutuhan divisi *${dept.label}* dengan kategori: *${kategori}*.`;
+    return `whatsapp://send?phone=${HOTLINE_WA_PUSAT}&text=${encodeURIComponent(templateTeks)}`;
+  };
+
+  // Handler Ganti Departemen (Dan reset isi chat simulasi)
   const onDeptChange = (deptKey) => {
     setSelectedDept(deptKey);
     const newDept = DEPT_CONFIG[deptKey];
-    setCsCategory(newDept.categories[0]);
     setCsMessages([
       {
         id: Date.now(),
@@ -123,7 +134,7 @@ export default function KontakPengelola() {
     const userQuery = csInput;
     setCsInput('');
 
-    // Simulasi respons otomatis dari divisi admin terkait (Berdasarkan Kategori Dropdown)
+    // Simulasi respons otomatis dari divisi admin terkait
     setTimeout(() => {
       const namaAdmin = dept.adminLabel;
       const kodeAvatar = selectedDept === 'pemeliharaan' ? 'LT' : (selectedDept === 'keuangan' ? 'AK' : 'AF');
@@ -214,16 +225,16 @@ export default function KontakPengelola() {
               })}
             </div>
 
-            {/* Dynamic Banner following department selection */}
+            {/* Dynamic Banner - Mengikuti Kategori Bahasan (Lainnya / Umum) */}
             <div className="bg-[#E8FAF3] border border-[#b5ead7] rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-in">
               <div className="flex items-start gap-2.5">
                 <Phone size={16} className="text-[#187050] flex-shrink-0 mt-0.5" />
                 <div>
                   <p className="text-xs font-bold text-[#187050]">
-                    Butuh Kirim Bukti Fisik / Foto?
+                    {csCategory === 'Lainnya' ? 'Butuh Penanganan Cepat?' : 'Butuh Kirim Bukti Fisik / Foto?'}
                   </p>
                   <p className="text-[10px] text-[#187050] font-medium mt-0.5">
-                    {dept.waSubtitle}
+                    {dapatkanTeksSpanduk()}
                   </p>
                 </div>
               </div>
@@ -234,11 +245,11 @@ export default function KontakPengelola() {
                 className="px-3.5 py-1.5 bg-[#187050] hover:bg-[#115038] text-white rounded-xl text-[10px] font-bold uppercase tracking-wider transition text-center shadow-sm flex items-center justify-center gap-1 flex-shrink-0"
               >
                 <Phone size={10} />
-                <span>WA — Kirim Bukti / Media</span>
+                <span>WA — Hotline Pusat</span>
               </a>
             </div>
 
-            {/* Sistem Dropdown Tagging Multi-Role Admin */}
+            {/* Dropdown Kategori Bahasan */}
             <div className="w-full sm:w-64">
               <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">
                 Kategori Bahasan
@@ -271,7 +282,7 @@ export default function KontakPengelola() {
                   <div className="max-w-[70%] space-y-1">
                     <div className={`px-4 py-2.5 rounded-2xl text-xs font-medium leading-relaxed shadow-sm ${
                       msg.sender === 'user'
-                        ? 'bg-zinc-900 text-white rounded-br-none'
+                        ? 'bg-zinc-950 text-white rounded-br-none'
                         : 'bg-white text-zinc-800 border border-zinc-100 rounded-bl-none'
                     }`}>
                       {msg.text}
@@ -329,12 +340,12 @@ export default function KontakPengelola() {
                 </button>
               </div>
 
-              {/* Teks Ringkas Info Kontak Darurat */}
+              {/* Teks Info Kontak Darurat menggunakan HOTLINE_WA_PUSAT */}
               <div className="py-2.5 text-[9px] text-zinc-400 font-semibold border-b border-zinc-100 flex items-center justify-between">
-                <span>Hotline Resmi WA:</span>
-                <a href={`https://wa.me/${dept.wa}`} target="_blank" rel="noopener noreferrer" className="text-emerald-700 hover:underline flex items-center gap-0.5">
+                <span>Hotline Resmi WA Pusat:</span>
+                <a href={`https://wa.me/${HOTLINE_WA_PUSAT}`} target="_blank" rel="noopener noreferrer" className="text-emerald-700 hover:underline flex items-center gap-0.5">
                   <Phone size={9} />
-                  <span>{dept.wa.startsWith('62') ? '0' + dept.wa.slice(2) : dept.wa}</span>
+                  <span>0889-7528-5486</span>
                 </a>
               </div>
 
@@ -345,7 +356,7 @@ export default function KontakPengelola() {
                     key={idx}
                     className={`p-3 rounded-xl text-xs font-medium leading-relaxed border ${
                       msg.sender === 'user'
-                        ? 'bg-zinc-900 text-white border-zinc-900 ml-6 rounded-tr-none'
+                        ? 'bg-zinc-950 text-white border-zinc-950 ml-6 rounded-tr-none'
                         : 'bg-zinc-50 text-zinc-700 border-zinc-100 mr-6 rounded-tl-none'
                     }`}
                   >
