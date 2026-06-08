@@ -1,20 +1,41 @@
 import { supabase } from '../lib/supabase';
 
-export const billingService = {
-  getTagsIPL: async () => {
-    /* TODO: await supabase.from('tagihan_ipl').select('*, units(no_unit), penghuni(nama_lengkap)') */
-    return [{ id: 1, bulan: 'Juni', tahun: 2026, total: 770000, status: 'menunggu' }];
-  },
-  payIPL: async (id, metode, idTransaksi) => {
-    /* TODO: await supabase.from('tagihan_ipl').update({ status: 'lunas', tgl_bayar: new Date(), metode_bayar: metode, id_transaksi: idTransaksi }).eq('id', id) */
-    return { success: true };
-  },
-  getExpenses: async () => {
-    /* TODO: await supabase.from('pengeluaran').select('*') */
-    return [{ id: 1, tanggal: '2026-06-03', kategori: 'operasional', nominal: 1500000, status: 'selesai' }];
-  },
-  createExpense: async (expenseData) => {
-    /* TODO: await supabase.from('pengeluaran').insert(expenseData) */
-    return { success: true };
-  }
+export const getTagihan = (filters = {}) => {
+  let q = supabase.from('tagihan')
+    .select(`*, unit(nomor_unit, lantai,
+              tower(nama_tower)),
+              penghuni:users(nama)`)
+    .order('created_at', { ascending: false });
+  if (filters.status)  q = q.eq('status',  filters.status);
+  if (filters.jenis)   q = q.eq('jenis',   filters.jenis);
+  if (filters.unit_id) q = q.eq('unit_id', filters.unit_id);
+  return q;
 };
+
+export const getTagihanById = (id) =>
+  supabase.from('tagihan')
+    .select(`*, unit(nomor_unit, tower(nama_tower)), penghuni:users(nama)`)
+    .eq('id', id).single();
+
+export const createTagihan = (data) =>
+  supabase.from('tagihan').insert(data).select().single();
+
+export const konfirmasiBayar = (id, buktiUrl = '') =>
+  supabase.from('tagihan')
+    .update({ status: 'sudah_bayar', bukti_bayar_url: buktiUrl })
+    .eq('id', id);
+
+export const getTagihanFasilitas = (filters = {}) => {
+  let q = supabase.from('tagihan_fasilitas')
+    .select(`*, reservasi(tanggal, jam_mulai, jam_selesai,
+              fasilitas(nama)),
+              penghuni:users(nama)`)
+    .order('created_at', { ascending: false });
+  if (filters.status) q = q.eq('status', filters.status);
+  return q;
+};
+
+export const konfirmasiFasilitas = (id) =>
+  supabase.from('tagihan_fasilitas')
+    .update({ status: 'sudah_bayar' })
+    .eq('id', id);
