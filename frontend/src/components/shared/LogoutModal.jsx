@@ -1,22 +1,34 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LogOut } from 'lucide-react';
-import { getSession, needsAttendance, hasCheckedInToday } from '../../utils/authSession';
+// 1. IMPORT USEAUTHCONTEXT & CLEARSESSION UNTUK SUPABASE AUTH
+import { useAuthContext } from '../../context/AuthContext';
+import { clearSession, needsAttendance, hasCheckedInToday } from '../../utils/authSession';
 
 export default function LogoutModal({ isOpen, onConfirm, onCancel, userName, roleName }) {
   const navigate = useNavigate();
+  // 2. AMBIL FUNGSI LOGOUT DAN ROLE AKTIF DARI CONTEXT GLOBAL
+  const { logout, role } = useAuthContext();
 
   if (!isOpen) return null;
 
-  const handleConfirmClick = () => {
-    const { role } = getSession();
-    if (needsAttendance(role) && hasCheckedInToday()) {
+  // 3. SELESAIKAN LOGIKA LOGOUT ASLI SUPABASE
+  const handleConfirmClick = async () => {
+    // Gunakan role dari AuthContext atau fallback ke getSession() jika context delay
+    const activeRole = role || localStorage.getItem('sm_role');
+
+    if (needsAttendance(activeRole) && hasCheckedInToday()) {
       navigate('/absensi');
-      onCancel(); // Tutup modal dengan aman di layout jika harus absen dulu
+      onCancel(); // Tutup modal dengan aman di layout jika harus absen keluar dulu
     } else {
-      localStorage.clear();
-      sessionStorage.clear();
-      window.location.href = '/';
+      clearSession();   // Menghapus data localStorage bawaan SiManTap secara spesifik
+      await logout();   // Memutus token session aktif di server Supabase
+      
+      // Jalankan callback onConfirm bawaan jika ada komponen induk yang membutuhkannya
+      if (typeof onConfirm === 'function') onConfirm();
+      
+      // Lempar balik ke gerbang login
+      navigate('/login');
     }
   };
 
@@ -66,7 +78,7 @@ export default function LogoutModal({ isOpen, onConfirm, onCancel, userName, rol
           </div>
         </div>
 
-        {/* Dual button setup (vertical stacked stack, gap-3) */}
+        {/* Dual button setup */}
         <div className="flex flex-col gap-3">
           <button 
             onClick={handleConfirmClick}

@@ -1,16 +1,20 @@
-import { useState, useEffect } from 'react';
-import { authService } from '../services/authService';
+import { useAuthContext } from '../context/AuthContext';
 
-export const useAuth = () => {
-  const [user, setUser] = useState({ name: 'John Doe', role: 'super_admin' }); // Temporary mock data
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-
+export function useAuth() {
+  const { user, role, profile, loading, logout } = useAuthContext();
+  
   return {
     user,
+    role,
+    profile,
     loading,
-    error,
-    login: async (email, password) => authService.login(email, password),
-    logout: async () => authService.logout()
+    logout,
+    isLoggedIn:    !!user,
+    isSuperAdmin:  role === 'super_admin',
+    isPenghuni:    role === 'penghuni',
+    nama:          profile?.nama  || '',
+    email:         profile?.email || '',
+    userId:        profile?.id    || '',
+    dbRole:        profile?.role  || '',
   };
-};
+}

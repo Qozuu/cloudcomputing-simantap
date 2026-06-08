@@ -1,21 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Eye, EyeOff, Loader2, Check, ChevronLeft, Crown, Wallet, Wrench, ShieldCheck, Sparkles, Building2, Home } from 'lucide-react';
-import { saveSession, needsAttendance } from '../../utils/authSession';
+// 1. IMPORT SUPABASE DAN UTILS AUTH TERBARU UNTUK KONEKSI DATABASE
+import { supabase } from '../../lib/supabase';
+import { 
+  saveSession, 
+  needsAttendance, 
+  ROLE_MAP_REVERSE, 
+  ROLE_ROUTES, 
+  setMustChangePassword 
+} from '../../utils/authSession';
+
 // IMPORT FILE ASLI PNG
 import LogoSiManTap from '../../assets/logo.png';
-
-const ROLE_ROUTES = {
-  'super_admin':     '/superadmin/homepage',
-  'gm':              '/superadmin/homepage',
-  'manager':         '/superadmin/homepage',
-  'keuangan':        '/keuangan/dashboard',
-  'pemeliharaan':    '/pemeliharaan/dashboard',
-  'kebersihan':      '/kebersihan/jadwal',
-  'fasilitas':       '/fasilitas/dashboard',
-  'keamanan':        '/keamanan/dashboard',
-  'penghuni':        '/penghuni/beranda',
-};
 
 const ROLE_CONFIG = {
   super_admin: {
@@ -145,7 +142,8 @@ export default function LoginPage() {
     }
   }, [roleParam, config]);
 
-  const handleLogin = () => {
+  // 2. GANTI FUNGSI HANDLELOGIN MENJADI ASLI KONEK SUPABASE
+  const handleLogin = async () => {
     setError('');
     
     if (!username.trim() || !password) {
@@ -155,48 +153,73 @@ export default function LoginPage() {
 
     setIsLoading(true);
 
-    // Mock login delay (1.5 seconds)
-    setTimeout(() => {
+    // Trik otomatis: Jika user cuma ngetik 'budi', otomatis diubah ke 'budi@simantap.id'
+    const emailToUse = username.includes('@')
+      ? username
+      : `${username.trim().toLowerCase()}@simantap.id`;
+
+    try {
+      // A. Kirim data login ke Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email: emailToUse,
+        password: password,
+      });
+
+      if (authError) {
+        setIsLoading(false);
+        setError('Username atau password salah.');
+        return;
+      }
+
+      // B. Ambil detail profile dan role asli dari tabel 'users' di database
+      const { data: profile, error: profileError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', authData.user.id)
+        .single();
+
+      if (profileError || !profile) {
+        setIsLoading(false);
+        setError('Gagal memuat profil pengguna dari database.');
+        return;
+      }
+
+      // C. Tentukan Mapping Role & Penentuan Halaman Tujuan
+      const dbRole    = profile?.role || 'penghuni';
+      const frontRole = ROLE_MAP_REVERSE[dbRole] || dbRole;
+      const targetRoute = ROLE_ROUTES[frontRole] || '/penghuni/beranda';
+
+      // D. Simpan Sesi Login ke LocalStorage melalui utilitas kita
+      saveSession(frontRole, targetRoute, profile);
+      setMustChangePassword(profile?.must_change_password || false);
+      localStorage.setItem('userRole', frontRole);
+
+      // Aktifkan transisi centang hijau (Success State Overlay)
       setIsLoading(false);
       setSuccess(true);
 
-      // Brief checkmark transition before routing
+      // E. Alihkan halaman setelah 1 detik sukses
       setTimeout(() => {
-        let role = selectedRole || roleParam;
-        if (!role) {
-          const lowerUser = username.toLowerCase().trim();
-          if (lowerUser.includes('super.admin')) {
-            role = 'super_admin';
-          } else if (lowerUser.includes('manager') || lowerUser.includes('gm')) {
-            role = 'gm';
-          } else if (lowerUser.includes('keuangan')) {
-            role = 'keuangan';
-          } else if (lowerUser.includes('pemeliharaan')) {
-            role = 'pemeliharaan';
-          } else if (lowerUser.includes('keamanan')) {
-            role = 'keamanan';
-          } else if (lowerUser.includes('kebersihan')) {
-            role = 'kebersihan';
-          } else if (lowerUser.includes('fasilitas')) {
-            role = 'fasilitas';
-          } else {
-            role = 'penghuni';
-          }
+        // Kasus 1: Pengguna baru yang wajib ganti password dulu
+        if (profile?.must_change_password) {
+          navigate('/ganti-password');
+          return;
         }
 
-        const targetRoute = config?.route || ROLE_ROUTES[role] || '/penghuni/beranda';
-        
-        saveSession(role, targetRoute, username);
-        localStorage.setItem('userRole', role);
-
-        if (needsAttendance(role)) {
+        // Kasus 2: Staf operasional/security/cleaning yang wajib absen masuk (Check-In) dulu
+        if (needsAttendance(frontRole)) {
           navigate('/absensi');
         } else {
+          // Kasus 3: Super Admin, GM, Penghuni langsung menuju dashboard utama
           navigate(targetRoute);
         }
       }, 1000);
 
-    }, 1500);
+    } catch (err) {
+      setIsLoading(false);
+      setError('Terjadi kesalahan jaringan internal server.');
+      console.error(err);
+    }
   };
 
   return (
@@ -384,7 +407,7 @@ export default function LoginPage() {
                 </button>
               </div>
 
-              {/* Footer Modern — Murni teks info/bantuan tanpa opsi registrasi */}
+              {/* Footer Modern */}
               <div className="pt-6 mt-6 border-t border-soft text-center">
                 <p className="text-[11px] text-[#8A857F] font-medium max-w-xs mx-auto leading-relaxed">
                   Butuh akses tambahan? Silakan hubungi <span className="font-bold text-[#1E1E1E]">Super Admin Utama</span> atau IT Support manajemen.

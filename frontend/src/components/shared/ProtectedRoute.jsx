@@ -1,22 +1,15 @@
-import React from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
+import { useAuthContext } from '../../context/AuthContext';
 
-export default function ProtectedRoute({ children }) {
-  const location = useLocation();
+export default function ProtectedRoute({ allowedRoles, children }) {
+  const { role, loading } = useAuthContext();
 
-  // 🎯 KUNCI ANTI-RESIDU: Tolak interupsi jika arahnya ke pemilihan role
-  const isBypassPage = 
-    window.location.pathname === '/pilih-role' || 
-    window.location.search.includes('action=logout') ||
-    location.pathname === '/pilih-role';
+  if (loading) return null; // Tunggu sampai status loading auth selesai
 
-  if (isBypassPage) {
-    return children;
-  }
+  if (!role) return <Navigate to="/login" replace />;
 
-  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-  if (!token) {
-    return <Navigate to="/login" replace />;
+  if (allowedRoles && !allowedRoles.includes(role)) {
+    return <Navigate to="/unauthorized" replace />;
   }
 
   return children;
