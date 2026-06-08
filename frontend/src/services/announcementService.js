@@ -1,15 +1,42 @@
 import { supabase } from '../lib/supabase';
 
-export const announcementService = {
-  // Get active announcements to display on dashboard
-  getActiveAnnouncements: async () => {
-    /* TODO: const { data } = await supabase.from('pengumuman').select('*').eq('status', 'tayang') */
-    return [{ id: 1, judul: 'Water Pipe Maintenance', isi: 'Water will be temporarily shut down at 10 PM.', kategori: 'pemeliharaan', target: 'semua' }];
-  },
-
-  // Create a new announcement (by Superadmin/Admin)
-  createAnnouncement: async (announcementData) => {
-    /* TODO: await supabase.from('pengumuman').insert(announcementData) */
-    return { success: true };
-  }
+// tabel: informasi
+// target_role: 'all' | role tertentu | 'penghuni'
+export const getInformasi = (filters = {}) => {
+  let q = supabase.from('informasi')
+    .select(`*, pembuat:users(nama, role)`)
+    .order('created_at', { ascending: false });
+  if (filters.is_published !== undefined)
+    q = q.eq('is_published', filters.is_published);
+  if (filters.target_role && filters.target_role !== 'all')
+    q = q.or(`target_role.eq.${filters.target_role},target_role.eq.all`);
+  return q;
 };
+
+// Khusus penghuni: hanya yang published
+export const getPengumuman = () =>
+  supabase.from('informasi')
+    .select(`*, pembuat:users(nama)`)
+    .eq('is_published', true)
+    .order('created_at', { ascending: false });
+
+export const createInformasi = async (data) => {
+  const { data: { user } } = await supabase.auth.getUser();
+  return supabase.from('informasi')
+    .insert({ ...data, dibuat_oleh: user.id })
+    .select().single();
+};
+
+export const updateInformasi = (id, data) =>
+  supabase.from('informasi').update(data).eq('id', id);
+
+export const publishInformasi = (id) =>
+  supabase.from('informasi')
+    .update({ is_published: true }).eq('id', id);
+
+export const arsipInformasi = (id) =>
+  supabase.from('informasi')
+    .update({ is_published: false }).eq('id', id);
+
+export const deleteInformasi = (id) =>
+  supabase.from('informasi').delete().eq('id', id);

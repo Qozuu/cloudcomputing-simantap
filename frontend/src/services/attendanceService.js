@@ -1,21 +1,65 @@
 import { supabase } from '../lib/supabase';
 
-export const attendanceService = {
-  // Get attendance logs by a specific date
-  getByDate: async (date) => {
-    /* TODO: const { data } = await supabase.from('absensi').select('*, profiles(*)').eq('tanggal', date) */
-    return [];
-  },
+const getToday = () => new Date().toISOString().split('T')[0];
+const getTime  = () => new Date().toTimeString().slice(0, 5);
 
-  // Clock-in employee with GPS coordinates
-  clockIn: async (userId, lat, lng) => {
-    /* TODO: await supabase.from('absensi').insert({ user_id: userId, tanggal: new Date(), jam_masuk: new Date().toLocaleTimeString(), lat_masuk: lat, lng_masuk: lng }) */
-    return { success: true };
-  },
+export const checkIn = async (lokasi = '') => {
+  const { data: { user } } = await supabase.auth.getUser();
 
-  // Clock-out employee
-  clockOut: async (userId, todayDate) => {
-    /* TODO: await supabase.from('absensi').update({ jam_keluar: new Date().toLocaleTimeString() }).match({ user_id: userId, tanggal: todayDate }) */
-    return { success: true };
-  }
+  // Insert row absensi baru
+  const { data, error } = await supabase.from('absensi')
+    .insert({
+      karyawan_id: user.id,
+      tanggal:     getToday(),
+      jam_masuk:   getTime(),
+      status:      'hadir',
+      lokasi,
+    })
+    .select().single();
+
+  return { data, error };
 };
+
+export const checkOut = async () => {
+  const { data: { user } } = await supabase.auth.getUser();
+
+  const { data, error } = await supabase.from('absensi')
+    .update({ jam_keluar: getTime() })
+    .eq('karyawan_id', user.id)
+    .eq('tanggal', getToday())
+    .is('jam_keluar', null) 
+    .select().single();
+
+  return { data, error };
+};
+
+export const getAbsensiHariIni = async () => {
+  const { data: { user } } = await supabase.auth.getUser();
+  return supabase.from('absensi')
+    .select('*')
+    .eq('karyawan_id', user.id)
+    .eq('tanggal', getToday())
+    .maybeSingle();
+};
+
+export const getAbsensiByTanggal = (tanggal) =>
+  supabase.from('absensi')
+    .select(`*, karyawan:users(nama, role)`)
+    .eq('tanggal', tanggal)
+    .order('created_at');
+
+export const getAbsensiBulan = (bulan, tahun) => {
+  const start = new Date(tahun, bulan - 1, 1).toISOString().split('T')[0];
+  const end   = new Date(tahun, bulan, 0).toISOString().split('T')[0]; // last day
+  return supabase.from('absensi')
+    .select(`*, karyawan:users(nama, role)`)
+    .gte('tanggal', start)
+    .lte('tanggal', end)
+    .order('tanggal');
+};
+
+export const inputAbsensiManual = (data) =>
+  supabase.from('absensi').insert(data).select().single();
+
+export const updateAbsensi = (id, data) =>
+  supabase.from('absensi').update(data).eq('id', id);
