@@ -222,18 +222,7 @@ export default function CSLiveChat() {
 
               {/* Action Buttons */}
               <div className="flex items-center gap-2">
-                {/* WA button */}
-                <a
-                  href={`https://wa.me/628123456789?text=Halo%20${activeChat.name}%20dari%20Apartemen%20SiManTap%20terkait%20keluhan%20Anda`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-bold bg-[#E8FAF3] text-[#187050] hover:bg-[#D5F5E9] transition"
-                >
-                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.455L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.37 9.864-9.799.002-2.63-1.023-5.101-2.885-6.963C16.59 1.981 14.119.953 11.49.953c-5.447 0-9.875 4.375-9.879 9.804-.002 1.778.475 3.514 1.386 5.049L1.96 20.37l4.687-1.216z"/>
-                  </svg>
-                  <span>WA</span>
-                </a>
+                {/* Keterangan: Tombol WA di sini telah dihapus */}
                 
                 {/* Create ticket button */}
                 <button
@@ -292,7 +281,7 @@ export default function CSLiveChat() {
                 </button>
               </div>
               <p className="text-[10px] text-muted font-semibold text-center mt-2.5">
-                Customer Service aktif · Hubungi WA langsung jika diperlukan
+                Customer Service aktif · Membalas keluhan penghuni secara real-time
               </p>
             </form>
           </>
