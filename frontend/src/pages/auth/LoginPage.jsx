@@ -126,9 +126,18 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [selectedRole, setSelectedRole] = useState('');
 
+  // Sesi Intervensi Ganti Password States
+  const [showForceChange, setShowForceChange] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [savedProfile, setSavedProfile] = useState(null);
+  const [nextRoute, setNextRoute] = useState('');
+
   // Focus states for input glows
   const [usernameFocused, setUsernameFocused] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
+  const [newPasswordFocused, setNewPasswordFocused] = useState(false);
+  const [confirmPasswordFocused, setConfirmPasswordFocused] = useState(false);
 
   useEffect(() => {
     if (config) {
@@ -142,7 +151,7 @@ export default function LoginPage() {
     }
   }, [roleParam, config]);
 
-  // 2. GANTI FUNGSI HANDLELOGIN MENJADI ASLI KONEK SUPABASE
+  // FUNGSI HANDLELOGIN UTAMA
   const handleLogin = async () => {
     setError('');
     
@@ -153,7 +162,6 @@ export default function LoginPage() {
 
     setIsLoading(true);
 
-    // Trik otomatis: Jika user cuma ngetik 'budi', otomatis diubah ke 'budi@simantap.id'
     const emailToUse = username.includes('@')
       ? username
       : `${username.trim().toLowerCase()}@simantap.id`;
@@ -171,7 +179,7 @@ export default function LoginPage() {
         return;
       }
 
-      // B. Ambil detail profile dan role asli dari tabel 'users' di database
+      // B. Ambil detail profile dan role asli dari tabel 'users'
       const { data: profile, error: profileError } = await supabase
         .from('users')
         .select('*')
@@ -187,33 +195,31 @@ export default function LoginPage() {
       // C. Tentukan Mapping Role & Penentuan Halaman Tujuan
       const dbRole    = profile?.role || 'penghuni';
       const frontRole = ROLE_MAP_REVERSE[dbRole] || dbRole;
-      const targetRoute = ROLE_ROUTES[frontRole] || '/penghuni/beranda';
+      let targetRoute = ROLE_ROUTES[frontRole] || '/penghuni/beranda';
 
-      // D. Simpan Sesi Login ke LocalStorage melalui utilitas kita
-      saveSession(frontRole, targetRoute, profile);
-      setMustChangePassword(profile?.must_change_password || false);
-      localStorage.setItem('userRole', frontRole);
+      if (needsAttendance(frontRole)) {
+        targetRoute = '/absensi';
+      }
 
-      // Aktifkan transisi centang hijau (Success State Overlay)
-      setIsLoading(false);
-      setSuccess(true);
+      // D. Evaluasi Logika Wajib Ganti Password
+      if (profile?.must_change_password) {
+        setIsLoading(false);
+        setSavedProfile(profile);
+        setNextRoute(targetRoute);
+        setShowForceChange(true); // Pindahkan screen ke Form Ganti Password
+      } else {
+        // E. Alur Normal Tanpa Ganti Password
+        saveSession(frontRole, targetRoute, profile);
+        setMustChangePassword(false);
+        localStorage.setItem('userRole', frontRole);
 
-      // E. Alihkan halaman setelah 1 detik sukses
-      setTimeout(() => {
-        // Kasus 1: Pengguna baru yang wajib ganti password dulu
-        if (profile?.must_change_password) {
-          navigate('/ganti-password');
-          return;
-        }
+        setIsLoading(false);
+        setSuccess(true);
 
-        // Kasus 2: Staf operasional/security/cleaning yang wajib absen masuk (Check-In) dulu
-        if (needsAttendance(frontRole)) {
-          navigate('/absensi');
-        } else {
-          // Kasus 3: Super Admin, GM, Penghuni langsung menuju dashboard utama
+        setTimeout(() => {
           navigate(targetRoute);
-        }
-      }, 1000);
+        }, 1000);
+      }
 
     } catch (err) {
       setIsLoading(false);
@@ -222,12 +228,70 @@ export default function LoginPage() {
     }
   };
 
+  // FUNGSI UPDATE PASSWORD BARU (PAKSAAN)
+  const handleForceChangePassword = async () => {
+    setError('');
+
+    if (!newPassword || !confirmPassword) {
+      setError('Kedua kolom password wajib diisi.');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setError('Konfirmasi password baru tidak cocok.');
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      setError('Password baru minimal harus 6 karakter.');
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      // 1. Update ke Supabase Auth core
+      const { error: authUpdateError } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+
+      if (authUpdateError) throw authUpdateError;
+
+      // 2. Update kolom database di table users publik
+      const { error: dbUpdateError } = await supabase
+        .from('users')
+        .update({ must_change_password: false })
+        .eq('id', savedProfile.id);
+
+      if (dbUpdateError) throw dbUpdateError;
+
+      // 3. Set Sesi Sukses & Alihkan ke Dashboard/Absensi
+      const dbRole = savedProfile?.role || 'penghuni';
+      const frontRole = ROLE_MAP_REVERSE[dbRole] || dbRole;
+
+      saveSession(frontRole, nextRoute, savedProfile);
+      setMustChangePassword(false);
+      localStorage.setItem('userRole', frontRole);
+
+      setIsLoading(false);
+      setShowForceChange(false);
+      setSuccess(true); // Tampilkan overlay sukses centang hijau bawaanmu
+
+      setTimeout(() => {
+        navigate(nextRoute);
+      }, 1000);
+
+    } catch (err) {
+      setIsLoading(false);
+      setError(err.message || 'Gagal memperbarui password baru.');
+    }
+  };
+
   return (
     <div className="h-screen w-full bg-[#FAF6F0] font-sans flex flex-col md:flex-row overflow-hidden select-none">
       
       {/* LEFT DECORATIVE BLOCK - Hidden on Mobile */}
       <aside className="hidden md:flex md:w-5/12 h-full flex-col justify-between p-12 bg-[#EEEDFB] rounded-r-[3rem] shadow-sm">
-        {/* Header Logo */}
         <div className="flex items-center gap-1.5">
           <img 
             src={LogoSiManTap} 
@@ -239,7 +303,6 @@ export default function LoginPage() {
           </span>
         </div>
 
-        {/* Minimalist Typography */}
         <div className="my-auto">
           <h1 className="text-3xl lg:text-4xl font-black text-[#1E1E1E] tracking-tight leading-tight">
             SiManTap Portal.<br />Secure access for residents and management teams.
@@ -249,7 +312,6 @@ export default function LoginPage() {
           </p>
         </div>
 
-        {/* Footer info */}
         <div className="text-[10px] text-[#8A857F] font-bold tracking-wide uppercase">
           © {new Date().getFullYear()} SiManTap. All rights reserved.
         </div>
@@ -273,7 +335,7 @@ export default function LoginPage() {
             </span>
           </div>
 
-          {/* Success State Overlay Card */}
+          {/* Skenario A: Success State Overlay Card */}
           {success ? (
             <div className="text-center py-10 space-y-4 animate-scale-in">
               <div className="w-16 h-16 rounded-full bg-emerald-500 text-white flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/20 transform scale-110 transition duration-300">
@@ -284,9 +346,81 @@ export default function LoginPage() {
                 <p className="text-xs text-[#8A857F] font-semibold mt-1">Mengalihkan ke dashboard operasional...</p>
               </div>
             </div>
+          ) : showForceChange ? (
+            /* Skenario B: UI INTERVENSI WAJIB GANTI PASSWORD */
+            <div className="animate-fade-up">
+              <div className="mb-6">
+                <h2 className="text-xl font-bold text-[#1E1E1E] leading-tight tracking-tight">
+                  🔒 Wajib Ganti Password
+                </h2>
+                <p className="text-xs font-medium text-[#8A857F] mt-1.5 leading-relaxed">
+                  Akun Anda menggunakan password bawaan sistem. Demi keamanan database, Anda wajib memperbaruinya sekarang.
+                </p>
+              </div>
+
+              {error && (
+                <div className="p-3.5 mb-5 text-xs font-semibold text-[#C05040] bg-[#FEF0EE] border border-[#F9C3BA] rounded-xl animate-fade-up">
+                  {error}
+                </div>
+              )}
+
+              <div className="space-y-5">
+                {/* Input Password Baru */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-[#1E1E1E]">Password Baru</label>
+                  <input
+                    type="password"
+                    placeholder="Masukkan password baru"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    onFocus={() => setNewPasswordFocused(true)}
+                    onBlur={() => setNewPasswordFocused(false)}
+                    style={newPasswordFocused ? {
+                      borderColor: primaryColor,
+                      boxShadow: `0 0 0 3px ${primaryColor}18`
+                    } : {}}
+                    className="input-modern"
+                  />
+                </div>
+
+                {/* Input Konfirmasi Password Baru */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-[#1E1E1E]">Konfirmasi Password Baru</label>
+                  <input
+                    type="password"
+                    placeholder="Ulangi password baru"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    onFocus={() => setConfirmPasswordFocused(true)}
+                    onBlur={() => setConfirmPasswordFocused(false)}
+                    style={confirmPasswordFocused ? {
+                      borderColor: primaryColor,
+                      boxShadow: `0 0 0 3px ${primaryColor}18`
+                    } : {}}
+                    className="input-modern"
+                  />
+                </div>
+
+                {/* Tombol Simpan */}
+                <button 
+                  onClick={isLoading ? null : handleForceChangePassword}
+                  className="btn-primary w-full justify-center py-3.5 rounded-2xl flex items-center justify-center gap-2 select-none"
+                  style={isLoading ? { opacity: 0.5, cursor: 'not-allowed' } : { backgroundColor: primaryColor }}
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" />
+                      <span>Memperbarui Password...</span>
+                    </>
+                  ) : (
+                    <span>Simpan & Masuk Sistem</span>
+                  )}
+                </button>
+              </div>
+            </div>
           ) : (
+            /* Skenario C: FORM LOGIN UTAMA BAWAAN KAMU */
             <>
-              {/* Kembali Pilih Role Button (Only when config exists) */}
               {config && (
                 <div 
                   onClick={() => navigate('/pilih-role')}
@@ -297,7 +431,6 @@ export default function LoginPage() {
                 </div>
               )}
 
-              {/* Header */}
               <div className="mb-6">
                 <h2 className="text-xl font-bold text-[#1E1E1E] leading-tight tracking-tight">
                   {config ? config.portal : 'Selamat datang kembali'}
@@ -306,7 +439,6 @@ export default function LoginPage() {
                   {config ? config.description : 'SiManTap — Grand Surabaya Apartment'}
                 </p>
 
-                {/* Role indicator pill */}
                 {config && (
                   <div 
                     className="rounded-full text-[10px] font-bold px-3 py-1 mt-3 w-max flex items-center gap-1.5 border"
@@ -331,9 +463,7 @@ export default function LoginPage() {
                 </div>
               )}
 
-              {/* Form */}
               <div className="space-y-5">
-                {/* Username */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-[#1E1E1E]">Username atau Email</label>
                   <input
@@ -354,7 +484,6 @@ export default function LoginPage() {
                   />
                 </div>
 
-                {/* Password */}
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-bold text-[#1E1E1E]">Password</label>
@@ -389,12 +518,12 @@ export default function LoginPage() {
                   </div>
                 </div>
 
-                {/* Submit Button */}
                 <button 
                   onClick={isLoading ? null : handleLogin}
                   className={`btn-primary w-full justify-center py-3.5 rounded-2xl flex items-center justify-center gap-2 select-none ${
                     isLoading ? 'opacity-50 cursor-not-allowed shadow-none' : ''
                   }`}
+                  style={!isLoading && config ? { backgroundColor: primaryColor } : {}}
                 >
                   {isLoading ? (
                     <>
@@ -407,7 +536,6 @@ export default function LoginPage() {
                 </button>
               </div>
 
-              {/* Footer Modern */}
               <div className="pt-6 mt-6 border-t border-soft text-center">
                 <p className="text-[11px] text-[#8A857F] font-medium max-w-xs mx-auto leading-relaxed">
                   Butuh akses tambahan? Silakan hubungi <span className="font-bold text-[#1E1E1E]">Super Admin Utama</span> atau IT Support manajemen.

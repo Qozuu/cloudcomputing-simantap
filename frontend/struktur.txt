@@ -1,0 +1,177 @@
+Folder PATH listing
+Volume serial number is 000000E2 8285:75F5
+C:\USERS\USER\CLOUDCOMPUTING-SIMANTAP\FRONTEND\SRC
+³   App.jsx
+³   index.css
+³   main.jsx
+³   
+ÃÄÄÄassets
+³       .gitkeep
+³       logo-simantap.svg
+³       logo.png
+³       
+ÃÄÄÄcomponents
+³   ÃÄÄÄpenghuni
+³   ³       .gitkeep
+³   ³       
+³   ÃÄÄÄshared
+³   ³       .gitkeep
+³   ³       AttendanceGuard.jsx
+³   ³       LogoutModal.jsx
+³   ³       NotificationBell.jsx
+³   ³       ProtectedRoute.jsx
+³   ³       PusatInformasi.jsx
+³   ³       
+³   ÀÄÄÄsuper_admin
+³           .gitkeep
+³           
+ÃÄÄÄconstants
+³       absensi.js
+³       apiEndpoints.js
+³       roles.js
+³       routes.js
+³       
+ÃÄÄÄcontext
+³       AuthContext.jsx
+³       NotificationContext.jsx
+³       
+ÃÄÄÄhooks
+³       useAnnouncement.js
+³       useApi.js
+³       useAttendance.js
+³       useAuth.js
+³       useBilling.js
+³       useCleaning.js
+³       useFacility.js
+³       useFinance.js
+³       useMaintenance.js
+³       useRole.js
+³       useSecurity.js
+³       useUnit.js
+³       useUser.js
+³       
+ÃÄÄÄlayouts
+³       AuthLayout.jsx
+³       FasilitasLayout.jsx
+³       KeamananLayout.jsx
+³       KebersihanLayout.jsx
+³       KeuanganLayout.jsx
+³       PemeliharaanLayout.jsx
+³       PenghuniLayout.jsx
+³       SuperAdminLayout.jsx
+³       
+ÃÄÄÄlib
+³       supabase.js
+³       
+ÃÄÄÄpages
+³   ³   Login.jsx
+³   ³   Unauthorized.jsx
+³   ³   
+³   ÃÄÄÄauth
+³   ³       ForgotPassword.jsx
+³   ³       LoginPage.jsx
+³   ³       OnboardingPage.jsx
+³   ³       RegisterPage.jsx
+³   ³       RolePickerPage.jsx
+³   ³       
+³   ÃÄÄÄfasilitas
+³   ³       AbsensiCheckIn.jsx
+³   ³       ChatFasilitas.jsx
+³   ³       DashboardFasilitas.jsx
+³   ³       JadwalFasilitas.jsx
+³   ³       KelolaFasilitas.jsx
+³   ³       PusatInformasi.jsx
+³   ³       ReservasiMasuk.jsx
+³   ³       TagihanReservasi.jsx
+³   ³       
+³   ÃÄÄÄkeamanan
+³   ³       AbsensiSatpam.jsx
+³   ³       BroadcastPesan.jsx
+³   ³       DashboardKeamanan.jsx
+³   ³       LogParkir.jsx
+³   ³       LogTamu.jsx
+³   ³       
+³   ÃÄÄÄkebersihan
+³   ³       AbsensiCheckIn.jsx
+³   ³       AbsensiPetugas.jsx
+³   ³       JadwalKebersihan.jsx
+³   ³       PermintaanCleaning.jsx
+³   ³       PusatInformasi.jsx
+³   ³       RiwayatPekerjaan.jsx
+³   ³       
+³   ÃÄÄÄkeuangan
+³   ³       AbsensiCheckIn.jsx
+³   ³       AbsensiKaryawan.jsx
+³   ³       ChatKeuangan.jsx
+³   ³       DashboardKeuangan.jsx
+³   ³       KelolaPenghuniKeuangan.jsx
+³   ³       LaporanPendapatan.jsx
+³   ³       LaporanPengeluaran.jsx
+³   ³       PendapatanFasilitas.jsx
+³   ³       RekonsiliPembayaran.jsx
+³   ³       TagihanEBilling.jsx
+³   ³       
+³   ÃÄÄÄpemeliharaan
+³   ³       AbsensiTeknisi.jsx
+³   ³       CSLiveChat.jsx
+³   ³       DashboardTiket.jsx
+³   ³       RiwayatPerbaikan.jsx
+³   ³       TiketKerusakan.jsx
+³   ³       
+³   ÃÄÄÄpenghuni
+³   ³       Beranda.jsx
+³   ³       CustomerService.jsx
+³   ³       EBilling.jsx
+³   ³       FasilitasApartemen.jsx
+³   ³       LaporanKerusakan.jsx
+³   ³       Pengumuman.jsx
+³   ³       ProfilSaya.jsx
+³   ³       PusatInformasi.jsx
+³   ³       
+³   ÃÄÄÄshared
+³   ³       AbsensiCheckIn.jsx
+³   ³       
+³   ÃÄÄÄsuperadmin
+³   ³       AbsenKaryawan.jsx
+³   ³       AuditLog.jsx
+³   ³       Dashboard.jsx
+³   ³       DataAdminDivisi.jsx
+³   ³       DataPenghuni.jsx
+³   ³       DataTower.jsx
+³   ³       DataUnit.jsx
+³   ³       GrafikMonitoring.jsx
+³   ³       Homepage.jsx
+³   ³       LaporanKeuangan.jsx
+³   ³       ManajemenFasilitas.jsx
+³   ³       PusatInformasi.jsx
+³   ³       VerifikasiAkun.jsx
+³   ³       
+³   ÀÄÄÄsuper_admin
+³           Dashboard.jsx
+³           Settings.jsx
+³           UserManagement.jsx
+³           
+ÃÄÄÄrouter
+³       index.jsx
+³       
+ÃÄÄÄservices
+³       announcementService.js
+³       api.js
+³       attendanceService.js
+³       authService.js
+³       billingService.js
+³       cleaningService.js
+³       facilityService.js
+³       financeService.js
+³       maintenanceService.js
+³       securityService.js
+³       unitService.js
+³       userService.js
+³       
+ÀÄÄÄutils
+        authSession.js
+        formatCurrency.js
+        formatDate.js
+        geolocation.js
+        roleGuard.js
+        
