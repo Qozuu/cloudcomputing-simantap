@@ -27,7 +27,7 @@ export default function SuperAdminLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const currentPath = location.pathname;
-  const [sidebarOpen, setSidebarOpen] = useState(false); // State pengontrol drawer mobile
+  const [isMobileOpen, setIsMobileOpen] = useState(false); // State pengontrol drawer mobile
   const [showLogout, setShowLogout] = useState(false);
 
   // Active state checker
@@ -89,25 +89,107 @@ export default function SuperAdminLayout() {
   };
 
   return (
-    <div className="flex h-screen bg-app-bg overflow-hidden relative">
+    <div className="flex h-screen bg-app-bg overflow-hidden">
       
-      {/* 🔴 OVERLAY BACKDROP MOBILE (Menutup laci jika area luar diklik di HP) */}
-      {sidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden transition-opacity duration-300"
-          onClick={() => setSidebarOpen(false)}
-        />
+      {/* Mobile drawer */}
+      {isMobileOpen && (
+        <div
+          className="fixed inset-0 z-50 md:hidden"
+          onClick={() => setIsMobileOpen(false)}
+        >
+          {/* Dark backdrop */}
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+
+          {/* Drawer panel — slides from left, never pushes content */}
+          <div
+            className="absolute left-0 top-0 h-full w-72 max-w-[80vw] bg-white flex flex-col shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <aside className="sidebar h-full flex flex-col bg-white !m-0 !rounded-none border-r border-soft">
+              
+              {/* AREA BRANDING: Standar pixel-perfect rapat kiri */}
+              <div className="sidebar-branding flex items-center justify-between md:justify-start gap-1 pl-1 pr-4 md:pr-0 select-none">
+                <div className="flex items-center gap-1">
+                  <img 
+                    src={LogoSiManTap} 
+                    alt="Logo SiManTap" 
+                    className="w-10 h-10 aspect-square object-contain shrink-0 filter drop-shadow-[0_4px_8px_rgba(30,58,138,0.38)]"
+                  />
+                  <span className="sidebar-brand-name font-bold text-[#1E1E1E] tracking-tighter text-lg ml-0.5 whitespace-nowrap">
+                    SiManTap
+                  </span>
+                </div>
+                
+                {/* Tombol Tutup X (Hanya muncul saat drawer terbuka di layar HP/Tablet kecil) */}
+                <button 
+                  className="md:hidden p-1 rounded hover:bg-surface text-muted hover:text-ink"
+                  onClick={() => setIsMobileOpen(false)}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Navigation Section */}
+              <nav className="sidebar-nav-list flex-1 overflow-y-auto py-2 px-1">
+                {navigation.map((section, secIdx) => (
+                  <div key={secIdx} className="mb-4">
+                    <span className="sidebar-section">
+                      {section.title}
+                    </span>
+                    <div className="space-y-1 mt-1">
+                      {section.items.map((item) => {
+                        const active = isActive(item.path);
+                        const Icon = item.icon;
+                        return (
+                          <Link
+                            key={item.path}
+                            to={item.path}
+                            onClick={() => setIsMobileOpen(false)} // Otomatis menutup drawer setelah pindah menu di HP
+                            className={`sidebar-item-link ${active ? 'active' : ''}`}
+                          >
+                            <Icon size={16} />
+                            <span className="truncate">{item.name}</span>
+                            {item.badge && (
+                              <span className="sidebar-badge">
+                                {item.badge}
+                              </span>
+                            )}
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </nav>
+
+              {/* Footer Profile Area */}
+              <div className="mt-auto pt-4 border-t border-soft flex flex-col gap-3 p-4 md:p-0">
+                <div className="sidebar-profile-footer">
+                  <div className="sidebar-user-avatar">BS</div>
+                  <div className="sidebar-profile-info">
+                    <span className="sidebar-profile-name">Budi Santoso</span>
+                    <span className="sidebar-profile-role">General Manager</span>
+                  </div>
+                </div>
+                <div
+                  onClick={() => setShowLogout(true)}
+                  className="flex items-center justify-center gap-2 py-2 px-3 border border-soft hover:bg-white rounded-xl text-xs font-semibold text-muted hover:text-ink transition-all duration-200 cursor-pointer select-none mb-2"
+                >
+                  <LogOut size={14} className="text-muted" />
+                  <span>Keluar</span>
+                </div>
+              </div>
+            </aside>
+          </div>
+        </div>
       )}
 
-      {/* ⚙️ SIDEBAR WRAPPER CONTAINER (Laptop/LG: Kunci mati normal kaku, Mobile: Sistem Laci Geser) */}
-      <div className={`fixed lg:static inset-y-0 left-0 z-50 transform ${
-        sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-      } lg:translate-x-0 transition-transform duration-300 ease-in-out`}>
-        
+      {/* Desktop Sidebar */}
+      <div className="hidden md:flex md:shrink-0">
         <aside className="sidebar h-full flex flex-col bg-white">
           
           {/* AREA BRANDING: Standar pixel-perfect rapat kiri */}
-          <div className="sidebar-branding flex items-center justify-between lg:justify-start gap-1 pl-1 pr-4 lg:pr-0 select-none">
+          <div className="sidebar-branding flex items-center justify-between md:justify-start gap-1 pl-1 pr-4 md:pr-0 select-none">
             <div className="flex items-center gap-1">
               <img 
                 src={LogoSiManTap} 
@@ -118,14 +200,6 @@ export default function SuperAdminLayout() {
                 SiManTap
               </span>
             </div>
-            
-            {/* Tombol Tutup X (Hanya muncul saat drawer terbuka di layar HP/Tablet kecil) */}
-            <button 
-              className="lg:hidden p-1 rounded hover:bg-surface text-muted hover:text-ink"
-              onClick={() => setSidebarOpen(false)}
-            >
-              <X size={20} />
-            </button>
           </div>
 
           {/* Navigation Section */}
@@ -143,7 +217,6 @@ export default function SuperAdminLayout() {
                       <Link
                         key={item.path}
                         to={item.path}
-                        onClick={() => setSidebarOpen(false)} // Otomatis menutup drawer setelah pindah menu di HP
                         className={`sidebar-item-link ${active ? 'active' : ''}`}
                       >
                         <Icon size={16} />
@@ -162,7 +235,7 @@ export default function SuperAdminLayout() {
           </nav>
 
           {/* Footer Profile Area */}
-          <div className="mt-auto pt-4 border-t border-soft flex flex-col gap-3 p-4 lg:p-0">
+          <div className="mt-auto pt-4 border-t border-soft flex flex-col gap-3 p-4 md:p-0">
             <div className="sidebar-profile-footer">
               <div className="sidebar-user-avatar">BS</div>
               <div className="sidebar-profile-info">
@@ -185,13 +258,13 @@ export default function SuperAdminLayout() {
       <div className="flex-1 flex flex-col overflow-y-auto bg-app-bg w-full">
         
         {/* Top Bar inside main area */}
-        <header className="topbar flex items-center justify-between px-4 lg:px-6">
+        <header className="topbar flex items-center justify-between px-4 md:px-6">
           <div className="flex items-center gap-3">
             
             {/* 🍔 TOMBOL HAMBURGER MENU MOBILE */}
             <button 
-              className="lg:hidden p-1 text-ink focus:outline-none"
-              onClick={() => setSidebarOpen(true)}
+              className="md:hidden p-1 text-ink focus:outline-none"
+              onClick={() => setIsMobileOpen(true)}
             >
               <Menu size={24} />
             </button>
@@ -218,7 +291,7 @@ export default function SuperAdminLayout() {
         </header>
 
         {/* Content Outlet */}
-        <main className="flex-1 px-4 lg:px-6 pb-8">
+        <main className="flex-1 px-4 md:px-6 pb-8">
           <Outlet />
         </main>
       </div>
