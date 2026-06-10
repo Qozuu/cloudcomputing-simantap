@@ -17,9 +17,9 @@ import LogoSiManTap from '../../assets/logo.png';
 const ROLE_CONFIG = {
   super_admin: {
     label:       'Super Admin',
-    portal:      'Login Portal General Manager',
+    portal:      'Login Portal Super Admin',
     description: 'Akses penuh ke seluruh sistem manajemen SiManTap.',
-    username:    'super.admin',
+    username:    'budi', // Disesuaikan dengan Budi Santoso (super_admin)
     color:       '#1C3657',
     colorLight:  '#EEF2F8',
     icon:        'Crown',
@@ -29,7 +29,7 @@ const ROLE_CONFIG = {
     label:       'General Manager',
     portal:      'Login Portal General Manager',
     description: 'Akses penuh ke seluruh sistem manajemen SiManTap.',
-    username:    'super.admin',
+    username:    'budi', 
     color:       '#1C3657',
     colorLight:  '#EEF2F8',
     icon:        'Crown',
@@ -37,9 +37,9 @@ const ROLE_CONFIG = {
   },
   manager: {
     label:       'Manager',
-    portal:      'Login Portal General Manager',
+    portal:      'Login Portal Manager',
     description: 'Akses penuh ke seluruh sistem manajemen SiManTap.',
-    username:    'super.admin',
+    username:    'budi', 
     color:       '#1C3657',
     colorLight:  '#EEF2F8',
     icon:        'Crown',
@@ -49,7 +49,7 @@ const ROLE_CONFIG = {
     label:       'Keuangan',
     portal:      'Login Portal Keuangan',
     description: 'Kelola tagihan, pembayaran, dan laporan keuangan apartemen.',
-    username:    'admin.keuangan',
+    username:    'rina', // Disesuaikan dengan Rina Kurnia
     color:       '#1D4ED8',
     colorLight:  '#EFF6FF',
     icon:        'Wallet',
@@ -59,7 +59,7 @@ const ROLE_CONFIG = {
     label:       'Pemeliharaan',
     portal:      'Login Portal Pemeliharaan',
     description: 'Kelola tiket kerusakan, teknisi, dan jadwal perbaikan.',
-    username:    'admin.pemeliharaan',
+    username:    'doni', // Disesuaikan dengan Doni Praetya
     color:       '#C2410C',
     colorLight:  '#FFF7ED',
     icon:        'Wrench',
@@ -69,7 +69,7 @@ const ROLE_CONFIG = {
     label:       'Keamanan',
     portal:      'Login Portal Keamanan',
     description: 'Pantau akses tamu, parkir, dan keamanan lingkungan apartemen.',
-    username:    'admin.keamanan',
+    username:    'agus', // Disesuaikan dengan Agus Wibowo
     color:       '#0F766E',
     colorLight:  '#F0FDFA',
     icon:        'ShieldCheck',
@@ -79,7 +79,7 @@ const ROLE_CONFIG = {
     label:       'Kebersihan',
     portal:      'Login Portal Kebersihan',
     description: 'Atur jadwal kebersihan, absensi petugas, dan permintaan cleaning.',
-    username:    'admin.kebersihan',
+    username:    'siti', // Disesuaikan dengan Siti Rahayu
     color:       '#7C3AED',
     colorLight:  '#F5F3FF',
     icon:        'Sparkles',
@@ -89,7 +89,7 @@ const ROLE_CONFIG = {
     label:       'Fasilitas',
     portal:      'Login Portal Fasilitas',
     description: 'Kelola reservasi, jadwal, dan tagihan fasilitas apartemen.',
-    username:    'admin.fasilitas',
+    username:    'reza', // Disesuaikan dengan Reza Pratama
     color:       '#0369A1',
     colorLight:  '#F0F9FF',
     icon:        'Building2',
@@ -99,7 +99,7 @@ const ROLE_CONFIG = {
     label:       'Penghuni',
     portal:      'Login Portal Penghuni',
     description: 'Akses tagihan, laporan kerusakan, dan fasilitas apartemen Anda.',
-    username:    'hendra.gunawan',
+    username:    'agus', // Sementara dipetakan ke user valid untuk kebutuhan development
     color:       '#15803D',
     colorLight:  '#F0FDF4',
     icon:        'Home',
@@ -142,7 +142,7 @@ export default function LoginPage() {
   useEffect(() => {
     if (config) {
       setUsername(config.username);
-      setPassword('demo123');
+      setPassword('demo123'); // Pastikan password ini sesuai dengan yang ada di Supabase Auth dashboard kamu
       setSelectedRole(roleParam);
     } else {
       setUsername('');
@@ -164,7 +164,7 @@ export default function LoginPage() {
 
     const emailToUse = username.includes('@')
       ? username
-      : `${username.trim().toLowerCase()}@simantap.id`;
+      : `${username}@simantap.id`;
 
     try {
       // A. Kirim data login ke Supabase Auth
