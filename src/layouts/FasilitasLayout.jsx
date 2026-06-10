@@ -90,123 +90,120 @@ export default function FasilitasLayout() {
       {/* Mobile drawer */}
       {isMobileOpen && (
         <div
-          className="fixed inset-0 z-50 md:hidden"
+          className="fixed inset-0 z-[999] md:hidden"
           onClick={() => setIsMobileOpen(false)}
         >
-          {/* Dark backdrop */}
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-
-          {/* Drawer panel — slides from left, never pushes content */}
           <div
-            className="absolute left-0 top-0 h-full w-72 max-w-[80vw] bg-white flex flex-col shadow-2xl"
+            className="absolute left-0 top-0 h-full w-72 max-w-[80vw] bg-white flex flex-col overflow-hidden shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <aside className="sidebar h-full flex flex-col bg-white !m-0 !rounded-none border-r border-soft">
-              
-              {/* Area Branding */}
-              <div className="sidebar-branding flex items-center justify-between md:justify-start gap-1 pl-1 pr-4 md:pr-0 select-none">
-                <div className="flex items-center gap-1">
-                  <img 
-                    src={LogoSiManTap} 
-                    alt="Logo SiManTap" 
-                    className="w-10 h-10 aspect-square object-contain shrink-0 filter drop-shadow-[0_4px_8px_rgba(30,58,138,0.38)]"
-                  />
-                  <span className="sidebar-brand-name font-bold text-[#1E1E1E] tracking-tighter text-lg ml-0.5">
-                    SiManTap
-                  </span>
-                </div>
-                
-                {/* Tombol Tutup X (Hanya Muncul di Layar HP) */}
-                <button 
-                  onClick={() => setIsMobileOpen(false)} 
-                  className="md:hidden p-1 text-muted hover:text-ink focus:outline-none"
-                >
-                  <X size={20} />
-                </button>
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <img src={LogoSiManTap} alt="Logo" className="w-8 h-8 object-contain" />
+                <span className="font-bold text-[#1E1E1E] text-base">SiManTap</span>
+              </div>
+              <button onClick={() => setIsMobileOpen(false)} className="p-1 text-gray-400 hover:text-gray-600">
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Nav items */}
+            <nav className="flex-1 overflow-y-auto p-3 space-y-1">
+              {menuItems.slice(0, 5).map((item) => {
+                const active = isActive(item.path);
+                return (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    onClick={() => setIsMobileOpen(false)}
+                    className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                      active
+                        ? 'bg-[#111111] text-white'
+                        : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
+                    }`}
+                  >
+                    {item.icon}
+                    <span className="flex-1">{item.name}</span>
+                    {item.badge && (
+                      <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${
+                        active ? 'bg-white/20 text-white' : 'bg-red-100 text-red-600'
+                      }`}>
+                        {item.badge}
+                      </span>
+                    )}
+                  </Link>
+                );
+              })}
+
+              {/* CS Live Chat Slot */}
+              <div
+                onClick={() => {
+                  setIsMobileOpen(false);
+                  navigate('/fasilitas/chat');
+                }}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all cursor-pointer ${
+                  isActive('/fasilitas/chat')
+                    ? 'bg-[#111111] text-white'
+                    : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
+                }`}
+              >
+                <MessageSquare size={16} />
+                <span className="flex-1">CS Live Chat</span>
+                <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${
+                  isActive('/fasilitas/chat') ? 'bg-white/20 text-white' : 'bg-red-100 text-red-600'
+                }`}>
+                  2
+                </span>
               </div>
 
-              {/* Navigation Section */}
-              <nav className="sidebar-nav-list flex-1 overflow-y-auto py-2 px-1">
-                <div>
-                  <span className="sidebar-section">FASILITAS</span>
-                  <div className="space-y-1 mt-2">
-                    {menuItems.slice(0, 5).map((item) => {
-                      const active = isActive(item.path);
-                      return (
-                        <Link
-                          key={item.path}
-                          to={item.path}
-                          onClick={() => setIsMobileOpen(false)} // Tutup drawer setelah pilih menu di HP
-                          className={`sidebar-item-link ${active ? 'active' : ''}`}
-                        >
-                          {item.icon}
-                          <span>{item.name}</span>
-                          {item.badge && (
-                            <span className="sidebar-badge">
-                              {item.badge}
-                            </span>
-                          )}
-                        </Link>
-                      );
-                    })}
+              {menuItems.slice(5).map((item) => {
+                const active = isActive(item.path);
+                return (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    onClick={() => setIsMobileOpen(false)}
+                    className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                      active
+                        ? 'bg-[#111111] text-white'
+                        : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
+                    }`}
+                  >
+                    {item.icon}
+                    <span className="flex-1">{item.name}</span>
+                    {item.badge && (
+                      <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${
+                        active ? 'bg-white/20 text-white' : 'bg-red-100 text-red-600'
+                      }`}>
+                        {item.badge}
+                      </span>
+                    )}
+                  </Link>
+                );
+              })}
+            </nav>
 
-                    {/* CS Live Chat Item */}
-                    <div
-                      className={`sidebar-item sidebar-item-link ${isActive('/fasilitas/chat') ? 'active' : ''}`}
-                      onClick={() => {
-                        navigate('/fasilitas/chat');
-                        setIsMobileOpen(false);
-                      }}
-                    >
-                      <div className="sidebar-item-bg" />
-                      <MessageSquare size={16} />
-                      <span>CS Live Chat</span>
-                      <span className="sidebar-badge">2</span>
-                    </div>
-
-                    {menuItems.slice(5).map((item) => {
-                      const active = isActive(item.path);
-                      return (
-                        <Link
-                          key={item.path}
-                          to={item.path}
-                          onClick={() => setIsMobileOpen(false)}
-                          className={`sidebar-item-link ${active ? 'active' : ''}`}
-                        >
-                          {item.icon}
-                          <span>{item.name}</span>
-                          {item.badge && (
-                            <span className="sidebar-badge">
-                              {item.badge}
-                            </span>
-                          )}
-                        </Link>
-                      );
-                    })}
-                  </div>
+            {/* Footer */}
+            <div className="p-4 border-t border-gray-100 space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center font-bold text-sm shrink-0">
+                  RP
                 </div>
-              </nav>
-
-              {/* Footer Profile Area */}
-              <div className="mt-auto pt-4 border-t border-soft flex flex-col gap-3 p-4 md:p-0">
-                <div className="sidebar-profile-footer">
-                  <div className="sidebar-user-avatar">RP</div>
-                  <div className="sidebar-profile-info">
-                    <span className="sidebar-profile-name">Reza Pratama</span>
-                    <span className="sidebar-profile-role">Admin Fasilitas</span>
-                  </div>
-                </div>
-                <div
-                  onClick={() => setShowLogout(true)}
-                  className="flex items-center justify-center gap-2 py-2 px-3 border border-soft hover:bg-white rounded-xl text-xs font-semibold text-muted hover:text-ink transition-all duration-200 cursor-pointer select-none mb-2"
-                >
-                  <svg className="w-4 h-4 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                  </svg>
-                  <span>Keluar</span>
+                <div className="flex flex-col min-w-0">
+                  <span className="text-sm font-bold text-[#1E1E1E] truncate">Reza Pratama</span>
+                  <span className="text-xs text-gray-400 truncate">Admin Fasilitas</span>
                 </div>
               </div>
-            </aside>
+              <button
+                onClick={() => { setIsMobileOpen(false); setShowLogout(true); }}
+                className="w-full flex items-center justify-center gap-2 py-2.5 border border-gray-200 rounded-xl text-xs font-semibold text-red-500 hover:bg-red-50 transition-all"
+              >
+                <LogOut size={14} />
+                <span>Keluar dari Aplikasi</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
