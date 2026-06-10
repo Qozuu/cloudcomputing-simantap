@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import LogoutModal from '../components/shared/LogoutModal';
 import NotificationBell from '../components/shared/NotificationBell';
-import { MessageSquare, Menu, X } from 'lucide-react';
+import { MessageSquare, Menu, X, LogOut } from 'lucide-react'; // <-- FIX: Tambah LogOut import
 
 // 1. IMPORT LOGO ASSET
 import LogoSiManTap from '../assets/logo.png';
@@ -12,7 +12,30 @@ export default function FasilitasLayout() {
   const navigate = useNavigate();
   const currentPath = location.pathname;
   const [showLogout, setShowLogout] = useState(false);
-  const [isMobileOpen, setIsMobileOpen] = useState(false); // State pengontrol drawer mobile
+  const [isMobileOpen, setIsMobileOpen] = useState(false); 
+  const [namaUser, setNamaUser] = useState(''); // <-- FIX: Tambah state namaUser
+
+  // <-- FIX: Tambah fungsi getAvatarInitials agar tidak eror crash
+  const getAvatarInitials = (name) => {
+    if (!name) return 'AF';
+    const parts = name.trim().split(' ');
+    if (parts.length > 1) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return parts[0].substring(0, 2).toUpperCase();
+  };
+
+  // Mengambil otomatis nama user dari sessionStorage saat load halaman
+  useEffect(() => {
+    for (let i = 0; i < sessionStorage.length; i++) {
+      const key = sessionStorage.key(i);
+      const value = sessionStorage.getItem(key);
+      if (value && !value.includes('@') && value.length < 30) {
+        setNamaUser(value);
+        break;
+      }
+    }
+  }, []);
 
   // Active state checker
   const isActive = (path) => currentPath === path;
@@ -189,10 +212,10 @@ export default function FasilitasLayout() {
             <div className="p-4 border-t border-gray-100 space-y-3">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center font-bold text-sm shrink-0">
-                  RP
+                  {getAvatarInitials(namaUser)}
                 </div>
                 <div className="flex flex-col min-w-0">
-                  <span className="text-sm font-bold text-[#1E1E1E] truncate">Reza Pratama</span>
+                  <span className="text-sm font-bold text-[#1E1E1E] truncate">{namaUser || 'Memuat...'}</span>
                   <span className="text-xs text-gray-400 truncate">Admin Fasilitas</span>
                 </div>
               </div>
@@ -245,7 +268,7 @@ export default function FasilitasLayout() {
                     <Link
                       key={item.path}
                       to={item.path}
-                      onClick={() => setIsMobileOpen(false)} // Tutup drawer setelah pilih menu di HP
+                      onClick={() => setIsMobileOpen(false)} 
                       className={`sidebar-item-link ${active ? 'active' : ''}`}
                     >
                       {item.icon}
@@ -296,30 +319,31 @@ export default function FasilitasLayout() {
             </div>
           </nav>
 
-        {/* Footer Profile Area */}
-        <div className="mt-auto pt-4 border-t border-soft flex flex-col gap-3">
-          <div className="sidebar-profile-footer">
-            <div className="sidebar-user-avatar">
-              {getAvatarInitials(namaUser)}
+          {/* Footer Profile Area */}
+          <div className="mt-auto pt-4 border-t border-soft flex flex-col gap-3">
+            <div className="sidebar-profile-footer">
+              <div className="sidebar-user-avatar">
+                {getAvatarInitials(namaUser)}
+              </div>
+              <div className="sidebar-profile-info">
+                <span className="sidebar-profile-name">
+                  {namaUser || 'Memuat Nama...'}
+                </span>
+                <span className="sidebar-profile-role">Admin Fasilitas</span>
+              </div>
             </div>
-            <div className="sidebar-profile-info">
-              <span className="sidebar-profile-name">
-                {namaUser || 'Memuat Nama...'}
-              </span>
-              <span className="sidebar-profile-role">Admin Fasilitas</span>
+            <div
+              onClick={() => setShowLogout(true)}
+              className="flex items-center justify-center gap-2 py-2 px-3 border border-soft hover:bg-white rounded-xl text-xs font-semibold text-muted hover:text-ink transition-all duration-200 cursor-pointer select-none"
+            >
+              <svg className="w-4 h-4 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+              <span>Keluar</span>
             </div>
           </div>
-          <div
-            onClick={() => setShowLogout(true)}
-            className="flex items-center justify-center gap-2 py-2 px-3 border border-soft hover:bg-white rounded-xl text-xs font-semibold text-muted hover:text-ink transition-all duration-200 cursor-pointer select-none"
-          >
-            <svg className="w-4 h-4 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-            </svg>
-            <span>Keluar</span>
-          </div>
-        </div>
-      </aside>
+        </aside>
+      </div> {/* <-- FIX: Tag Penutup div desktop sidebar yang hilang */}
 
       {/* Main Content Area - Scrollable */}
       <div className="flex-1 flex flex-col overflow-y-auto bg-app-bg">
@@ -344,7 +368,7 @@ export default function FasilitasLayout() {
           <div className="flex items-center gap-5">
             {/* Current Date */}
             <div className="text-right hidden sm:block">
-              <span className="text-xs font-semibold text-muted">Jumat, 22 Mei 2026</span>
+              <span className="text-xs font-semibold text-muted">Rabu, 10 Juni 2026</span>
             </div>
             
             {/* Notification Bell */}
@@ -368,7 +392,7 @@ export default function FasilitasLayout() {
           navigate('/login');
         }}
         onCancel={() => setShowLogout(false)}
-        userName="Reza Pratama"
+        userName={namaUser || "Admin Fasilitas"}
         roleName="Admin Fasilitas"
       />
     </div>
