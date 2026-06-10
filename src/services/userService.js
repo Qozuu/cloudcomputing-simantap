@@ -46,7 +46,7 @@ export const createPenghuni = async (userData) => {
       password_hash:        defaultPassword,
       role:                 'penghuni',
       no_hp:                userData.no_hp || '',
-      must_change_password: true,
+      must_change_password: false,
     })
     .select().single();
 

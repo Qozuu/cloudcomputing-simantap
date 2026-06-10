@@ -220,17 +220,6 @@ export default function EBilling() {
 
               <div className="flex gap-3">
                 <button
-                  onClick={() => {
-                    setModalOpen(false);
-                    setSuccessToast('Mendownload tanda terima PDF...');
-                    setTimeout(() => setSuccessToast(''), 3000);
-                  }}
-                  className="flex-1 btn-primary py-2.5 px-4 text-xs flex items-center justify-center gap-1.5"
-                >
-                  <Download size={14} />
-                  <span>Download PDF</span>
-                </button>
-                <button
                   onClick={() => setModalOpen(false)}
                   className="btn-ghost text-xs border-none"
                 >

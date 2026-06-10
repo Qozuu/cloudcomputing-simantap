@@ -162,9 +162,13 @@ export default function FasilitasLayout() {
         {/* Footer Profile Area */}
         <div className="mt-auto pt-4 border-t border-soft flex flex-col gap-3">
           <div className="sidebar-profile-footer">
-            <div className="sidebar-user-avatar">RP</div>
+            <div className="sidebar-user-avatar">
+              {getAvatarInitials(namaUser)}
+            </div>
             <div className="sidebar-profile-info">
-              <span className="sidebar-profile-name">Reza Pratama</span>
+              <span className="sidebar-profile-name">
+                {namaUser || 'Memuat Nama...'}
+              </span>
               <span className="sidebar-profile-role">Admin Fasilitas</span>
             </div>
           </div>

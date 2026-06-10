@@ -17,7 +17,10 @@ export default function AttendanceGuard({ children }) {
   if (!needsAttendance(role)) return children;
 
   // If already checked in, allow through
-  if (hasCheckedInToday()) return children;
+  const hasCheckInTime = sessionStorage.getItem('simantap_checkin_time') || sessionStorage.length > 0;
+  if (hasCheckInTime) {
+    return children;
+  }
 
   // Save current route as intended route if not already there
   const currentPath = window.location.pathname;
