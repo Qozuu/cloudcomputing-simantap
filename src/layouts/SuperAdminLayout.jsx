@@ -27,7 +27,7 @@ export default function SuperAdminLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const currentPath = location.pathname;
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isMobileOpen, setIsMobileOpen] = useState(false); // State pengontrol drawer mobile
   const [showLogout, setShowLogout] = useState(false);
 
   // Active state checker
@@ -91,104 +91,175 @@ export default function SuperAdminLayout() {
   return (
     <div className="flex h-screen bg-app-bg overflow-hidden">
       
-      {/* Backdrop for mobile */}
-      {sidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-ink/30 backdrop-blur-sm z-30 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
+      {/* Mobile drawer */}
+      {isMobileOpen && (
+        <div
+          className="fixed inset-0 z-[999] md:hidden"
+          onClick={() => setIsMobileOpen(false)}
+        >
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+          <div
+            className="absolute left-0 top-0 h-full w-72 max-w-[80vw] bg-white flex flex-col overflow-hidden shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <img src={LogoSiManTap} alt="Logo" className="w-8 h-8 object-contain" />
+                <span className="font-bold text-[#1E1E1E] text-base">SiManTap</span>
+              </div>
+              <button onClick={() => setIsMobileOpen(false)} className="p-1 text-gray-400 hover:text-gray-600">
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Nav items */}
+            <nav className="flex-1 overflow-y-auto p-3 space-y-4">
+              {navigation.map((section, secIdx) => (
+                <div key={secIdx} className="space-y-1">
+                  <span className="text-xs font-semibold text-gray-400 px-3 tracking-wider uppercase">
+                    {section.title}
+                  </span>
+                  <div className="space-y-1 mt-1">
+                    {section.items.map((item) => {
+                      const active = isActive(item.path);
+                      const IconComponent = item.icon;
+                      return (
+                        <Link
+                          key={item.path}
+                          to={item.path}
+                          onClick={() => setIsMobileOpen(false)}
+                          className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                            active
+                              ? 'bg-[#111111] text-white'
+                              : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
+                          }`}
+                        >
+                          <IconComponent size={16} />
+                          <span className="flex-1 truncate">{item.name}</span>
+                          {item.badge && (
+                            <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${
+                              active ? 'bg-white/20 text-white' : 'bg-red-100 text-red-600'
+                            }`}>
+                              {item.badge}
+                            </span>
+                          )}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </nav>
+
+            {/* Footer */}
+            <div className="p-4 border-t border-gray-100 space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center font-bold text-sm shrink-0">
+                  BS
+                </div>
+                <div className="flex flex-col min-w-0">
+                  <span className="text-sm font-bold text-[#1E1E1E] truncate">Budi Santoso</span>
+                  <span className="text-xs text-gray-400 truncate">General Manager</span>
+                </div>
+              </div>
+              <button
+                onClick={() => { setIsMobileOpen(false); setShowLogout(true); }}
+                className="w-full flex items-center justify-center gap-2 py-2.5 border border-gray-200 rounded-xl text-xs font-semibold text-red-500 hover:bg-red-50 transition-all"
+              >
+                <LogOut size={14} />
+                <span>Keluar dari Aplikasi</span>
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
-      {/* Sidebar - Fixed Left */}
-      <aside 
-        className={`fixed inset-y-0 left-0 lg:translate-x-0 lg:static z-40 lg:z-20 transition-transform duration-300 ${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        } sidebar`}
-      >
-        {/* AREA BRANDING */}
-        <div className="sidebar-branding flex items-center justify-start gap-1 pl-1 select-none">
-          <img 
-            src={LogoSiManTap} 
-            alt="Logo SiManTap" 
-            className="w-10 h-10 aspect-square object-contain shrink-0 filter drop-shadow-[0_4px_8px_rgba(30,58,138,0.38)]"
-          />
-          <span className="sidebar-brand-name font-bold text-[#1E1E1E] tracking-tighter text-lg ml-0.5">
-            SiManTap
-          </span>
-          {/* Close button for mobile */}
-          <button 
-            className="lg:hidden p-1 rounded hover:bg-surface text-muted hover:text-ink ml-auto"
-            onClick={() => setSidebarOpen(false)}
-          >
-            <X size={18} />
-          </button>
-        </div>
-
-        {/* Navigation Section */}
-        <nav className="sidebar-nav-list flex-1 overflow-y-auto py-2 px-1">
-          {navigation.map((section, secIdx) => (
-            <div key={secIdx} className="mb-4">
-              <span className="sidebar-section">
-                {section.title}
+      {/* Desktop Sidebar */}
+      <div className="hidden md:flex md:shrink-0">
+        <aside className="sidebar h-full flex flex-col bg-white">
+          
+          {/* AREA BRANDING: Standar pixel-perfect rapat kiri */}
+          <div className="sidebar-branding flex items-center justify-between md:justify-start gap-1 pl-1 pr-4 md:pr-0 select-none">
+            <div className="flex items-center gap-1">
+              <img 
+                src={LogoSiManTap} 
+                alt="Logo SiManTap" 
+                className="w-10 h-10 aspect-square object-contain shrink-0 filter drop-shadow-[0_4px_8px_rgba(30,58,138,0.38)]"
+              />
+              <span className="sidebar-brand-name font-bold text-[#1E1E1E] tracking-tighter text-lg ml-0.5 whitespace-nowrap">
+                SiManTap
               </span>
-              <div className="space-y-1 mt-1">
-                {section.items.map((item) => {
-                  const active = isActive(item.path);
-                  const Icon = item.icon;
-                  return (
-                    <Link
-                      key={item.path}
-                      to={item.path}
-                      onClick={() => setSidebarOpen(false)}
-                      className={`sidebar-item-link ${active ? 'active' : ''}`}
-                    >
-                      <Icon size={16} />
-                      <span className="truncate">{item.name}</span>
-                      {item.badge && (
-                        <span className="sidebar-badge">
-                          {item.badge}
-                        </span>
-                      )}
-                    </Link>
-                  );
-                })}
+            </div>
+          </div>
+
+          {/* Navigation Section */}
+          <nav className="sidebar-nav-list flex-1 overflow-y-auto py-2 px-1">
+            {navigation.map((section, secIdx) => (
+              <div key={secIdx} className="mb-4">
+                <span className="sidebar-section">
+                  {section.title}
+                </span>
+                <div className="space-y-1 mt-1">
+                  {section.items.map((item) => {
+                    const active = isActive(item.path);
+                    const Icon = item.icon;
+                    return (
+                      <Link
+                        key={item.path}
+                        to={item.path}
+                        className={`sidebar-item-link ${active ? 'active' : ''}`}
+                      >
+                        <Icon size={16} />
+                        <span className="truncate">{item.name}</span>
+                        {item.badge && (
+                          <span className="sidebar-badge">
+                            {item.badge}
+                          </span>
+                        )}
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </nav>
+
+          {/* Footer Profile Area */}
+          <div className="mt-auto pt-4 border-t border-soft flex flex-col gap-3 p-4 md:p-0">
+            <div className="sidebar-profile-footer">
+              <div className="sidebar-user-avatar">BS</div>
+              <div className="sidebar-profile-info">
+                <span className="sidebar-profile-name">Budi Santoso</span>
+                <span className="sidebar-profile-role">General Manager</span>
               </div>
             </div>
-          ))}
-        </nav>
-
-        {/* Footer Profile Area */}
-        <div className="mt-auto pt-4 border-t border-soft flex flex-col gap-3">
-          <div className="sidebar-profile-footer">
-            <div className="sidebar-user-avatar">BS</div>
-            <div className="sidebar-profile-info">
-              <span className="sidebar-profile-name">Budi Santoso</span>
-              <span className="sidebar-profile-role">General Manager</span>
+            <div
+              onClick={() => setShowLogout(true)}
+              className="flex items-center justify-center gap-2 py-2 px-3 border border-soft hover:bg-white rounded-xl text-xs font-semibold text-muted hover:text-ink transition-all duration-200 cursor-pointer select-none mb-2"
+            >
+              <LogOut size={14} className="text-muted" />
+              <span>Keluar</span>
             </div>
           </div>
-          <div
-            onClick={() => setShowLogout(true)}
-            className="flex items-center justify-center gap-2 py-2 px-3 border border-soft hover:bg-white rounded-xl text-xs font-semibold text-muted hover:text-ink transition-all duration-200 cursor-pointer select-none"
-          >
-            <LogOut size={14} className="text-muted" />
-            <span>Keluar</span>
-          </div>
-        </div>
-      </aside>
+        </aside>
+      </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col overflow-y-auto bg-app-bg">
+      <div className="flex-1 flex flex-col overflow-y-auto bg-app-bg w-full">
         
         {/* Top Bar inside main area */}
-        <header className="topbar">
+        <header className="topbar flex items-center justify-between px-4 md:px-6">
           <div className="flex items-center gap-3">
-            {/* Hamburger button on mobile */}
+            
+            {/* 🍔 TOMBOL HAMBURGER MENU MOBILE */}
             <button 
-              className="lg:hidden p-2 rounded-lg hover:bg-surface text-ink"
-              onClick={() => setSidebarOpen(true)}
+              className="md:hidden p-1 text-ink focus:outline-none"
+              onClick={() => setIsMobileOpen(true)}
             >
-              <Menu size={20} />
+              <Menu size={24} />
             </button>
+
             <div className="flex flex-col">
               <span className="topbar-role">
                 General Manager
@@ -211,7 +282,7 @@ export default function SuperAdminLayout() {
         </header>
 
         {/* Content Outlet */}
-        <main className="flex-1 px-6 pb-8">
+        <main className="flex-1 px-4 md:px-6 pb-8">
           <Outlet />
         </main>
       </div>
@@ -222,7 +293,7 @@ export default function SuperAdminLayout() {
         onConfirm={() => {
           setShowLogout(false);
           localStorage.removeItem('userRole');
-          sessionSession.clear();
+          sessionStorage.clear(); // FIX: Diperbaiki dari sessionSession ke sessionStorage asli browser
           navigate('/login');
         }}
         onCancel={() => setShowLogout(false)}

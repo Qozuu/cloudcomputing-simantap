@@ -17,7 +17,42 @@ import {
 // 1. IMPORT LOGO ASSET BIAR SELARAS TOTAL JIRR
 import LogoSiManTap from '../assets/logo.png';
 
+
 export default function PenghuniLayout() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const currentPath = location.pathname;
+  const [showLogout, setShowLogout] = useState(false);
+
+  // 🛠️ TAMBAHKAN KODE INI DI SINI:
+  const [namaUser, setNamaUser] = useState('');
+
+  React.useEffect(() => {
+    // Cari otomatis nama user di sessionStorage
+    for (let i = 0; i < sessionStorage.length; i++) {
+      const key = sessionStorage.key(i);
+      const value = sessionStorage.getItem(key);
+      
+      if (value && !value.includes('@') && value.length < 30 && key.toLowerCase().includes('name')) {
+        setNamaUser(value);
+        break;
+      }
+    }
+  }, []);
+
+  // Fungsi untuk membuat inisial avatar otomatis (contoh: Qozu -> QO, Hendra Gunawan -> HG)
+  const getAvatarInitials = (name) => {
+    if (!name) return '??';
+    const parts = name.trim().split(' ');
+    if (parts.length > 1) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return parts[0].substring(0, 2).toUpperCase();
+  };
+
+  // Active state checker
+  const isActive = (path) => currentPath === path;
+  // ... sisa menuItems ke bawah tetap biarkan sama
   const location = useLocation();
   const navigate = useNavigate();
   const currentPath = location.pathname;
@@ -131,7 +166,7 @@ export default function PenghuniLayout() {
         {/* Footer Profile Area */}
         <div className="mt-auto pt-4 border-t border-soft flex flex-col gap-3">
           <div className="sidebar-profile-footer">
-            <div className="sidebar-user-avatar">HG</div>
+            <div className="sidebar-user-avatar"></div>
             <div className="sidebar-profile-info">
               <span className="sidebar-profile-name">Hendra Gunawan</span>
               <span className="sidebar-profile-role">Penghuni — Unit 12A</span>
@@ -194,3 +229,4 @@ export default function PenghuniLayout() {
     </div>
   );
 }
+
