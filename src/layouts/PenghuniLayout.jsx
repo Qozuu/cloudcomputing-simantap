@@ -52,14 +52,6 @@ export default function PenghuniLayout() {
 
   // Active state checker
   const isActive = (path) => currentPath === path;
-  // ... sisa menuItems ke bawah tetap biarkan sama
-  const location = useLocation();
-  const navigate = useNavigate();
-  const currentPath = location.pathname;
-  const [showLogout, setShowLogout] = useState(false);
-
-  // Active state checker
-  const isActive = (path) => currentPath === path;
 
   // Sidebar menu items
   const menuItems = [
