@@ -9,7 +9,7 @@ export default function AbsenKaryawan() {
     { id: 4, name: 'Siti Rahayu', division: 'Kebersihan', checkIn: '06:00', checkOut: '14:00', status: 'Hadir', date: '20 Mei 2026', device: 'Oppo A78', location: 'Area Lobby & Koridor Tower B', notes: 'Selesai membersihkan sektor tengah' },
     { id: 5, name: 'Pak Heri', division: 'Pemeliharaan', checkIn: '—', checkOut: '—', status: 'Tidak Hadir', date: '20 Mei 2026', device: '—', location: '—', notes: 'Izin (Sakit dengan surat keterangan dokter)' },
     { id: 6, name: 'Pak Roni', division: 'Pemeliharaan', checkIn: '09:30', checkOut: '—', status: 'Hadir', date: '20 Mei 2026', device: 'Vivo Y35', location: 'Gedung Parkir P2', notes: 'Terlambat karena kendala pengiriman material' },
-    { id: 7, name: 'Budi Santoso', division: 'Management', checkIn: '09:00', checkOut: '—', status: 'Hadir', date: '20 Mei 2026', device: 'iPad Pro (iPadOS)', location: 'Ruang Direksi Utama', notes: 'Agenda rapat eksternal' },
+    { id: 7, name: 'Budi Santoso', division: 'Fasilitas', checkIn: '09:00', checkOut: '—', status: 'Hadir', date: '20 Mei 2026', device: 'iPad Pro (iPadOS)', location: 'Ruang Direksi Utama', notes: 'Agenda rapat eksternal' },
     { id: 8, name: 'Dewi Puspita', division: 'Kebersihan', checkIn: '—', checkOut: '—', status: 'Tidak Hadir', date: '20 Mei 2026', device: '—', location: '—', notes: 'Alpa (Tanpa keterangan tanpa respon)' }
   ]);
 
@@ -26,7 +26,7 @@ export default function AbsenKaryawan() {
       case 'Pemeliharaan': return 'badge-yellow';
       case 'Keamanan': return 'badge-dark';
       case 'Kebersihan': return 'badge-mint';
-      case 'Management': return 'badge-gray';
+      case 'Fasilitas': return 'badge-gray';
       default: return 'badge-gray';
     }
   };
@@ -82,7 +82,7 @@ export default function AbsenKaryawan() {
               <option value="Pemeliharaan">Pemeliharaan</option>
               <option value="Keamanan">Keamanan</option>
               <option value="Kebersihan">Kebersihan</option>
-              <option value="Management">Management</option>
+              <option value="Fasilitas">Fasilitas</option>
             </select>
           </div>
         </div>

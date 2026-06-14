@@ -17,13 +17,10 @@ import {
   TrendingDown,
   Activity,
   AlertTriangle,
-  FileDown,
-  CheckCircle
 } from 'lucide-react';
 
 export default function GrafikMonitoring() {
   const [timeFilter, setTimeFilter] = useState('6 Bulan Terakhir');
-  const [successToast, setSuccessToast] = useState('');
 
   const monitoringData = [
     { name: 'Okt', Pendapatan: 270, Pengeluaran: 125, Laba: 145, Kehadiran: 88 },
@@ -35,15 +32,10 @@ export default function GrafikMonitoring() {
   ];
 
   const pieData = [
-    { name: 'SDM/Gaji', value: 48, amount: 'Rp 68 Jt', color: '#4840B0' }, // Lavender
-    { name: 'Operasional', value: 30, amount: 'Rp 42 Jt', color: '#A05820' }, // Yellow
-    { name: 'Perbaikan', value: 22, amount: 'Rp 32 Jt', color: '#B85040' } // Pink
+    { name: 'SDM/Gaji', value: 48, amount: 'Rp 68 Jt', color: '#4840B0' },
+    { name: 'Operasional', value: 30, amount: 'Rp 42 Jt', color: '#A05820' },
+    { name: 'Perbaikan', value: 22, amount: 'Rp 32 Jt', color: '#B85040' }
   ];
-
-  const handleExport = () => {
-    setSuccessToast('Laporan_Monitoring_Grafik.pdf berhasil diunduh!');
-    setTimeout(() => setSuccessToast(''), 3000);
-  };
 
   return (
     <div className="space-y-6 animate-fade-up relative">
@@ -63,17 +55,10 @@ export default function GrafikMonitoring() {
             <option value="6 Bulan Terakhir">6 Bulan Terakhir</option>
             <option value="1 Tahun Terakhir">1 Tahun Terakhir</option>
           </select>
-          <button
-            onClick={handleExport}
-            className="btn-ghost btn-sm"
-          >
-            <FileDown size={14} />
-            <span>Export PDF</span>
-          </button>
         </div>
       </div>
 
-      {/* KPI Stats Row (5 Cards) - 5-position rotation applied */}
+      {/* KPI Stats Row */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         <div className="card-pink flex flex-col justify-between min-h-[110px]">
           <div>
@@ -126,7 +111,7 @@ export default function GrafikMonitoring() {
         </div>
       </div>
 
-      {/* Recharts Master LineChart with dual YAxis */}
+      {/* Recharts Master LineChart */}
       <div className="card-section p-6 space-y-4">
         <div>
           <h3 className="text-sm font-bold text-[#1E1E1E] uppercase tracking-wider font-serif">
@@ -150,7 +135,6 @@ export default function GrafikMonitoring() {
                 axisLine={false} 
                 tick={{ fontSize: 10, fontWeight: 'bold', fill: '#8A857F' }}
               />
-              {/* Financial Axis (Left) */}
               <YAxis 
                 yAxisId="financial" 
                 tickFormatter={(v) => `Rp ${v} Jt`}
@@ -158,7 +142,6 @@ export default function GrafikMonitoring() {
                 axisLine={false}
                 tick={{ fontSize: 10, fontWeight: 'bold', fill: '#1E1E1E' }}
               />
-              {/* Attendance Axis (Right) */}
               <YAxis 
                 yAxisId="percentage" 
                 orientation="right"
@@ -176,50 +159,10 @@ export default function GrafikMonitoring() {
                 }}
               />
               <Legend verticalAlign="bottom" height={36} wrapperStyle={{ fontSize: '11px', fontWeight: 'bold', paddingTop: '10px' }} />
-              
-              {/* Lines using premium pastel styles */}
-              <Line 
-                name="Pendapatan" 
-                type="monotone" 
-                dataKey="Pendapatan" 
-                stroke="#B85040" // Pink
-                strokeWidth={3} 
-                yAxisId="financial" 
-                connectNulls 
-                dot={{ r: 4 }} 
-                activeDot={{ r: 6 }} 
-              />
-              <Line 
-                name="Pengeluaran" 
-                type="monotone" 
-                dataKey="Pengeluaran" 
-                stroke="#A05820" // Yellow
-                strokeWidth={2.5} 
-                yAxisId="financial" 
-                connectNulls 
-                dot={{ r: 3 }} 
-              />
-              <Line 
-                name="Laba Bersih" 
-                type="monotone" 
-                dataKey="Laba" 
-                stroke="#187050" // Mint
-                strokeWidth={2.5} 
-                yAxisId="financial" 
-                connectNulls 
-                dot={{ r: 3 }} 
-              />
-              <Line 
-                name="Kehadiran %" 
-                type="monotone" 
-                dataKey="Kehadiran" 
-                stroke="#4840B0" // Lavender
-                strokeWidth={2} 
-                strokeDasharray="5 5" 
-                yAxisId="percentage" 
-                connectNulls 
-                dot={{ r: 3 }} 
-              />
+              <Line name="Pendapatan" type="monotone" dataKey="Pendapatan" stroke="#B85040" strokeWidth={3} yAxisId="financial" connectNulls dot={{ r: 4 }} activeDot={{ r: 6 }} />
+              <Line name="Pengeluaran" type="monotone" dataKey="Pengeluaran" stroke="#A05820" strokeWidth={2.5} yAxisId="financial" connectNulls dot={{ r: 3 }} />
+              <Line name="Laba Bersih" type="monotone" dataKey="Laba" stroke="#187050" strokeWidth={2.5} yAxisId="financial" connectNulls dot={{ r: 3 }} />
+              <Line name="Kehadiran %" type="monotone" dataKey="Kehadiran" stroke="#4840B0" strokeWidth={2} strokeDasharray="5 5" yAxisId="percentage" connectNulls dot={{ r: 3 }} />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -227,28 +170,17 @@ export default function GrafikMonitoring() {
 
       {/* Two Column Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        
-        {/* Left: Donut Chart for Expense Composition */}
         <div className="card-section p-6 flex flex-col justify-between">
           <div>
             <h4 className="text-xs font-bold text-[#1E1E1E] uppercase tracking-wider border-b border-[#EAE6E1] pb-3 mb-4 font-serif">
               Komposisi Pengeluaran Bulan Ini
             </h4>
           </div>
-
           <div className="flex items-center justify-around gap-6 py-2">
             <div className="relative w-40 h-40 flex-shrink-0">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie
-                    data={pieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={48}
-                    outerRadius={64}
-                    paddingAngle={3}
-                    dataKey="value"
-                  >
+                  <Pie data={pieData} cx="50%" cy="50%" innerRadius={48} outerRadius={64} paddingAngle={3} dataKey="value">
                     {pieData.map((entry, idx) => (
                       <Cell key={`cell-${idx}`} fill={entry.color} />
                     ))}
@@ -260,7 +192,6 @@ export default function GrafikMonitoring() {
                 <span className="text-[9px] font-bold text-[#8A857F] uppercase tracking-tight">Total</span>
               </div>
             </div>
-
             <div className="space-y-3 flex-1 max-w-[200px]">
               {pieData.map((item, idx) => (
                 <div key={idx} className="flex items-start gap-2.5 text-xs font-bold">
@@ -275,48 +206,34 @@ export default function GrafikMonitoring() {
           </div>
         </div>
 
-        {/* Right: Allocation Bars */}
         <div className="card-section p-6 space-y-5">
           <h4 className="text-xs font-bold text-[#1E1E1E] uppercase tracking-wider border-b border-[#EAE6E1] pb-3 font-serif">
             Pendapatan per Sumber & Tower
           </h4>
-          
           <div className="space-y-4">
             <div className="space-y-2">
               <span className="text-[10px] font-bold text-[#8A857F] uppercase tracking-wider block">Per Sumber Pendapatan</span>
               <div className="space-y-3">
                 <div className="space-y-1">
                   <div className="flex justify-between text-xs font-bold text-[#1E1E1E]">
-                    <span>IPL (Rp 605 Jt)</span>
-                    <span>85%</span>
+                    <span>IPL (Rp 605 Jt)</span><span>85%</span>
                   </div>
-                  <div className="progress-track">
-                    <div className="progress-fill progress-lavender" style={{ width: '85%' }}></div>
-                  </div>
+                  <div className="progress-track"><div className="progress-fill progress-lavender" style={{ width: '85%' }}></div></div>
                 </div>
-                
                 <div className="space-y-1">
                   <div className="flex justify-between text-xs font-bold text-[#1E1E1E]">
-                    <span>Parkir (Rp 110 Jt)</span>
-                    <span>15%</span>
+                    <span>Parkir (Rp 110 Jt)</span><span>15%</span>
                   </div>
-                  <div className="progress-track">
-                    <div className="progress-fill progress-pink" style={{ width: '15%' }}></div>
-                  </div>
+                  <div className="progress-track"><div className="progress-fill progress-pink" style={{ width: '15%' }}></div></div>
                 </div>
-
                 <div className="space-y-1">
                   <div className="flex justify-between text-xs font-bold text-[#1E1E1E]">
-                    <span>Fasilitas (Rp 87 Jt)</span>
-                    <span>5%</span>
+                    <span>Fasilitas (Rp 87 Jt)</span><span>5%</span>
                   </div>
-                  <div className="progress-track">
-                    <div className="progress-fill progress-mint" style={{ width: '5%' }}></div>
-                  </div>
+                  <div className="progress-track"><div className="progress-fill progress-mint" style={{ width: '5%' }}></div></div>
                 </div>
               </div>
             </div>
-
             <div className="space-y-2 pt-2 border-t border-[#EAE6E1]">
               <span className="text-[10px] font-bold text-[#8A857F] uppercase tracking-wider block">Per Tower Gedung</span>
               <div className="grid grid-cols-3 gap-3 text-center">
@@ -336,7 +253,6 @@ export default function GrafikMonitoring() {
             </div>
           </div>
         </div>
-
       </div>
 
       {/* HR Attendance Rates */}
@@ -370,8 +286,6 @@ export default function GrafikMonitoring() {
         <h4 className="text-xs font-bold text-[#1E1E1E] uppercase tracking-wider border-b border-[#EAE6E1] pb-3 font-serif">
           Tren Kerusakan Fasilitas
         </h4>
-
-        {/* Warning banner */}
         <div className="bg-[#FEF7EC] border border-[#FCD6A5] rounded-2xl p-4 flex items-start gap-3">
           <AlertTriangle className="text-[#A05820] flex-shrink-0 mt-0.5" size={16} />
           <div className="space-y-0.5">
@@ -381,8 +295,6 @@ export default function GrafikMonitoring() {
             </p>
           </div>
         </div>
-
-        {/* Progress bars */}
         <div className="space-y-4 max-w-xl pt-1">
           {[
             { label: 'AC/Pendingin', tickets: 47, width: '90%', progressClass: 'progress-lavender' },
@@ -401,16 +313,6 @@ export default function GrafikMonitoring() {
         </div>
       </div>
 
-      {/* Success Toast */}
-      {successToast && (
-        <div className="toast-modern toast-success">
-          <CheckCircle size={16} />
-          <div>
-            <p className="text-[10px] text-white/70 font-semibold">Sukses</p>
-            <p className="text-xs font-bold leading-none mt-0.5">{successToast}</p>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

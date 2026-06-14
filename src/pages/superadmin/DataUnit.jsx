@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, X, Search } from 'lucide-react';
+import { Plus, X, Search, Home, User, Layers, Maximize2, Banknote } from 'lucide-react';
 
 export default function DataUnit() {
   const [units, setUnits] = useState([
@@ -14,19 +14,21 @@ export default function DataUnit() {
   const [statusFilter, setStatusFilter] = useState('Semua');
   const [searchQuery, setSearchQuery] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [selectedUnit, setSelectedUnit] = useState(null);
 
   const [newUnit, setNewUnit] = useState({
-    noUnit: '',
-    tower: 'Tower A',
-    floor: '',
-    size: '',
-    status: 'Kosong'
+    noUnit: '', tower: 'Tower A', floor: '', size: '', status: 'Kosong'
   });
+
+  const openDetail = (unit) => {
+    setSelectedUnit(unit);
+    setDetailOpen(true);
+  };
 
   const handleAddUnit = (e) => {
     e.preventDefault();
     if (!newUnit.noUnit || !newUnit.floor || !newUnit.size) return;
-
     const added = {
       id: Date.now(),
       noUnit: newUnit.noUnit,
@@ -37,7 +39,6 @@ export default function DataUnit() {
       status: newUnit.status,
       ipl: 'Rp 770.000'
     };
-
     setUnits(prev => [added, ...prev]);
     setModalOpen(false);
     setNewUnit({ noUnit: '', tower: 'Tower A', floor: '', size: '', status: 'Kosong' });
@@ -46,7 +47,7 @@ export default function DataUnit() {
   const filteredUnits = units.filter(unit => {
     const matchesTower = towerFilter === 'Semua' || unit.tower === towerFilter;
     const matchesStatus = statusFilter === 'Semua' || unit.status === statusFilter;
-    const matchesSearch = 
+    const matchesSearch =
       unit.noUnit.toLowerCase().includes(searchQuery.toLowerCase()) ||
       unit.resident.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesTower && matchesStatus && matchesSearch;
@@ -84,7 +85,6 @@ export default function DataUnit() {
             </select>
           </div>
 
-          {/* SEARCH BOX FIXED (Menggunakan Inline Style untuk memaksa posisi) */}
           <div className="relative flex items-center" style={{ minWidth: '240px' }}>
             <input
               type="text"
@@ -92,29 +92,17 @@ export default function DataUnit() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="input-modern font-semibold w-full"
-              style={{ 
-                paddingLeft: '16px', 
-                paddingRight: '40px', // Ruang agar teks tidak menimpa ikon
-                borderRadius: '99px' 
-              }}
+              style={{ paddingLeft: '16px', paddingRight: '40px', borderRadius: '99px' }}
             />
-            <Search 
-              className="text-muted" 
-              size={16} 
-              style={{ 
-                position: 'absolute', 
-                right: '15px',      // Ikon dikunci di kanan
-                left: 'auto',       // Menghapus paksa settingan CSS global
-                pointerEvents: 'none' 
-              }} 
+            <Search
+              className="text-muted"
+              size={16}
+              style={{ position: 'absolute', right: '15px', left: 'auto', pointerEvents: 'none' }}
             />
           </div>
         </div>
 
-        <button
-          onClick={() => setModalOpen(true)}
-          className="btn-primary py-2.5 px-4 text-xs font-bold"
-        >
+        <button onClick={() => setModalOpen(true)} className="btn-primary py-2.5 px-4 text-xs font-bold">
           <Plus size={14} />
           <span>Tambah Unit</span>
         </button>
@@ -133,7 +121,6 @@ export default function DataUnit() {
                 <th className="text-left">Penghuni</th>
                 <th className="text-left">Status</th>
                 <th className="text-left">IPL / Bulan</th>
-                {/* HEAD AKSI TENGAH */}
                 <th style={{ textAlign: 'center', width: '100px' }}>Aksi</th>
               </tr>
             </thead>
@@ -152,11 +139,10 @@ export default function DataUnit() {
                       </span>
                     </td>
                     <td className="text-ink font-bold font-mono">{row.ipl}</td>
-                    {/* ISI AKSI TENGAH */}
                     <td style={{ textAlign: 'center' }}>
-                      <button 
-                        className="text-ink hover:underline font-bold text-xs"
-                        style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}
+                      <button
+                        onClick={() => openDetail(row)}
+                        className="text-[10px] font-black uppercase text-ink hover:underline tracking-tighter"
                       >
                         Detail
                       </button>
@@ -175,7 +161,86 @@ export default function DataUnit() {
         </div>
       </div>
 
-      {/* Modal Add Unit tetap seperti kode asli Anda */}
+      {/* Modal Detail Unit */}
+      {detailOpen && selectedUnit && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/40 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl overflow-hidden animate-scale-up">
+            <div className="relative h-24 bg-[#EAE6E1]">
+              <button
+                onClick={() => setDetailOpen(false)}
+                className="absolute top-4 right-4 w-8 h-8 bg-white/50 backdrop-blur-md rounded-full flex items-center justify-center text-ink hover:bg-white transition-all"
+              >
+                <X size={16} />
+              </button>
+              <div className="absolute -bottom-10 left-6 w-20 h-20 bg-white rounded-2xl shadow-lg flex items-center justify-center border-4 border-white">
+                <Home size={32} className="text-[#C8C2BC]" />
+              </div>
+            </div>
+
+            <div className="pt-14 p-8 space-y-6">
+              <div>
+                <h4 className="text-lg font-black text-ink tracking-tight">Unit {selectedUnit.noUnit}</h4>
+                <p className="text-xs font-bold text-muted flex items-center gap-1.5 mt-1">
+                  <Layers size={12} /> {selectedUnit.tower} — {selectedUnit.floor}
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex items-center gap-4">
+                  <div className="w-9 h-9 rounded-xl bg-[#F8F7F5] flex items-center justify-center text-muted">
+                    <User size={16} />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black text-[#C8C2BC] uppercase tracking-widest">Penghuni</p>
+                    <p className="text-xs font-bold text-ink">{selectedUnit.resident}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-4">
+                  <div className="w-9 h-9 rounded-xl bg-[#F8F7F5] flex items-center justify-center text-muted">
+                    <Maximize2 size={16} />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black text-[#C8C2BC] uppercase tracking-widest">Luas Unit</p>
+                    <p className="text-xs font-bold text-ink">{selectedUnit.size}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-4">
+                  <div className="w-9 h-9 rounded-xl bg-[#F8F7F5] flex items-center justify-center text-muted">
+                    <Banknote size={16} />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black text-[#C8C2BC] uppercase tracking-widest">IPL / Bulan</p>
+                    <p className="text-xs font-bold text-ink">{selectedUnit.ipl}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-4">
+                  <div className="w-9 h-9 rounded-xl bg-[#F8F7F5] flex items-center justify-center text-muted">
+                    <Home size={16} />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black text-[#C8C2BC] uppercase tracking-widest">Status Unit</p>
+                    <span className={`badge-base mt-1 inline-block ${selectedUnit.status === 'Dihuni' ? 'badge-mint' : 'badge-gray'}`}>
+                      {selectedUnit.status}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setDetailOpen(false)}
+                className="w-full btn-primary py-3.5 rounded-2xl text-[11px] font-black uppercase tracking-widest"
+              >
+                Tutup Detail
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Add Unit */}
       {modalOpen && (
         <div className="modal-overlay">
           <div className="modal-box">
