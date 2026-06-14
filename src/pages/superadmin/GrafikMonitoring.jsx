@@ -266,7 +266,7 @@ export default function GrafikMonitoring() {
             { label: 'Pemeliharaan', rate: 93, progressClass: 'progress-pink' },
             { label: 'Keamanan', rate: 92, progressClass: 'progress-dark' },
             { label: 'Kebersihan', rate: 88, progressClass: 'progress-pink' },
-            { label: 'Management', rate: 100, progressClass: 'progress-mint' }
+            { label: 'Fasilitas', rate: 100, progressClass: 'progress-mint' }
           ].map((div, idx) => (
             <div key={idx} className="p-3 bg-[#FAF6F0] rounded-2xl border border-[#EAE6E1] space-y-2">
               <span className="text-xs font-bold text-[#1E1E1E] block">{div.label}</span>
