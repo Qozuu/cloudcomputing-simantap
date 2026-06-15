@@ -222,8 +222,6 @@ export default function CSLiveChat() {
 
               {/* Action Buttons */}
               <div className="flex items-center gap-2">
-                {/* Keterangan: Tombol WA di sini telah dihapus */}
-                
                 {/* Create ticket button */}
                 <button
                   onClick={() => setModalOpen(true)}
@@ -318,9 +316,10 @@ export default function CSLiveChat() {
               </button>
             </div>
 
-            {/* Info Banner */}
+            {/* Info Banner - FIXED ICON SIZE */}
             <div className="px-5 py-3 bg-[#EEEDFB] border-b border-soft text-xs font-bold text-ink flex items-center gap-2">
-              <svg className="w-4.5 h-4.5 text-[#4840B0] flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              {/* Diubah dari w-4.5 h-4.5 menjadi w-5 h-5 agar ukurannya stabil dan tidak merusak layout */}
+              <svg className="w-5 h-5 text-[#4840B0] flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <span>Laporan chat dari penghuni {activeChat.name} ({activeChat.unit})</span>
