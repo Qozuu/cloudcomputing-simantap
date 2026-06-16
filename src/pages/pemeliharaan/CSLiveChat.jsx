@@ -1,73 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../../lib/supabase';
 
 export default function CSLiveChat() {
-  const [conversations, setConversations] = useState([
-    {
-      id: 'HG',
-      name: 'Hendra G.',
-      unit: 'Unit 12A',
-      lastMessage: 'AC saya masih bocor pak...',
-      time: '09:45',
-      unread: true,
-      messages: [
-        { sender: 'resident', text: 'Selamat pagi pak Doni, teknisi AC kemarin sudah datang?', time: '09:40' },
-        { sender: 'admin', text: 'Pagi Pak Hendra. Iya sudah dijadwalkan, kemarin ada kendala apa?', time: '09:42' },
-        { sender: 'resident', text: 'AC saya masih bocor pak, airnya menetes deras di ruang tamu.', time: '09:45' }
-      ]
-    },
-    {
-      id: 'MS',
-      name: 'Maya S.',
-      unit: 'Unit 05B',
-      lastMessage: 'Kapan teknisi datang...',
-      time: '09:20',
-      unread: true,
-      messages: [
-        { sender: 'resident', text: 'Pak, saklar lampu di kamar mandi saya padam semuanya.', time: '09:18' },
-        { sender: 'resident', text: 'Kapan teknisi datang untuk memperbaikinya ya?', time: '09:20' }
-      ]
-    },
-    {
-      id: 'RH',
-      name: 'Rudi H.',
-      unit: 'Unit 18C',
-      lastMessage: 'Terima kasih sudah diperbaiki',
-      time: '08:55',
-      unread: false,
-      messages: [
-        { sender: 'resident', text: 'Pak Doni, kebocoran pipa di kamar mandi saya sudah diatasi oleh Pak Heri.', time: '08:50' },
-        { sender: 'resident', text: 'Terima kasih sudah diperbaiki', time: '08:55' }
-      ]
-    },
-    {
-      id: 'DL',
-      name: 'Dewi L.',
-      unit: 'Unit 07A',
-      lastMessage: 'Ada yang bocor di kamar mandi',
-      time: '08:20',
-      unread: true,
-      messages: [
-        { sender: 'resident', text: 'Halo admin pemeliharaan, ada kebocoran air merembes di langit-langit kamar mandi unit saya.', time: '08:20' }
-      ]
-    },
-    {
-      id: 'FN',
-      name: 'Fajar N.',
-      unit: 'Unit 22B',
-      lastMessage: 'Baik pak, ditunggu ya',
-      time: 'Kemarin',
-      unread: false,
-      messages: [
-        { sender: 'admin', text: 'Pak Fajar, perbaikan engsel pintu lift sudah selesai dijadwalkan besok.', time: 'Kemarin' },
-        { sender: 'resident', text: 'Baik pak, ditunggu ya', time: 'Kemarin' }
-      ]
-    }
-  ]);
-
+  const [conversations, setConversations] = useState([]);
   const [activeId, setActiveId] = useState(null);
   const [replyText, setReplyText] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [successToast, setSuccessToast] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState(null);
   
   // Ticket Modal Form Fields
   const [ticketCategory, setTicketCategory] = useState('AC');
@@ -78,68 +19,225 @@ export default function CSLiveChat() {
 
   const activeChat = conversations.find(c => c.id === activeId);
 
-  // Mark chat as read when clicked
-  const handleSelectChat = (id) => {
-    setActiveId(id);
-    setConversations(prev => 
-      prev.map(c => c.id === id ? { ...c, unread: false } : c)
-    );
-    // Auto populate ticket form title
-    const selected = conversations.find(c => c.id === id);
-    if (selected) {
-      setTicketTitle(`${selected.lastMessage} di ${selected.unit}`);
-      setTicketDesc(`Dibuat berdasarkan laporan chat dari penghuni ${selected.name} (${selected.unit}): "${selected.lastMessage}"`);
+  const loadConversations = async (adminId) => {
+    try {
+      const { data: participants, error: pError } = await supabase
+        .from('conversation_participants')
+        .select('conversation_id')
+        .eq('user_id', adminId);
+
+      if (pError) throw pError;
+      const convIds = participants?.map(p => p.conversation_id) || [];
+
+      if (convIds.length === 0) {
+        setConversations([]);
+        return;
+      }
+
+      const { data: otherParticipants, error: opError } = await supabase
+        .from('conversation_participants')
+        .select('conversation_id, user_id, users:users(nama, role)')
+        .in('conversation_id', convIds)
+        .neq('user_id', adminId);
+
+      if (opError) throw opError;
+
+      const residentIds = otherParticipants?.map(p => p.user_id) || [];
+
+      const { data: penghunis, error: pgError } = await supabase
+        .from('penghuni')
+        .select('user_id, unit(nomor_unit)')
+        .in('user_id', residentIds);
+
+      const { data: messages, error: mError } = await supabase
+        .from('messages')
+        .select('conversation_id, body, created_at')
+        .in('conversation_id', convIds)
+        .order('created_at', { ascending: false });
+
+      const mapped = otherParticipants.map(participant => {
+        const userId = participant.user_id;
+        const name = participant.users?.nama || 'Anonim';
+        const unitData = penghunis?.find(p => p.user_id === userId);
+        const unitNum = unitData?.unit?.nomor_unit || '—';
+        
+        const lastMsgObj = messages?.find(m => m.conversation_id === participant.conversation_id);
+        const lastMessage = lastMsgObj?.body || 'Belum ada pesan';
+        const time = lastMsgObj?.created_at
+          ? new Date(lastMsgObj.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          : '—';
+
+        return {
+          id: participant.conversation_id,
+          userId: userId,
+          name: name,
+          unit: unitNum !== '—' ? `Unit ${unitNum}` : '—',
+          lastMessage: lastMessage,
+          time: time,
+          unread: false,
+          messages: []
+        };
+      });
+
+      setConversations(mapped);
+    } catch (err) {
+      console.error('Failed to load conversations:', err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Send message function
-  const handleSendMessage = (e) => {
-    e.preventDefault();
-    if (!replyText.trim() || !activeId) return;
-
-    const now = new Date();
-    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-    setConversations(prev =>
-      prev.map(c => {
-        if (c.id === activeId) {
-          return {
-            ...c,
-            lastMessage: replyText,
-            time: timeStr,
-            messages: [
-              ...c.messages,
-              { sender: 'admin', text: replyText, time: timeStr }
-            ]
-          };
+  useEffect(() => {
+    async function init() {
+      try {
+        setLoading(true);
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          setCurrentUser(user);
+          await loadConversations(user.id);
         }
-        return c;
-      })
-    );
+      } catch (err) {
+        console.error('Failed to init chat:', err.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+    init();
+  }, []);
 
-    setReplyText('');
+  useEffect(() => {
+    if (!activeId || !currentUser) return;
+
+    const channel = supabase.channel(`messages-rt-${activeId}`)
+      .on('postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'messages',
+          filter: `conversation_id=eq.${activeId}` },
+        async (payload) => {
+          const isAdmin = payload.new.sender_id === currentUser.id;
+          const formattedMsg = {
+            sender: isAdmin ? 'admin' : 'resident',
+            text: payload.new.body,
+            time: new Date(payload.new.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          };
+
+          setConversations(prev =>
+            prev.map(c => {
+              if (c.id === activeId) {
+                const exists = c.messages.some(m => m.text === formattedMsg.text && m.time === formattedMsg.time);
+                if (exists) return c;
+                return {
+                  ...c,
+                  lastMessage: formattedMsg.text,
+                  time: formattedMsg.time,
+                  messages: [...c.messages, formattedMsg]
+                };
+              }
+              return c;
+            })
+          );
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [activeId, currentUser]);
+
+  const handleSelectChat = async (id) => {
+    setActiveId(id);
+    try {
+      const { data: msgs, error } = await supabase
+        .from('messages')
+        .select('*, sender:users(nama, role)')
+        .eq('conversation_id', id)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+
+      const formatted = msgs.map(m => {
+        const isAdmin = m.sender?.role?.startsWith('div_') || m.sender_id === currentUser?.id;
+        return {
+          sender: isAdmin ? 'admin' : 'resident',
+          text: m.body,
+          time: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+      });
+
+      setConversations(prev =>
+        prev.map(c => c.id === id ? { ...c, messages: formatted, unread: false } : c)
+      );
+
+      // Auto populate ticket form fields
+      const selected = conversations.find(c => c.id === id);
+      if (selected) {
+        setTicketTitle(`${selected.lastMessage} di ${selected.unit}`);
+        setTicketDesc(`Dibuat berdasarkan laporan chat dari penghuni ${selected.name} (${selected.unit}): "${selected.lastMessage}"`);
+      }
+    } catch (err) {
+      console.error('Failed to load messages:', err.message);
+    }
   };
 
-  // Create Ticket Submit
-  const handleCreateTicketSubmit = (e) => {
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+    if (!replyText.trim() || !activeId || !currentUser) return;
+
+    const text = replyText;
+    setReplyText('');
+
+    try {
+      const { error } = await supabase.from('messages').insert({
+        conversation_id: activeId,
+        sender_id: currentUser.id,
+        body: text
+      });
+
+      if (error) throw error;
+    } catch (err) {
+      console.error('Failed to send message:', err.message);
+    }
+  };
+
+  const handleCreateTicketSubmit = async (e) => {
     e.preventDefault();
     if (!activeChat) return;
 
-    setModalOpen(false);
-    setSuccessToast(`Tiket untuk ${activeChat.name} berhasil dibuat!`);
-    
-    // Clear toast after 3 seconds
-    setTimeout(() => {
-      setSuccessToast('');
-    }, 3000);
+    try {
+      // Find technician ID from their name
+      const { data: tech } = await supabase
+        .from('users')
+        .select('id')
+        .eq('nama', ticketTechnician)
+        .maybeSingle();
 
-    // Reset ticket fields
-    setTicketTitle('');
-    setTicketDesc('');
+      const { error } = await supabase.from('laporan').insert({
+        judul: ticketTitle,
+        deskripsi: ticketDesc,
+        kategori: ticketCategory,
+        prioritas: ticketPriority,
+        pelapor_id: activeChat.userId,
+        status: 'proses',
+        ditugaskan_ke: tech?.id || null
+      });
+
+      if (error) throw error;
+
+      setModalOpen(false);
+      setSuccessToast(`Tiket untuk ${activeChat.name} berhasil dibuat!`);
+      setTimeout(() => setSuccessToast(''), 3000);
+      setTicketTitle('');
+      setTicketDesc('');
+    } catch (err) {
+      console.error('Failed to create ticket:', err.message);
+    }
   };
 
-  // Count unread conversations
   const unreadCount = conversations.filter(c => c.unread).length;
+
+  if (loading) {
+    return <div className="p-6 text-muted text-sm">Memuat...</div>;
+  }
 
   return (
     <div className="h-[calc(100vh-140px)] flex flex-col md:flex-row border border-soft rounded-3xl bg-surface shadow-soft overflow-hidden animate-fade-up relative">
@@ -158,6 +256,7 @@ export default function CSLiveChat() {
         <div className="flex-1 overflow-y-auto divide-y divide-gray-100">
           {conversations.map((chat) => {
             const isActiveItem = chat.id === activeId;
+            const initials = chat.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
             return (
               <button
                 key={chat.id}
@@ -170,7 +269,7 @@ export default function CSLiveChat() {
               >
                 {/* Avatar Initials */}
                 <div className="avatar avatar-md avatar-lavender shadow-sm">
-                  {chat.id}
+                  {initials}
                 </div>
                 
                 {/* Content */}
@@ -205,7 +304,7 @@ export default function CSLiveChat() {
               <div className="flex items-center gap-3">
                 <div className="relative">
                   <div className="avatar avatar-md avatar-lavender shadow-sm">
-                    {activeChat.id}
+                    {activeChat.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                   </div>
                   <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 rounded-full border-2 border-white"></span>
                 </div>
@@ -222,8 +321,6 @@ export default function CSLiveChat() {
 
               {/* Action Buttons */}
               <div className="flex items-center gap-2">
-                {/* Keterangan: Tombol WA di sini telah dihapus */}
-                
                 {/* Create ticket button */}
                 <button
                   onClick={() => setModalOpen(true)}

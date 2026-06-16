@@ -1,14 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search, Plus, X, Pencil, CheckCircle } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 
 export default function PusatInformasi() {
-  const [posts, setPosts] = useState([
-    { id: 1, title: 'Pemadaman Listrik Tower B', subtitle: 'Listrik Tower B akan dipadamkan 22 Apr pukul 09.00-12.00 untuk perbaikan panel listrik utama.', category: 'Darurat', target: 'Semua', date: '21 Apr 2026', status: 'Tayang' },
-    { id: 2, title: 'Kolam Renang Dibuka Kembali', subtitle: 'Kolam Renang Tower A kembali beroperasi normal mulai 20 April 2026.', category: 'Info', target: 'Semua', date: '20 Apr 2026', status: 'Tayang' },
-    { id: 3, title: 'Promo Sewa Ruang Serbaguna', subtitle: 'Diskon 30% untuk sewa Ruang Serbaguna di bulan April 2026.', category: 'Promo', target: 'Semua', date: '15 Apr 2026', status: 'Draf' },
-    { id: 4, title: 'Peraturan Parkir Baru', subtitle: 'Mulai 1 Mei 2026 tarif parkir revisi Rp 3.000/jam dan motor Rp 15.000/hari.', category: 'Peraturan', target: 'Semua', date: '10 Apr 2026', status: 'Arsip' },
-    { id: 5, title: 'Jadwal Pemeliharaan Lift', subtitle: 'Lift Tower A lantai 1-10 telah selesai diperiksa dan berfungsi normal.', category: 'Pemeliharaan', target: 'Tower A', date: '05 Apr 2026', status: 'Tayang' }
-  ]);
+  const [posts, setPosts] = useState([]);
+  const [currentUser, setCurrentUser] = useState(null);
 
   const [filterCategory, setFilterCategory] = useState('Semua Kategori');
   const [filterStatus, setFilterStatus] = useState('Semua Status');
@@ -26,6 +22,50 @@ export default function PusatInformasi() {
   });
 
   const [editingPost, setEditingPost] = useState(null);
+
+  const loadPosts = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      setCurrentUser(user);
+
+      const { data: infos } = await supabase
+        .from('informasi')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (infos) {
+        const formatted = infos.map(bc => {
+          const bcDate = new Date(bc.created_at);
+          const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+          const dateStr = `${bcDate.getDate()} ${months[bcDate.getMonth()]} ${bcDate.getFullYear()}`;
+          
+          let targetVal = bc.target_role || 'Semua';
+
+          let statusVal = bc.status;
+          if (!statusVal) {
+            statusVal = bc.is_published ? 'Tayang' : 'Draf';
+          }
+
+          return {
+            id: bc.id,
+            title: bc.judul || '',
+            subtitle: bc.isi || bc.deskripsi || '',
+            category: bc.kategori || bc.prioritas || 'Info',
+            target: targetVal,
+            date: dateStr,
+            status: statusVal
+          };
+        });
+        setPosts(formatted);
+      }
+    } catch (err) {
+      console.error('Error loading posts:', err);
+    }
+  };
+
+  useEffect(() => {
+    loadPosts();
+  }, []);
 
   const getCategoryBadgeClass = (category) => {
     switch (category) {
@@ -47,31 +87,35 @@ export default function PusatInformasi() {
     }
   };
 
-  const handleCreateSubmit = (e) => {
+  const handleCreateSubmit = async (e) => {
     e.preventDefault();
     if (!newPost.title || !newPost.subtitle) return;
 
-    const today = new Date();
-    const formattedDate = today.toLocaleDateString('id-ID', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric'
-    });
+    try {
+      const targetLabel = (newPost.target === 'Semua Penghuni' || newPost.target === 'Semua') ? 'Semua' : newPost.target;
+      const { error } = await supabase
+        .from('informasi')
+        .insert({
+          judul: newPost.title,
+          isi: newPost.subtitle,
+          deskripsi: newPost.subtitle,
+          kategori: newPost.category,
+          prioritas: newPost.category,
+          target_role: targetLabel,
+          status: 'Tayang',
+          is_published: true,
+          dibuat_oleh: currentUser?.id
+        });
 
-    const added = {
-      id: Date.now(),
-      title: newPost.title,
-      category: newPost.category,
-      target: newPost.target,
-      date: formattedDate,
-      status: 'Tayang',
-      subtitle: newPost.subtitle
-    };
+      if (error) throw error;
 
-    setPosts(prev => [added, ...prev]);
-    setCreateModalOpen(false);
-    showToast(`Informasi "${newPost.title}" berhasil dipublikasikan!`);
-    setNewPost({ title: '', category: 'Info', target: 'Semua Penghuni', subtitle: '' });
+      setCreateModalOpen(false);
+      showToast(`Informasi "${newPost.title}" berhasil dipublikasikan!`);
+      setNewPost({ title: '', category: 'Info', target: 'Semua Penghuni', subtitle: '' });
+      loadPosts();
+    } catch (err) {
+      console.error('Error creating post:', err);
+    }
   };
 
   const handleEditOpen = (post) => {
@@ -79,15 +123,34 @@ export default function PusatInformasi() {
     setEditModalOpen(true);
   };
 
-  const handleEditSubmit = (e) => {
+  const handleEditSubmit = async (e) => {
     e.preventDefault();
     if (!editingPost || !editingPost.title || !editingPost.subtitle) return;
 
-    setPosts(prev => 
-      prev.map(p => p.id === editingPost.id ? editingPost : p)
-    );
-    setEditModalOpen(false);
-    showToast(`Informasi "${editingPost.title}" berhasil diperbarui!`);
+    try {
+      const targetLabel = (editingPost.target === 'Semua Penghuni' || editingPost.target === 'Semua') ? 'Semua' : editingPost.target;
+      const { error } = await supabase
+        .from('informasi')
+        .update({
+          judul: editingPost.title,
+          isi: editingPost.subtitle,
+          deskripsi: editingPost.subtitle,
+          kategori: editingPost.category,
+          prioritas: editingPost.category,
+          target_role: targetLabel,
+          status: editingPost.status,
+          is_published: editingPost.status === 'Tayang'
+        })
+        .eq('id', editingPost.id);
+
+      if (error) throw error;
+
+      setEditModalOpen(false);
+      showToast(`Informasi "${editingPost.title}" berhasil diperbarui!`);
+      loadPosts();
+    } catch (err) {
+      console.error('Error updating post:', err);
+    }
   };
 
   const showToast = (msg) => {

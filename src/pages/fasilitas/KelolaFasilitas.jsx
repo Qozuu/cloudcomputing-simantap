@@ -1,49 +1,62 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, Edit3, EyeOff, Eye, MapPin, Clock, Info, X } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 
 export default function KelolaFasilitasAdmin() {
-  const [facilities, setFacilities] = useState([
-    {
-      id: 1,
-      name: 'Kolam Renang Olympic',
-      location: 'Lantai G Tower A',
-      hours: '06:00 - 21:00',
-      capacity: '50',
-      price: 'Gratis',
-      status: 'Buka',
-      image: 'https://images.unsplash.com/photo-1576013551627-0cc20b96c2a7?auto=format&fit=crop&q=80&w=800'
-    },
-    {
-      id: 2,
-      name: 'Fitness & Gym Center',
-      location: 'Lantai 2 Tower A',
-      hours: '06:00 - 22:00',
-      capacity: '30',
-      price: 'Gratis',
-      status: 'Buka',
-      image: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&q=80&w=800'
-    },
-    {
-      id: 3,
-      name: 'Ruang Pertemuan / Ballroom',
-      location: 'Lantai 1 Tower C',
-      hours: '08:00 - 22:00',
-      capacity: '100',
-      price: 'Rp 100.000/sesi',
-      status: 'Maintenance',
-      image: 'https://images.unsplash.com/photo-1431540015161-0bf868a2d407?auto=format&fit=crop&q=80&w=800'
-    }
-  ]);
+  const [facilities, setFacilities] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   // State untuk kontrol Modal Edit
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedFacility, setSelectedFacility] = useState(null);
 
-  const handleToggleStatus = (id, e) => {
+  const loadFacilities = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('fasilitas')
+        .select('*')
+        .order('nama');
+
+      if (error) throw error;
+
+      if (data) {
+        setFacilities(data.map(item => ({
+          id: item.id,
+          name: item.nama || '',
+          location: item.lokasi || '',
+          hours: item.jam_operasional || '',
+          capacity: String(item.kapasitas || 0),
+          price: item.harga_sewa || 'Gratis',
+          status: item.is_active ? 'Buka' : 'Maintenance',
+          image: item.gambar || 'https://images.unsplash.com/photo-1576013551627-0cc20b96c2a7?auto=format&fit=crop&q=80&w=800'
+        })));
+      }
+    } catch (err) {
+      console.error('Failed to load facilities:', err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadFacilities();
+  }, []);
+
+  const handleToggleStatus = async (id, currentStatus, e) => {
     e.stopPropagation();
-    setFacilities(prev =>
-      prev.map(f => f.id === id ? { ...f, status: f.status === 'Buka' ? 'Maintenance' : 'Buka' } : f)
-    );
+    try {
+      const nextActive = currentStatus !== 'Buka';
+      const { error } = await supabase
+        .from('fasilitas')
+        .update({ is_active: nextActive })
+        .eq('id', id);
+
+      if (error) throw error;
+      loadFacilities();
+    } catch (err) {
+      console.error('Failed to toggle facility status:', err.message);
+    }
   };
 
   // Pemicu Bukanya Modal Edit
@@ -53,19 +66,64 @@ export default function KelolaFasilitasAdmin() {
     setIsModalOpen(true);
   };
 
+  const handleOpenAdd = () => {
+    setSelectedFacility({
+      name: '',
+      location: '',
+      hours: '08:00 - 22:00',
+      capacity: '50',
+      status: 'Buka',
+      price: 'Gratis',
+      image: 'https://images.unsplash.com/photo-1576013551627-0cc20b96c2a7?auto=format&fit=crop&q=80&w=800'
+    });
+    setIsModalOpen(true);
+  };
+
   const handleCardClick = (facility) => {
     if (facility.status === 'Maintenance') return;
   };
 
   // Fungsi saat form di dalam modal disubmit / simpan perubahan
-  const handleSaveChanges = (e) => {
+  const handleSaveChanges = async (e) => {
     e.preventDefault();
-    setFacilities(prev =>
-      prev.map(f => f.id === selectedFacility.id ? selectedFacility : f)
-    );
-    setIsModalOpen(false);
-    setSelectedFacility(null);
+    try {
+      const dbPayload = {
+        nama: selectedFacility.name,
+        lokasi: selectedFacility.location,
+        jam_operasional: selectedFacility.hours,
+        kapasitas: parseInt(selectedFacility.capacity) || 0,
+        harga_sewa: selectedFacility.price,
+        is_active: selectedFacility.status === 'Buka',
+        gambar: selectedFacility.image
+      };
+
+      if (selectedFacility.id) {
+        // Edit mode
+        const { error } = await supabase
+          .from('fasilitas')
+          .update(dbPayload)
+          .eq('id', selectedFacility.id);
+
+        if (error) throw error;
+      } else {
+        // Add mode
+        const { error } = await supabase
+          .from('fasilitas')
+          .insert(dbPayload);
+
+        if (error) throw error;
+      }
+      setIsModalOpen(false);
+      setSelectedFacility(null);
+      loadFacilities();
+    } catch (err) {
+      console.error('Failed to save facility:', err.message);
+    }
   };
+
+  if (loading) {
+    return <div className="p-6 text-muted text-sm">Memuat...</div>;
+  }
 
   return (
     <div className="space-y-6 animate-fade-up relative">
@@ -76,6 +134,7 @@ export default function KelolaFasilitasAdmin() {
           <p className="text-xs text-muted font-medium">Konfigurasi operasional, harga sewa, dan kuota harian gedung oleh Admin.</p>
         </div>
         <button 
+          onClick={handleOpenAdd}
           className="bg-ink text-white text-xs font-bold flex items-center gap-1.5 self-start sm:self-auto px-4 py-2.5 rounded-xl shadow-md hover:-translate-y-0.5 hover:shadow-lg active:translate-y-0.5 active:scale-95 transition-all"
         >
           <Plus size={15} /> <span>Tambah Fasilitas</span>
@@ -149,7 +208,7 @@ export default function KelolaFasilitasAdmin() {
                 </button>
                 
                 <button 
-                  onClick={(e) => handleToggleStatus(fac.id, e)}
+                  onClick={(e) => handleToggleStatus(fac.id, fac.status, e)}
                   className={`py-2.5 px-3 rounded-xl justify-center text-[11px] font-bold shadow-sm flex items-center gap-1.5 border transition-all active:scale-95 cursor-pointer ${
                     isBuka ? 'bg-white text-[#C05040] border-[#F9C3BA] hover:bg-red-50' : 'bg-[#187050] text-white border-[#187050] hover:bg-[#145d42]'
                   }`}

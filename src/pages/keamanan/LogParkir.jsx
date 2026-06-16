@@ -6,6 +6,9 @@ import {
   TrendingUp,
   CheckCircle2
 } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
+
+// TODO: create parkir table
 
 // Fungsi Hitung Biaya Parkir (Tetap dipertahankan)
 const calculateParkingFee = (masukStr, keluarStr, isPenghuni) => {

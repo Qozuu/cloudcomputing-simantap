@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Users,
@@ -8,12 +8,14 @@ import {
   QrCode,
   ArrowUpRight
 } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 
 export default function DashboardKeamanan() {
-  const stats = [
+  const [recentTamu, setRecentTamu] = useState([]);
+  const [stats, setStats] = useState([
     {
       title: 'Tamu Hari Ini',
-      value: '24',
+      value: '0',
       subtitle: 'QR Code aktif',
       icon: Users,
       colorClass: 'stat-pink',
@@ -38,40 +40,103 @@ export default function DashboardKeamanan() {
     },
     {
       title: 'Broadcast Terakhir',
-      value: '2 jam',
-      subtitle: 'Lift Tower B',
+      value: '—',
+      subtitle: 'Tidak ada broadcast baru',
       icon: Megaphone,
       colorClass: 'stat-mint',
       textClass: 'text-[#187050]'
     }
-  ];
+  ]);
 
-  const recentTamu = [
-    {
-      id: 1,
-      name: 'Budi Susanto',
-      unit: '12A',
-      host: 'Hendra G.',
-      time: 'Masuk 09:30',
-      type: 'Tamu pribadi'
-    },
-    {
-      id: 2,
-      name: 'Delivery JNE',
-      unit: '05B',
-      host: 'Maya S.',
-      time: 'Masuk 09:15',
-      type: 'Pengiriman paket'
-    },
-    {
-      id: 3,
-      name: 'Dr. Rina',
-      unit: '18C',
-      host: 'Rudi H.',
-      time: 'Masuk 08:45',
-      type: 'Kunjungan keluarga'
+  useEffect(() => {
+    async function loadData() {
+      try {
+        // 1. Fetch visitors di_dalam
+        const { data: visitors } = await supabase
+          .from('visitor')
+          .select('*, unit_tujuan:unit(nomor_unit, tower(nama_tower))')
+          .is('waktu_keluar', null)
+          .order('waktu_masuk', { ascending: false })
+          .limit(5);
+
+        if (visitors) {
+          const tamuFormatted = visitors.map(v => {
+            const masukDate = new Date(v.waktu_masuk);
+            const timeStr = masukDate.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+            return {
+              id: v.id,
+              name: v.nama_tamu,
+              unit: v.unit_tujuan?.nomor_unit || '—',
+              host: v.unit_tujuan?.tower?.nama_tower || '—',
+              time: `Masuk ${timeStr}`,
+              type: v.keperluan || 'Tamu pribadi'
+            };
+          });
+          setRecentTamu(tamuFormatted);
+        }
+
+        // 2. Fetch active incidents
+        const { data: incidents } = await supabase
+          .from('incident')
+          .select('*')
+          .eq('status', 'aktif')
+          .order('created_at', { ascending: false });
+
+        const activeIncidentsCount = incidents?.length ?? 0;
+
+        // 3. Fetch visitor di_dalam count for stats
+        const { count: activeVisitorsCount } = await supabase
+          .from('visitor')
+          .select('id', { count: 'exact', head: true })
+          .is('waktu_keluar', null);
+
+        // 4. Fetch last broadcast
+        const { data: broadcasts } = await supabase
+          .from('informasi')
+          .select('judul, created_at')
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        let lastBroadcastTitle = 'Tidak ada';
+        let lastBroadcastTime = '—';
+        if (broadcasts && broadcasts.length > 0) {
+          lastBroadcastTitle = broadcasts[0].judul;
+          const bcDate = new Date(broadcasts[0].created_at);
+          const diffMs = new Date() - bcDate;
+          const diffHrs = Math.floor(diffMs / (1000 * 60 * 60));
+          if (diffHrs < 1) {
+            lastBroadcastTime = 'Baru saja';
+          } else if (diffHrs < 24) {
+            lastBroadcastTime = `${diffHrs} jam lalu`;
+          } else {
+            lastBroadcastTime = `${Math.floor(diffHrs / 24)} hari lalu`;
+          }
+        }
+
+        setStats(prev => {
+          const updated = [...prev];
+          updated[0] = { ...updated[0], value: String(activeVisitorsCount ?? 0) };
+          updated[2] = { 
+            ...updated[2], 
+            value: String(activeIncidentsCount),
+            badgeText: activeIncidentsCount === 0 ? 'Aman' : 'Tindakan'
+          };
+          updated[3] = {
+            ...updated[3],
+            value: lastBroadcastTime,
+            subtitle: lastBroadcastTitle
+          };
+          return updated;
+        });
+
+      } catch (err) {
+        console.error('Error loading dashboard data:', err);
+      }
     }
-  ];
+
+    loadData();
+  }, []);
+
 
   return (
     <div className="space-y-6 animate-fade-up">

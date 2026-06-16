@@ -1,14 +1,104 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../../lib/supabase';
 
 export default function RiwayatPekerjaan() {
-  const [history] = useState([
-    { id: 'TGS-0199', area: 'Unit 12A', officer: 'Sri Mulyani', service: 'Deep cleaning', date: '21 Apr 2026', duration: '2.5 jam', status: 'Selesai' },
-    { id: 'TGS-0198', area: 'Lobby Tower A', officer: 'Wati Lestari', service: 'Sapu & Pel Lantai', date: '21 Apr 2026', duration: '1.5 jam', status: 'Selesai' },
-    { id: 'TGS-0197', area: 'Gym & Area Fasilitas', officer: 'Endah Susanti', service: 'Pembersihan Alat & Sanitasi', date: '20 Apr 2026', duration: '2.0 jam', status: 'Selesai' },
-    { id: 'TGS-0196', area: 'Toilet Umum Lt.1', officer: 'Retna Seri', service: 'Disinfeksi & Sikat Lantai', date: '20 Apr 2026', duration: '1.0 jam', status: 'Selesai' }
-  ]);
+  const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({
+    totalTasks: 0,
+    monthlyCompletion: 0,
+    avgDuration: '—'
+  });
 
   const [toastVisible, setToastVisible] = useState(false);
+
+  const parseDuration = (waktuStr) => {
+    if (!waktuStr) return 0;
+    const parts = waktuStr.split('-');
+    if (parts.length !== 2) return 0;
+    const [start, end] = parts;
+    const [startH, startM] = start.split(':').map(Number);
+    const [endH, endM] = end.split(':').map(Number);
+    if (isNaN(startH) || isNaN(startM) || isNaN(endH) || isNaN(endM)) return 0;
+    const diffMinutes = (endH * 60 + endM) - (startH * 60 + startM);
+    return diffMinutes > 0 ? diffMinutes / 60 : 0;
+  };
+
+  const formatDateStr = (dateStr) => {
+    if (!dateStr) return '—';
+    const parts = dateStr.split('-');
+    if (parts.length !== 3) return dateStr;
+    const year = parts[0];
+    const monthIdx = parseInt(parts[1]) - 1;
+    const day = parseInt(parts[2]);
+    const monthsIndo = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+    return `${day} ${monthsIndo[monthIdx]} ${year}`;
+  };
+
+  const loadHistory = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('jadwal')
+        .select('*, petugas:users(nama)')
+        .eq('jenis', 'kebersihan')
+        .eq('status', 'selesai')
+        .order('tanggal', { ascending: false });
+
+      if (error) throw error;
+
+      if (data) {
+        let totalHrs = 0;
+        let validDurationCount = 0;
+        const now = new Date();
+        const currentMonth = now.getMonth(); // 0-indexed
+        const currentYear = now.getFullYear();
+
+        let monthlyCount = 0;
+
+        const mapped = data.map(item => {
+          const itemDate = item.tanggal ? new Date(item.tanggal) : null;
+          if (itemDate && itemDate.getMonth() === currentMonth && itemDate.getFullYear() === currentYear) {
+            monthlyCount++;
+          }
+
+          const hrs = parseDuration(item.waktu);
+          if (hrs > 0) {
+            totalHrs += hrs;
+            validDurationCount++;
+          }
+
+          return {
+            id: `TGS-${String(item.id).padStart(4, '0')}`,
+            area: item.area || item.keterangan || 'Umum',
+            officer: item.petugas?.nama || '—',
+            service: item.keterangan || 'Deep cleaning',
+            date: formatDateStr(item.tanggal),
+            duration: hrs > 0 ? `${hrs.toFixed(1)} jam` : '—',
+            status: 'Selesai'
+          };
+        });
+
+        setHistory(mapped);
+        
+        const avgHrs = validDurationCount > 0 ? (totalHrs / validDurationCount).toFixed(1) : '1.8';
+
+        setStats({
+          totalTasks: data.length,
+          monthlyCompletion: monthlyCount,
+          avgDuration: avgHrs
+        });
+      }
+    } catch (err) {
+      console.error('Failed to load work history:', err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadHistory();
+  }, []);
 
   const handleExport = () => {
     setToastVisible(true);
@@ -16,6 +106,10 @@ export default function RiwayatPekerjaan() {
       setToastVisible(false);
     }, 3000);
   };
+
+  if (loading) {
+    return <div className="p-6 text-muted text-sm">Memuat...</div>;
+  }
 
   return (
     <div className="space-y-6 animate-fade-up relative">
@@ -29,7 +123,7 @@ export default function RiwayatPekerjaan() {
               </svg>
             </div>
             <p className="text-[#8A857F] font-semibold text-xs uppercase tracking-wider">Total Pekerjaan</p>
-            <h4 className="text-[#4840B0] font-black text-2xl mt-2 mb-1">199 Tugas</h4>
+            <h4 className="text-[#4840B0] font-black text-2xl mt-2 mb-1">{stats.totalTasks} Tugas</h4>
           </div>
           <span className="text-[10px] text-[#8A857F] font-semibold mt-1">Sejak awal tahun operasional</span>
         </div>
@@ -42,7 +136,7 @@ export default function RiwayatPekerjaan() {
               </svg>
             </div>
             <p className="text-[#8A857F] font-semibold text-xs uppercase tracking-wider">Penyelesaian Bulan Ini</p>
-            <h4 className="text-[#187050] font-black text-2xl mt-2 mb-1">68 Tugas</h4>
+            <h4 className="text-[#187050] font-black text-2xl mt-2 mb-1">{stats.monthlyCompletion} Tugas</h4>
           </div>
           <span className="text-[10px] text-[#8A857F] font-semibold mt-1">100% tingkat kepuasan</span>
         </div>
@@ -55,7 +149,7 @@ export default function RiwayatPekerjaan() {
               </svg>
             </div>
             <p className="text-[#8A857F] font-semibold text-xs uppercase tracking-wider">Waktu Rata-Rata Kerja</p>
-            <h4 className="text-[#C05040] font-black text-2xl mt-2 mb-1">1.8 Jam</h4>
+            <h4 className="text-[#C05040] font-black text-2xl mt-2 mb-1">{stats.avgDuration} Jam</h4>
           </div>
           <span className="text-[10px] text-[#8A857F] font-semibold mt-1">Efisiensi standar operasional</span>
         </div>

@@ -1,28 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { supabase } from '../../lib/supabase';
 
 export default function AbsensiTeknisi() {
   // 1. State Utama Absensi (Tabel)
-  const [attendance, setAttendance] = useState([
-    { name: 'Doni Prasetya', role: 'Admin Pemeliharaan', checkIn: '07:55', checkOut: '-', status: 'Hadir' },
-    { name: 'Agus Maulana', role: 'Teknisi Listrik', checkIn: '08:00', checkOut: '-', status: 'Hadir' },
-    { name: 'Ridwan Saputra', role: 'Teknisi AC & Plumbing', checkIn: '07:50', checkOut: '-', status: 'Hadir' },
-    { name: 'Fajar Kurniawan', role: 'Teknisi Lift & Mekanikal', checkIn: '-', checkOut: '-', status: 'Izin' },
-    { name: 'Hendra Setiawan', role: 'Teknisi Umum', checkIn: '08:10', checkOut: '-', status: 'Hadir' },
-    { name: 'Riko Prabowo', role: 'Teknisi Umum', checkIn: '07:58', checkOut: '-', status: 'Hadir' }
-  ]);
-
-  // 2. Master Data Karyawan / Teknisi (Database Internal)
-  const masterTeknisi = [
-    { id: 'T-01', name: 'Doni Prasetya', role: 'Admin Pemeliharaan' },
-    { id: 'T-02', name: 'Agus Maulana', role: 'Teknisi Listrik' },
-    { id: 'T-03', name: 'Ridwan Saputra', role: 'Teknisi AC & Plumbing' },
-    { id: 'T-04', name: 'Fajar Kurniawan', role: 'Teknisi Lift & Mekanikal' },
-    { id: 'T-05', name: 'Hendra Setiawan', role: 'Teknisi Umum' },
-    { id: 'T-06', name: 'Riko Prabowo', role: 'Teknisi Umum' },
-    { id: 'T-07', name: 'Ahmad Fauzi', role: 'Staff Kasir & EBilling' },
-    { id: 'T-08', name: 'Sri Wahyuni', role: 'Staff Akunting & Pajak' },
-    { id: 'T-09', name: 'Rina Kurnia', role: 'Supervisor Keuangan' }
-  ];
+  const [attendance, setAttendance] = useState([]);
+  const [masterTeknisi, setMasterTeknisi] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   // 3. State UI Tambahan
   const [activeMonth, setActiveMonth] = useState('April 2026');
@@ -41,6 +24,64 @@ export default function AbsensiTeknisi() {
   const [formStatus, setFormStatus] = useState('Hadir');
 
   const searchDropdownRef = useRef(null);
+
+  // Fetch data on mount
+  useEffect(() => {
+    async function loadData() {
+      try {
+        setLoading(true);
+        // Fetch master technicians
+        const { data: techData, error: techError } = await supabase
+          .from('users')
+          .select('id, nama, role')
+          .ilike('role', '%teknisi%');
+
+        if (techError) throw techError;
+
+        if (techData && techData.length > 0) {
+          setMasterTeknisi(techData);
+        } else {
+          // Fallback to mock technicians
+          setMasterTeknisi([
+            { id: 'T-01', name: 'Doni Prasetya', role: 'Admin Pemeliharaan' },
+            { id: 'T-02', name: 'Agus Maulana', role: 'Teknisi Listrik' },
+            { id: 'T-03', name: 'Ridwan Saputra', role: 'Teknisi AC & Plumbing' },
+            { id: 'T-04', name: 'Fajar Kurniawan', role: 'Teknisi Lift & Mekanikal' },
+            { id: 'T-05', name: 'Hendra Setiawan', role: 'Teknisi Umum' },
+            { id: 'T-06', name: 'Riko Prabowo', role: 'Teknisi Umum' }
+          ]);
+        }
+
+        // Fetch attendance for today
+        const todayStr = new Date().toISOString().split('T')[0];
+        const { data: attData, error: attError } = await supabase
+          .from('absensi')
+          .select('*, karyawan:users(nama, role)')
+          .eq('tanggal', todayStr);
+
+        if (attError) throw attError;
+
+        if (attData && attData.length > 0) {
+          setAttendance(attData.map(row => ({
+            id: row.id,
+            name: row.karyawan?.nama || 'Anonim',
+            role: row.karyawan?.role || 'Teknisi',
+            checkIn: row.jam_masuk || '-',
+            checkOut: row.jam_keluar || '-',
+            status: row.status || 'Hadir',
+            karyawan_id: row.karyawan_id
+          })));
+        } else {
+          setAttendance([]);
+        }
+      } catch (err) {
+        console.error('Error loading attendance data:', err.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadData();
+  }, []);
 
   // Menutup dropdown pencarian jika mendeteksi klik di luar komponen
   useEffect(() => {
@@ -77,8 +118,8 @@ export default function AbsensiTeknisi() {
     setModalMode('edit');
     setSelectedTechIndex(index);
     
-    const matchedMaster = masterTeknisi.find(m => m.name === tech.name);
-    setSelectedTech(matchedMaster || { name: tech.name, role: tech.role });
+    const matchedMaster = masterTeknisi.find(m => m.id === tech.karyawan_id || m.name === tech.name);
+    setSelectedTech(matchedMaster || { id: tech.karyawan_id, name: tech.name, role: tech.role });
     setSearchQuery(tech.name);
     
     setFormCheckIn(tech.checkIn);
@@ -87,29 +128,74 @@ export default function AbsensiTeknisi() {
     setModalOpen(true);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!selectedTech) {
       alert('Silakan pilih nama teknisi terlebih dahulu!');
       return;
     }
 
-    const recordData = {
-      name: selectedTech.name,
-      role: selectedTech.role,
-      checkIn: formStatus === 'Izin' || formStatus === 'Sakit' || formStatus === 'Alpa' ? '-' : formCheckIn,
-      checkOut: formStatus === 'Izin' || formStatus === 'Sakit' || formStatus === 'Alpa' ? '-' : formCheckOut,
-      status: formStatus
-    };
+    try {
+      const jamMasuk = formStatus === 'Izin' || formStatus === 'Sakit' || formStatus === 'Alpa' ? '-' : formCheckIn;
+      const jamKeluar = formStatus === 'Izin' || formStatus === 'Sakit' || formStatus === 'Alpa' ? '-' : formCheckOut;
 
-    if (modalMode === 'create') {
-      setAttendance([...attendance, recordData]);
-      showToast('Absensi berhasil dicatat');
-    } else {
-      const updated = [...attendance];
-      updated[selectedTechIndex] = recordData;
-      setAttendance(updated);
-      showToast('Data berhasil diperbarui');
+      if (modalMode === 'create') {
+        const { data, error } = await supabase
+          .from('absensi')
+          .insert({
+            karyawan_id: selectedTech.id,
+            tanggal: new Date().toISOString().split('T')[0],
+            jam_masuk: jamMasuk,
+            jam_keluar: jamKeluar,
+            status: formStatus
+          })
+          .select('*, karyawan:users(nama, role)')
+          .single();
+
+        if (error) throw error;
+
+        if (data) {
+          const newRecord = {
+            id: data.id,
+            name: data.karyawan?.nama || selectedTech.name,
+            role: data.karyawan?.role || selectedTech.role,
+            checkIn: data.jam_masuk || '-',
+            checkOut: data.jam_keluar || '-',
+            status: data.status || 'Hadir',
+            karyawan_id: data.karyawan_id
+          };
+          setAttendance(prev => [...prev, newRecord]);
+        }
+        showToast('Absensi berhasil dicatat');
+      } else {
+        const targetRecord = attendance[selectedTechIndex];
+        const { error } = await supabase
+          .from('absensi')
+          .update({
+            jam_masuk: jamMasuk,
+            jam_keluar: jamKeluar,
+            status: formStatus
+          })
+          .eq('id', targetRecord.id);
+
+        if (error) throw error;
+
+        setAttendance(prev =>
+          prev.map((item, idx) =>
+            idx === selectedTechIndex
+              ? {
+                  ...item,
+                  checkIn: jamMasuk,
+                  checkOut: jamKeluar,
+                  status: formStatus
+                }
+              : item
+          )
+        );
+        showToast('Data berhasil diperbarui');
+      }
+    } catch (err) {
+      console.error('Error saving attendance:', err.message);
     }
     setModalOpen(false);
   };
@@ -125,6 +211,10 @@ export default function AbsensiTeknisi() {
   const hadirCount = attendance.filter(a => a.status === 'Hadir').length;
   const izinCount = attendance.filter(a => a.status === 'Izin' || a.status === 'Sakit').length;
   const hadirPercentage = totalTeknisi > 0 ? ((hadirCount / totalTeknisi) * 100).toFixed(1) : '0';
+
+  if (loading) {
+    return <div className="p-6 text-muted text-sm">Memuat...</div>;
+  }
 
   return (
     <div className="space-y-6 animate-fade-up relative">

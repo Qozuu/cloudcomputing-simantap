@@ -1,13 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, X } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 
 export default function DataAdminDivisi() {
-  const [admins, setAdmins] = useState([
-    { id: 1, name: 'Rina Kurnia', division: 'Keuangan', email: 'rina.k@simantap.id', phone: '0812-3456-7899', status: 'Aktif' },
-    { id: 2, name: 'Doni Praetya', division: 'Pemeliharaan', email: 'doni.p@simantap.id', phone: '0823-4567-8900', status: 'Aktif' },
-    { id: 3, name: 'Agus Wibowo', division: 'Keamanan', email: 'agus.w@simantap.id', phone: '0834-5678-9011', status: 'Aktif' },
-    { id: 4, name: 'Siti Rahayu', division: 'Kebersihan', email: 'siti.r@simantap.id', phone: '0845-6789-0122', status: 'Aktif' }
-  ]);
+  const [admins, setAdmins] = useState([]);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [successToast, setSuccessToast] = useState('');
@@ -17,6 +13,43 @@ export default function DataAdminDivisi() {
     emailSuffix: '',
     phone: ''
   });
+
+  const loadAdmins = async () => {
+    try {
+      const { data } = await supabase
+        .from('users')
+        .select('*')
+        .neq('role', 'penghuni')
+        .neq('role', 'super_admin')
+        .order('nama');
+
+      if (data) {
+        setAdmins(data.map(u => {
+          let divName = 'Management';
+          if (u.role === 'div_keuangan') divName = 'Keuangan';
+          else if (u.role === 'div_pemeliharaan') divName = 'Pemeliharaan';
+          else if (u.role === 'div_keamanan') divName = 'Keamanan';
+          else if (u.role === 'div_kebersihan') divName = 'Kebersihan';
+          else if (u.role === 'div_fasilitas') divName = 'Fasilitas';
+
+          return {
+            id: u.id,
+            name: u.nama,
+            division: divName,
+            email: u.email,
+            phone: u.no_hp || '—',
+            status: u.is_active !== false ? 'Aktif' : 'Non-Aktif'
+          };
+        }));
+      }
+    } catch (err) {
+      console.error('Error loading admins:', err);
+    }
+  };
+
+  useEffect(() => {
+    loadAdmins();
+  }, []);
 
   const getDivisionBadgeClass = (division) => {
     switch (division) {
@@ -29,23 +62,46 @@ export default function DataAdminDivisi() {
     }
   };
 
-  const handleAddAdmin = (e) => {
+  const handleAddAdmin = async (e) => {
     e.preventDefault();
     if (!newAdmin.name || !newAdmin.phone || !newAdmin.emailSuffix) return;
 
-    const added = {
-      id: Date.now(),
-      name: newAdmin.name,
-      division: newAdmin.division,
-      email: `${newAdmin.emailSuffix.toLowerCase()}@simantap.id`,
-      phone: newAdmin.phone,
-      status: 'Aktif'
-    };
+    const email = `${newAdmin.emailSuffix.toLowerCase()}@simantap.id`;
+    const defaultPassword = btoa(email);
+    const mappedRole = `div_${newAdmin.division.toLowerCase()}`;
 
-    setAdmins(prev => [...prev, added]);
-    setModalOpen(false);
-    showToast(`Admin "${newAdmin.name}" berhasil ditambahkan!`);
-    setNewAdmin({ name: '', division: 'Keuangan', emailSuffix: '', phone: '' });
+    try {
+      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+        email,
+        password: defaultPassword,
+        email_confirm: true
+      });
+
+      if (authError) throw authError;
+
+      const authUser = authData.user;
+
+      const { error: userError } = await supabase
+        .from('users')
+        .insert({
+          id: authUser.id,
+          nama: newAdmin.name,
+          email: email,
+          no_hp: newAdmin.phone,
+          role: mappedRole,
+          must_change_password: true
+        });
+
+      if (userError) throw userError;
+
+      setModalOpen(false);
+      showToast(`Admin "${newAdmin.name}" berhasil ditambahkan!`);
+      setNewAdmin({ name: '', division: 'Keuangan', emailSuffix: '', phone: '' });
+      loadAdmins();
+    } catch (err) {
+      console.error('Failed to add admin:', err.message);
+      alert(`Error: ${err.message}`);
+    }
   };
 
   const showToast = (msg) => {

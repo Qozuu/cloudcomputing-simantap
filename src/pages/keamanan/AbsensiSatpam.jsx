@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ChevronDown,
   Download,
@@ -9,6 +9,7 @@ import {
   Check,
   Search
 } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 
 export default function AbsensiSatpam() {
   const [successToast, setSuccessToast] = useState('');
@@ -21,7 +22,7 @@ export default function AbsensiSatpam() {
   const [selectedAbsensi, setSelectedAbsensi] = useState(null);
 
   // Form states
-  const [formPetugas, setFormPetugas] = useState('Eko Susanto');
+  const [formPetugas, setFormPetugas] = useState('');
   const [formShift, setFormShift] = useState('Pagi 06-14');
   const [formMasuk, setFormMasuk] = useState('06:00');
   const [formKeluar, setFormKeluar] = useState('14:00');
@@ -35,28 +36,58 @@ export default function AbsensiSatpam() {
   // State pencarian nama petugas di dalam dropdown modal
   const [searchPetugasInput, setSearchPetugasInput] = useState('');
 
-  const petugasList = [
-    'Eko Susanto',
-    'Tanto Wirawan',
-    'Hari Purnomo',
-    'Dimas Saputra',
-    'Wahyu Nugroho',
-    'Roni Setiawan',
-    'Agus Setiadi',
-    'Prasetyo Utomo'
-  ];
+  const [petugasList, setPetugasList] = useState([]);
+  const [petugasMap, setPetugasMap] = useState([]);
+  const [attendance, setAttendance] = useState([]);
 
   const shiftList = ['Pagi 06-14', 'Siang 14-22', 'Malam 22-06'];
   const statusList = ['Hadir', 'Izin'];
 
-  const [attendance, setAttendance] = useState([
-    { id: 1, nama: 'Eko Susanto', shift: 'Pagi 06-14', masuk: '05:58', keluar: '14:05', status: 'Hadir' },
-    { id: 2, nama: 'Tanto Wirawan', shift: 'Pagi 06-14', masuk: '06:03', keluar: '14:00', status: 'Hadir' },
-    { id: 3, nama: 'Hari Purnomo', shift: 'Siang 14-22', masuk: '13:55', keluar: '22:10', status: 'Hadir' },
-    { id: 4, nama: 'Dimas Saputra', shift: 'Siang 14-22', masuk: '14:10', keluar: '-', status: 'Hadir' },
-    { id: 5, nama: 'Wahyu Nugroho', shift: 'Malam 22-06', masuk: '-', keluar: '-', status: 'Izin' },
-    { id: 6, nama: 'Roni Setiawan', shift: 'Malam 22-06', masuk: '21:50', keluar: '-', status: 'Hadir' }
-  ]);
+  const loadData = async () => {
+    try {
+      const todayStr = new Date().toISOString().split('T')[0];
+
+      // 1. Fetch today's attendance
+      const { data: absData } = await supabase
+        .from('absensi')
+        .select('*, karyawan:users(nama,role)')
+        .eq('tanggal', todayStr);
+
+      if (absData) {
+        setAttendance(absData.map(item => ({
+          id: item.id,
+          nama: item.karyawan?.nama || '—',
+          shift: item.shift || 'Pagi 06-14',
+          masuk: item.jam_masuk || '-',
+          keluar: item.jam_keluar || '-',
+          status: item.status === 'hadir' ? 'Hadir' : 'Izin'
+        })));
+      }
+
+      // 2. Fetch security users / karyawan
+      const { data: userData } = await supabase
+        .from('users')
+        .select('id, nama, role')
+        .neq('role', 'penghuni')
+        .neq('role', 'super_admin');
+
+      if (userData) {
+        const securityStaff = userData.filter(u => u.role === 'div_keamanan');
+        const staffToUse = securityStaff.length > 0 ? securityStaff : userData;
+        setPetugasList(staffToUse.map(u => u.nama));
+        setPetugasMap(staffToUse);
+        if (staffToUse.length > 0 && !formPetugas) {
+          setFormPetugas(staffToUse[0].nama);
+        }
+      }
+    } catch (err) {
+      console.error('Error loading attendance data:', err);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
 
   const [rekap] = useState([
     { nama: 'Eko Susanto', persen: 96 },
@@ -89,46 +120,71 @@ export default function AbsensiSatpam() {
     setOpenDropdownStatus(false);
   };
 
-  const handleEditSave = (e) => {
+  const handleEditSave = async (e) => {
     e.preventDefault();
-    setAttendance(prev =>
-      prev.map(item =>
-        item.id === selectedAbsensi.id
-          ? { ...item, shift: formShift, masuk: formMasuk, keluar: formKeluar, status: formStatus }
-          : item
-      )
-    );
-    setEditModalOpen(false);
-    setSuccessToast('Data diedit');
-    setTimeout(() => setSuccessToast(''), 3000);
+    if (!selectedAbsensi) return;
+
+    try {
+      const { error } = await supabase
+        .from('absensi')
+        .update({
+          shift: formShift,
+          jam_masuk: formStatus === 'Hadir' ? formMasuk : null,
+          jam_keluar: formStatus === 'Hadir' ? formKeluar : null,
+          status: formStatus.toLowerCase()
+        })
+        .eq('id', selectedAbsensi.id);
+
+      if (error) throw error;
+
+      setEditModalOpen(false);
+      setSuccessToast('Data diedit');
+      setTimeout(() => setSuccessToast(''), 3000);
+      loadData();
+    } catch (err) {
+      console.error('Failed to update attendance:', err.message);
+    }
   };
 
-  const handleAddAbsensi = (e) => {
+  const handleAddAbsensi = async (e) => {
     e.preventDefault();
-    const newAbs = {
-      id: Date.now(),
-      nama: formPetugas,
-      shift: formShift,
-      masuk: formStatus === 'Hadir' ? formMasuk : '-',
-      keluar: formStatus === 'Hadir' ? formKeluar : '-',
-      status: formStatus
-    };
+    const matched = petugasMap.find(p => p.nama === formPetugas);
+    if (!matched) return;
 
-    setAttendance(prev => [...prev, newAbs]);
-    setAddModalOpen(false);
-    setSearchPetugasInput('');
-    setSuccessToast('Absensi petugas berhasil dicatat.');
-    setTimeout(() => setSuccessToast(''), 3000);
+    try {
+      const todayStr = new Date().toISOString().split('T')[0];
+      const { error } = await supabase
+        .from('absensi')
+        .insert({
+          karyawan_id: matched.id,
+          tanggal: todayStr,
+          shift: formShift,
+          jam_masuk: formStatus === 'Hadir' ? formMasuk : null,
+          jam_keluar: formStatus === 'Hadir' ? formKeluar : null,
+          status: formStatus.toLowerCase()
+        });
+
+      if (error) throw error;
+
+      setAddModalOpen(false);
+      setSearchPetugasInput('');
+      setSuccessToast('Absensi petugas berhasil dicatat.');
+      setTimeout(() => setSuccessToast(''), 3000);
+      loadData();
+    } catch (err) {
+      console.error('Failed to add attendance:', err.message);
+    }
   };
 
   const filteredAttendance = attendance.filter(item =>
     item.nama.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const totalPetugas = 8;
+  const totalPetugas = petugasList.length || 8;
   const hadirHariIni = attendance.filter(a => a.status === 'Hadir').length;
   const izinHariIni = attendance.filter(a => a.status === 'Izin' || a.status === 'Sakit').length;
   const hadirPercentage = `${Math.round((hadirHariIni / (attendance.length || 1)) * 100)}%`;
+
 
   return (
     <div className="space-y-6 animate-fade-up relative">

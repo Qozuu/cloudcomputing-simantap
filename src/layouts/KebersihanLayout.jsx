@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import LogoutModal from '../components/shared/LogoutModal';
 import NotificationBell from '../components/shared/NotificationBell';
@@ -8,6 +9,49 @@ import { Menu, X } from 'lucide-react';
 import LogoSiManTap from '../assets/logo.png';
 
 export default function KebersihanLayout() {
+  const [userProfile, setUserProfile] = useState(null);
+
+  useEffect(() => {
+    async function fetchProfile() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data } = await supabase
+        .from('users')
+        .select('nama, role, no_hp')
+        .eq('id', user.id)
+        .single();
+      setUserProfile(data);
+    }
+    fetchProfile();
+  }, []);
+
+  const getNama = () => userProfile?.nama || 'Pengguna';
+  
+  const getInitials = () => {
+    const nama = userProfile?.nama || '';
+    return nama.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || '??';
+  };
+
+  const getRoleLabel = () => {
+    const map = {
+      super_admin:         'General Manager',
+      superadmin:          'General Manager',
+      gm:                  'General Manager',
+      admin_keuangan:      'Admin Keuangan',
+      div_keuangan:        'Admin Keuangan',
+      admin_pemeliharaan: 'Admin Pemeliharaan',
+      div_pemeliharaan:    'Admin Pemeliharaan',
+      admin_kebersihan:    'Admin Kebersihan',
+      div_kebersihan:      'Admin Kebersihan',
+      admin_keamanan:      'Admin Keamanan',
+      div_keamanan:        'Admin Keamanan',
+      admin_fasilitas:     'Admin Fasilitas',
+      div_fasilitas:       'Admin Fasilitas',
+      penghuni:            'Penghuni',
+    };
+    return map[userProfile?.role] || userProfile?.role || 'Staff';
+  };
+
   const location = useLocation();
   const navigate = useNavigate();
   const currentPath = location.pathname;
@@ -130,18 +174,20 @@ export default function KebersihanLayout() {
             <div className="p-4 border-t border-gray-100 space-y-3">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center font-bold text-sm shrink-0">
-                  SR
+                  {getInitials()}
                 </div>
                 <div className="flex flex-col min-w-0">
-                  <span className="text-sm font-bold text-[#1E1E1E] truncate">Siti Rahayu</span>
-                  <span className="text-xs text-gray-400 truncate">Admin Kebersihan</span>
+                  <span className="text-sm font-bold text-[#1E1E1E] truncate">{getNama()}</span>
+                  <span className="text-xs text-gray-400 truncate">{getRoleLabel()}</span>
                 </div>
               </div>
               <button
                 onClick={() => { setIsMobileOpen(false); setShowLogout(true); }}
                 className="w-full flex items-center justify-center gap-2 py-2.5 border border-gray-200 rounded-xl text-xs font-semibold text-red-500 hover:bg-red-50 transition-all"
               >
-                <LogOut size={14} />
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
                 <span>Keluar dari Aplikasi</span>
               </button>
             </div>
@@ -206,10 +252,10 @@ export default function KebersihanLayout() {
           {/* Footer Profile Area */}
           <div className="mt-auto pt-4 border-t border-soft flex flex-col gap-3 p-4 md:p-0">
             <div className="sidebar-profile-footer">
-              <div className="sidebar-user-avatar">SR</div>
+              <div className="sidebar-user-avatar">{getInitials()}</div>
               <div className="sidebar-profile-info">
-                <span className="sidebar-profile-name">Siti Rahayu</span>
-                <span className="sidebar-profile-role">Admin Kebersihan</span>
+                <span className="sidebar-profile-name">{getNama()}</span>
+                <span className="sidebar-profile-role">{getRoleLabel()}</span>
               </div>
             </div>
             <div
@@ -241,7 +287,7 @@ export default function KebersihanLayout() {
             </button>
             
             <div className="flex flex-col">
-              <span className="topbar-role">Admin Kebersihan</span>
+              <span className="topbar-role">{getRoleLabel()}</span>
               <h2 className="topbar-title">{getPageTitle()}</h2>
             </div>
           </div>
@@ -270,11 +316,12 @@ export default function KebersihanLayout() {
           setShowLogout(false);
           localStorage.removeItem('userRole');
           sessionStorage.clear();
-          navigate('/login');
+          // 🛠️ SEKARANG SUDAH DIALIKKAN KE HALAMAN PILIH ROLE
+          navigate('/pilih-role');
         }}
         onCancel={() => setShowLogout(false)}
-        userName="Siti Rahayu"
-        roleName="Admin Kebersihan"
+        userName={getNama()}
+        roleName={getRoleLabel()}
       />
     </div>
   );

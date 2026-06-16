@@ -1,16 +1,10 @@
-import React, { useState } from 'react';
-import { Plus, X, FileDown, AlertTriangle } from 'lucide-react'; // Ditambahkan AlertTriangle untuk ikon warning
+import React, { useState, useEffect } from 'react';
+import { Plus, X, FileDown, AlertTriangle } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 
 export default function LaporanPengeluaran() {
-  const [expenses, setExpenses] = useState([
-    { id: 1, date: '01 Apr', category: 'SDM/Gaji', desc: 'Gaji karyawan bulanan', division: 'Semua Divisi', amount: 68000000, status: 'Selesai' },
-    { id: 2, date: '05 Apr', category: 'Operasional', desc: 'Listrik & Air Gedung', division: 'Keamanan', amount: 18500000, status: 'Selesai' },
-    { id: 3, date: '08 Apr', category: 'Perbaikan', desc: 'Ganti pompa air Tower B', division: 'Pemeliharaan', amount: 12000000, status: 'Selesai' },
-    { id: 4, date: '10 Apr', category: 'Operasional', desc: 'Pengadaan alat kebersihan', division: 'Kebersihan', amount: 3200000, status: 'Selesai' },
-    { id: 5, date: '12 Apr', category: 'Perbaikan', desc: 'Perbaikan lift Tower A lantai 10', division: 'Pemeliharaan', amount: 8500000, status: 'Proses' },
-    { id: 6, date: '15 Apr', category: 'Operasional', desc: 'Internet & keamanan CCTV', division: 'Keamanan', amount: 5600000, status: 'Selesai' },
-    { id: 7, date: '18 Apr', category: 'Perbaikan', desc: 'Cat ulang koridor Tower C', division: 'Pemeliharaan', amount: 4200000, status: 'Proses' }
-  ]);
+  const [expenses, setExpenses] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const [period, setPeriod] = useState('April 2026');
   const [modalOpen, setModalOpen] = useState(false);
@@ -28,6 +22,37 @@ export default function LaporanPengeluaran() {
     amount: '',
     status: 'Selesai'
   });
+
+  useEffect(() => {
+    async function loadExpenses() {
+      try {
+        setLoading(true);
+        const { data, error } = await supabase
+          .from('pengeluaran')
+          .select('*, created_by:users(nama)')
+          .order('tanggal', { ascending: false });
+
+        if (error) throw error;
+
+        if (data) {
+          setExpenses(data.map(item => ({
+            id: item.id,
+            date: item.tanggal ? new Date(item.tanggal).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }) : new Date(item.created_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }),
+            category: item.kategori || 'Operasional',
+            desc: item.keterangan || '',
+            division: item.divisi || 'Umum',
+            amount: item.nominal || 0,
+            status: item.status ? (item.status.toLowerCase() === 'proses' ? 'Proses' : 'Selesai') : 'Selesai'
+          })));
+        }
+      } catch (err) {
+        console.error('Failed to load expenses:', err.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadExpenses();
+  }, []);
 
   const getCategoryBadgeClass = (category) => {
     switch (category) {
@@ -60,27 +85,55 @@ export default function LaporanPengeluaran() {
     setNewExpense(prev => ({ ...prev, amount: sanitized }));
   };
 
-  const handleAddExpense = (e) => {
+  const handleAddExpense = async (e) => {
     e.preventDefault();
     if (!newExpense.desc || !newExpense.amount) return;
 
-    const today = new Date();
-    const formattedDate = today.toLocaleDateString('id-ID', { day: '2-digit', month: 'short' });
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
 
-    const added = {
-      id: Date.now(),
-      date: formattedDate,
-      category: newExpense.category,
-      desc: newExpense.desc,
-      division: newExpense.division,
-      amount: parseInt(newExpense.amount),
-      status: newExpense.status
-    };
+      const today = new Date();
+      const tanggal = today.toISOString().split('T')[0];
+      const nominal = parseInt(newExpense.amount);
+      const { category: kategori, desc: keterangan, division: divisi } = newExpense;
 
-    setExpenses(prev => [added, ...prev]);
-    setModalOpen(false);
-    showToast(`Pengeluaran "${newExpense.desc}" berhasil dicatat!`);
-    setNewExpense({ category: 'Operasional', desc: '', division: 'Umum', amount: '', status: 'Selesai' });
+      const { data, error } = await supabase
+        .from('pengeluaran')
+        .insert({
+          tanggal,
+          kategori,
+          keterangan,
+          divisi,
+          nominal,
+          status: 'proses',
+          created_by: user.id
+        })
+        .select('*, created_by:users(nama)')
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        const added = {
+          id: data.id,
+          date: data.tanggal ? new Date(data.tanggal).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }) : new Date(data.created_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }),
+          category: data.kategori || kategori,
+          desc: data.keterangan || keterangan,
+          division: data.divisi || divisi,
+          amount: data.nominal || nominal,
+          status: 'Proses'
+        };
+        setExpenses(prev => [added, ...prev]);
+        showToast(`Pengeluaran "${keterangan}" berhasil dicatat!`);
+      }
+    } catch (err) {
+      console.error('Failed to insert in DB:', err.message);
+      showToast(`Gagal mencatat pengeluaran: ${err.message}`);
+    } finally {
+      setModalOpen(false);
+      setNewExpense({ category: 'Operasional', desc: '', division: 'Umum', amount: '', status: 'Selesai' });
+    }
   };
 
   // 2. LOGIKA BARU: Klik badge tidak langsung mengubah data, melainkan membuka modal pengaman dulu
@@ -91,24 +144,45 @@ export default function LaporanPengeluaran() {
   };
 
   // 3. LOGIKA BARU: Eksekusi perubahan status HANYA jika disetujui di dalam modal
-  const handleConfirmStatusChange = () => {
+  const handleConfirmStatusChange = async () => {
     if (!selectedExpense) return;
 
-    setExpenses(prevExpenses =>
-      prevExpenses.map(item =>
-        item.id === selectedExpense.id ? { ...item, status: 'Selesai' } : item
-      )
-    );
-    
-    setConfirmModalOpen(false);
-    showToast(`Status pengeluaran "${selectedExpense.desc}" berhasil diubah menjadi SELESAI!`);
-    setSelectedExpense(null);
+    try {
+      const { error } = await supabase
+        .from('pengeluaran')
+        .update({ status: 'selesai' })
+        .eq('id', selectedExpense.id);
+
+      if (error) throw error;
+
+      setExpenses(prevExpenses =>
+        prevExpenses.map(item =>
+          item.id === selectedExpense.id ? { ...item, status: 'Selesai' } : item
+        )
+      );
+      showToast(`Status pengeluaran "${selectedExpense.desc}" berhasil diubah menjadi SELESAI!`);
+    } catch (err) {
+      console.error('Failed to update status in DB:', err.message);
+      showToast(`Gagal memperbarui status: ${err.message}`);
+    } finally {
+      setConfirmModalOpen(false);
+      setSelectedExpense(null);
+    }
   };
 
   const showToast = (msg) => {
     setSuccessToast(msg);
     setTimeout(() => setSuccessToast(''), 3000);
   };
+
+  const totalPengeluaran = expenses.reduce((sum, item) => sum + item.amount, 0);
+  const sdmTotal = expenses.filter(item => item.category === 'SDM/Gaji').reduce((sum, item) => sum + item.amount, 0);
+  const operasionalTotal = expenses.filter(item => item.category === 'Operasional').reduce((sum, item) => sum + item.amount, 0);
+  const perbaikanTotal = expenses.filter(item => item.category === 'Perbaikan').reduce((sum, item) => sum + item.amount, 0);
+
+  if (loading) {
+    return <div className="p-6 text-muted text-sm">Memuat...</div>;
+  }
 
   return (
     <div className="space-y-6 animate-fade-up relative">
@@ -142,30 +216,30 @@ export default function LaporanPengeluaran() {
         <div className="card-pink flex flex-col justify-between hover:shadow-soft transition">
           <div>
             <span className="text-[#8A857F] font-semibold text-xs uppercase tracking-wider block">Total Pengeluaran</span>
-            <h4 className="text-[#1E1E1E] font-black text-xl mt-1.5">Rp 142 Jt</h4>
+            <h4 className="text-[#1E1E1E] font-black text-xl mt-1.5">{formatRupiah(totalPengeluaran)}</h4>
           </div>
           <span className="text-[10px] text-[#8A857F] font-semibold mt-1">April 2026</span>
         </div>
         <div className="card-yellow flex flex-col justify-between hover:shadow-soft transition">
           <div>
             <span className="text-[#8A857F] font-semibold text-xs uppercase tracking-wider block">SDM & Gaji</span>
-            <h4 className="text-[#1E1E1E] font-black text-xl mt-1.5">Rp 68 Jt</h4>
+            <h4 className="text-[#1E1E1E] font-black text-xl mt-1.5">{formatRupiah(sdmTotal)}</h4>
           </div>
-          <span className="text-[10px] text-[#A05820] font-black mt-1">47.9% dari total</span>
+          <span className="text-[10px] text-[#A05820] font-black mt-1">{totalPengeluaran > 0 ? ((sdmTotal / totalPengeluaran) * 100).toFixed(1) : 0}% dari total</span>
         </div>
         <div className="card-lavender flex flex-col justify-between hover:shadow-soft transition">
           <div>
             <span className="text-[#8A857F] font-semibold text-xs uppercase tracking-wider block">Operasional</span>
-            <h4 className="text-[#1E1E1E] font-black text-xl mt-1.5">Rp 42 Jt</h4>
+            <h4 className="text-[#1E1E1E] font-black text-xl mt-1.5">{formatRupiah(operasionalTotal)}</h4>
           </div>
-          <span className="text-[10px] text-[#4840B0] font-black mt-1">29.6% dari total</span>
+          <span className="text-[10px] text-[#4840B0] font-black mt-1">{totalPengeluaran > 0 ? ((operasionalTotal / totalPengeluaran) * 100).toFixed(1) : 0}% dari total</span>
         </div>
         <div className="card-mint flex flex-col justify-between hover:shadow-soft transition">
           <div>
             <span className="text-[#8A857F] font-semibold text-xs uppercase tracking-wider block">Perbaikan Fasilitas</span>
-            <h4 className="text-[#1E1E1E] font-black text-xl mt-1.5">Rp 32 Jt</h4>
+            <h4 className="text-[#1E1E1E] font-black text-xl mt-1.5">{formatRupiah(perbaikanTotal)}</h4>
           </div>
-          <span className="text-[10px] text-[#187050] font-black mt-1">22.5% dari total</span>
+          <span className="text-[10px] text-[#187050] font-black mt-1">{totalPengeluaran > 0 ? ((perbaikanTotal / totalPengeluaran) * 100).toFixed(1) : 0}% dari total</span>
         </div>
       </div>
 

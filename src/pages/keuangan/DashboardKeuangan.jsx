@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { supabase } from '../../lib/supabase';
 import {
   BarChart,
   Bar,
@@ -13,52 +14,224 @@ import {
 export default function DashboardKeuangan() {
   const navigate = useNavigate();
 
-  const stats = [
+  const [stats, setStats] = useState([
     {
       title: 'Tagihan Bulan Ini',
-      value: 'Rp 339 Jt',
-      subtitle: '440 unit · Rp 770rb/unit avg',
+      value: 'Rp 0 Jt',
+      subtitle: '0 unit · Rp 0/unit avg',
       borderColor: 'border-l-[4px] border-l-[#F9C3BA]'
     },
     {
       title: 'Sudah Terbayar',
-      value: 'Rp 248 Jt',
-      badge: '+78.1% realisasi',
+      value: 'Rp 0 Jt',
+      badge: '+0% realisasi',
       badgeBg: 'badge-base badge-mint',
       borderColor: 'border-l-[4px] border-l-[#FCD6A5]'
     },
     {
       title: 'Menunggu',
-      value: 'Rp 44.6 Jt',
-      subtitle: '58 unit belum bayar',
+      value: 'Rp 0 Jt',
+      subtitle: '0 unit belum bayar',
       borderColor: 'border-l-[4px] border-l-[#C6C1F7]'
     },
     {
       title: 'Tunggakan',
-      value: 'Rp 46.2 Jt',
-      subtitle: '60 unit terlambat',
+      value: 'Rp 0 Jt',
+      subtitle: '0 unit terlambat',
       borderColor: 'border-l-[4px] border-l-[#B5EAD7]'
     }
-  ];
+  ]);
 
-  const chartData = [
-    { name: 'Okt', Pendapatan: 270 },
-    { name: 'Nov', Pendapatan: 280 },
-    { name: 'Des', Pendapatan: 260 },
-    { name: 'Jan', Pendapatan: 294 },
-    { name: 'Feb', Pendapatan: 302 },
-    { name: 'Mar', Pendapatan: 293 }
-  ];
+  const [chartData, setChartData] = useState([]);
+  const [expenses, setExpenses] = useState([
+    { label: 'SDM / Gaji', pct: 0, amount: 'Rp 0 Jt', color: 'progress-pink' },
+    { label: 'Operasional', pct: 0, amount: 'Rp 0 Jt', color: 'progress-lavender' },
+    { label: 'Perbaikan', pct: 0, amount: 'Rp 0 Jt', color: 'progress-mint' }
+  ]);
 
-  const expenses = [
-    { label: 'SDM / Gaji', pct: 48, amount: 'Rp 68 Jt', color: 'progress-pink' },
-    { label: 'Operasional', pct: 30, amount: 'Rp 42 Jt', color: 'progress-lavender' },
-    { label: 'Perbaikan', pct: 22, amount: 'Rp 32 Jt', color: 'progress-mint' }
-  ];
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadDashboardData() {
+      try {
+        setLoading(true);
+        // Fetch all bills
+        const { data: bills, error: billsError } = await supabase
+          .from('tagihan')
+          .select('*');
+
+        if (billsError) throw billsError;
+
+        if (bills) {
+          // Process stats
+          const totalBills = bills.length;
+          
+          const sumTotal = (arr) => arr.reduce((acc, b) => acc + (b.total || b.jumlah || 0), 0);
+          
+          const totalAmount = sumTotal(bills);
+          const avgAmount = totalBills > 0 ? Math.round(totalAmount / totalBills) : 0;
+          
+          const paidBills = bills.filter(b => b.status?.toLowerCase() === 'sudah_bayar' || b.status?.toLowerCase() === 'lunas');
+          const paidAmount = sumTotal(paidBills);
+          const paidPct = totalAmount > 0 ? ((paidAmount / totalAmount) * 100).toFixed(1) : '0';
+
+          const pendingBills = bills.filter(b => b.status?.toLowerCase() === 'menunggu');
+          const pendingAmount = sumTotal(pendingBills);
+          const pendingCount = pendingBills.length;
+
+          const overdueBills = bills.filter(b => b.status?.toLowerCase() === 'terlambat' || b.status?.toLowerCase() === 'tunggakan');
+          const overdueAmount = sumTotal(overdueBills);
+          const overdueCount = overdueBills.length;
+
+          const formatJuta = (val) => {
+            if (val >= 1000000) return `Rp ${(val / 1000000).toFixed(1)} Jt`;
+            return `Rp ${val.toLocaleString('id-ID')}`;
+          };
+
+          const formatRibu = (val) => {
+            if (val >= 1000) return `${Math.round(val / 1000)}rb`;
+            return val.toLocaleString('id-ID');
+          };
+
+          setStats([
+            {
+              title: 'Tagihan Bulan Ini',
+              value: formatJuta(totalAmount),
+              subtitle: `${totalBills} unit · Rp ${formatRibu(avgAmount)}/unit avg`,
+              borderColor: 'border-l-[4px] border-l-[#F9C3BA]'
+            },
+            {
+              title: 'Sudah Terbayar',
+              value: formatJuta(paidAmount),
+              badge: `+${paidPct}% realisasi`,
+              badgeBg: 'badge-base badge-mint',
+              borderColor: 'border-l-[4px] border-l-[#FCD6A5]'
+            },
+            {
+              title: 'Menunggu',
+              value: formatJuta(pendingAmount),
+              subtitle: `${pendingCount} unit belum bayar`,
+              borderColor: 'border-l-[4px] border-l-[#C6C1F7]'
+            },
+            {
+              title: 'Tunggakan',
+              value: formatJuta(overdueAmount),
+              subtitle: `${overdueCount} unit terlambat`,
+              borderColor: 'border-l-[4px] border-l-[#B5EAD7]'
+            }
+          ]);
+
+          // Process chartData (6 months income trend)
+          const monthsMap = {
+            '01': 'Jan', '02': 'Feb', '03': 'Mar', '04': 'Apr', '05': 'Mei', '06': 'Jun',
+            '07': 'Jul', '08': 'Ags', '09': 'Sep', '10': 'Okt', '11': 'Nov', '12': 'Des'
+          };
+          
+          const last6Months = [];
+          for (let i = 5; i >= 0; i--) {
+            const d = new Date();
+            d.setMonth(d.getMonth() - i);
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const y = d.getFullYear();
+            last6Months.push({
+              key: `${y}-${m}`,
+              name: monthsMap[m],
+              fullName: d.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }),
+              amount: 0
+            });
+          }
+
+          paidBills.forEach(b => {
+            let targetKey = '';
+            if (b.periode && b.periode.includes('-')) {
+              targetKey = b.periode.substring(0, 7);
+            } else if (b.periode) {
+              const parts = b.periode.split(' ');
+              if (parts.length === 2) {
+                const monthNames = {
+                  'januari': '01', 'februari': '02', 'maret': '03', 'april': '04', 'mei': '05', 'juni': '06',
+                  'juli': '07', 'agustus': '08', 'september': '09', 'oktober': '10', 'november': '11', 'desember': '12',
+                  'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04', 'may': '05', 'jun': '06', 'jul': '07', 'aug': '08',
+                  'sep': '09', 'oct': '10', 'nov': '11', 'dec': '12'
+                };
+                const mKey = monthNames[parts[0].toLowerCase()];
+                if (mKey) {
+                  targetKey = `${parts[1]}-${mKey}`;
+                }
+              }
+            }
+
+            const match = last6Months.find(item => item.key === targetKey || b.periode?.toLowerCase().includes(item.fullName.toLowerCase()) || b.periode?.toLowerCase().includes(item.name.toLowerCase()));
+            if (match) {
+              match.amount += (b.total || b.jumlah || 0);
+            }
+          });
+
+          setChartData(last6Months.map(m => ({
+            name: m.name,
+            Pendapatan: Math.round(m.amount / 1000000)
+          })));
+        }
+
+        // Fetch expenses
+        try {
+          const { data: expData, error: expError } = await supabase
+            .from('pengeluaran')
+            .select('*');
+
+          if (!expError && expData && expData.length > 0) {
+            const totalExp = expData.reduce((acc, row) => acc + (row.nominal || row.amount || 0), 0);
+            
+            const getCatTotal = (cat) => expData.filter(row => row.kategori?.toLowerCase().includes(cat.toLowerCase())).reduce((acc, row) => acc + (row.nominal || row.amount || 0), 0);
+            
+            const sdmTotal = getCatTotal('sdm') || getCatTotal('gaji');
+            const operasionalTotal = getCatTotal('operasional');
+            const perbaikanTotal = getCatTotal('perbaikan');
+            
+            const sdmPct = totalExp > 0 ? Math.round((sdmTotal / totalExp) * 100) : 0;
+            const operasionalPct = totalExp > 0 ? Math.round((operasionalTotal / totalExp) * 100) : 0;
+            const perbaikanPct = totalExp > 0 ? Math.round((perbaikanTotal / totalExp) * 100) : 0;
+
+            const formatJutaExp = (val) => {
+              if (val >= 1000000) return `Rp ${(val / 1000000).toFixed(0)} Jt`;
+              return `Rp ${val.toLocaleString('id-ID')}`;
+            };
+
+            setExpenses([
+              { label: 'SDM / Gaji', pct: sdmPct, amount: formatJutaExp(sdmTotal), color: 'progress-pink' },
+              { label: 'Operasional', pct: operasionalPct, amount: formatJutaExp(operasionalTotal), color: 'progress-lavender' },
+              { label: 'Perbaikan', pct: perbaikanPct, amount: formatJutaExp(perbaikanTotal), color: 'progress-mint' }
+            ]);
+          } else {
+            setExpenses([
+              { label: 'SDM / Gaji', pct: 48, amount: 'Rp 68 Jt', color: 'progress-pink' },
+              { label: 'Operasional', pct: 30, amount: 'Rp 42 Jt', color: 'progress-lavender' },
+              { label: 'Perbaikan', pct: 22, amount: 'Rp 32 Jt', color: 'progress-mint' }
+            ]);
+          }
+        } catch (e) {
+          setExpenses([
+            { label: 'SDM / Gaji', pct: 48, amount: 'Rp 68 Jt', color: 'progress-pink' },
+            { label: 'Operasional', pct: 30, amount: 'Rp 42 Jt', color: 'progress-lavender' },
+            { label: 'Perbaikan', pct: 22, amount: 'Rp 32 Jt', color: 'progress-mint' }
+          ]);
+        }
+      } catch (err) {
+        console.error('Error loading dashboard keuangan:', err.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadDashboardData();
+  }, []);
 
   const formatRupiahYAxis = (value) => {
     return `Rp ${value} Jt`;
   };
+
+  if (loading) {
+    return <div className="p-6 text-muted text-sm">Memuat...</div>;
+  }
 
   return (
     <div className="space-y-6 animate-fade-up">

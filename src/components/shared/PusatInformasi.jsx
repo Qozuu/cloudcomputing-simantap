@@ -1,60 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../../lib/supabase';
 
 export default function PusatInformasi({ userRole = 'Kebersihan' }) {
   const isManagement = userRole === 'GM' || userRole === 'SuperAdmin';
 
-  const [posts, setPosts] = useState([
-    {
-      id: 1,
-      title: 'Pemadaman Listrik Tower B',
-      subtitle: 'Listrik Tower B akan dipadamkan 22 Apr pukul 09.00-12.00 untuk perbaikan panel listrik utama.',
-      category: 'Darurat',
-      target: 'Semua',
-      date: '2026-04-21',
-      dateFormatted: '21 Apr 2026',
-      status: 'Tayang'
-    },
-    {
-      id: 2,
-      title: 'Kolam Renang Dibuka Kembali',
-      subtitle: 'Kolam Renang Tower A kembali beroperasi normal mulai 20 April 2026.',
-      category: 'Info',
-      target: 'Semua',
-      date: '2026-04-20',
-      dateFormatted: '20 Apr 2026',
-      status: 'Tayang'
-    },
-    {
-      id: 3,
-      title: 'Promo Sewa Ruang Serbaguna',
-      subtitle: 'Diskon 30% untuk sewa Ruang Serbaguna di bulan April 2026.',
-      category: 'Promo',
-      target: 'Semua',
-      date: '2026-04-15',
-      dateFormatted: '15 Apr 2026',
-      status: 'Tayang'
-    },
-    {
-      id: 4,
-      title: 'Peraturan Parkir Baru',
-      subtitle: 'Mulai 1 Mei 2026 tarif parkir revisi Rp 3.000/jam dan motor Rp 15.000/hari.',
-      category: 'Peraturan',
-      target: 'Semua',
-      date: '2026-04-10',
-      dateFormatted: '10 Apr 2026',
-      status: 'Tayang'
-    },
-    {
-      id: 5,
-      title: 'Jadwal Pemeliharaan Lift',
-      subtitle: 'Lift Tower A lantai 1-10 telah selesai diperiksa dan berfungsi normal.',
-      category: 'Pemeliharaan',
-      target: 'Tower A',
-      date: '2026-04-05',
-      dateFormatted: '05 Apr 2026',
-      status: 'Selesai'
-    }
-  ]);
+  const [posts, setPosts] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const [filterCategory, setFilterCategory] = useState('Semua Kategori');
   const [filterOrder, setFilterOrder] = useState('Terbaru Dulu');
@@ -73,6 +24,45 @@ export default function PusatInformasi({ userRole = 'Kebersihan' }) {
   });
 
   const [successToast, setSuccessToast] = useState('');
+
+  const loadPosts = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('informasi')
+        .select('*, pembuat:users(nama)')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      if (data) {
+        setPosts(data.map(item => {
+          const dateObj = new Date(item.created_at);
+          const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+          const dateFormatted = `${dateObj.getDate()} ${months[dateObj.getMonth()]} ${dateObj.getFullYear()}`;
+          
+          return {
+            id: item.id,
+            title: item.judul || '',
+            subtitle: item.deskripsi || '',
+            category: item.kategori || 'Info',
+            target: item.target || 'Semua',
+            date: item.created_at?.split('T')[0] || '',
+            dateFormatted,
+            status: item.is_published ? 'Tayang' : 'Selesai'
+          };
+        }));
+      }
+    } catch (err) {
+      console.error('Failed to load announcements:', err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadPosts();
+  }, []);
 
   // Sinkronisasi dengan Palet Pastel Sistem Manajemen Apartemen Anda
   const categoryBadgeColors = (category) => {
@@ -100,41 +90,57 @@ export default function PusatInformasi({ userRole = 'Kebersihan' }) {
     setFilterStatus('Semua Status');
   };
 
-  const handleArchivePost = (id) => {
+  const handleArchivePost = async (id) => {
     if (!isManagement) return;
-    setPosts(prev => prev.map(p => p.id === id ? { ...p, status: 'Selesai' } : p));
-    setSuccessToast('Informasi berhasil diarsipkan!');
-    setTimeout(() => setSuccessToast(''), 3000);
+    try {
+      const { error } = await supabase
+        .from('informasi')
+        .update({ is_published: false })
+        .eq('id', id);
+
+      if (error) throw error;
+      setSuccessToast('Informasi berhasil diarsipkan!');
+      setTimeout(() => setSuccessToast(''), 3000);
+      loadPosts();
+    } catch (err) {
+      console.error('Failed to archive announcement:', err.message);
+    }
   };
 
-  const handleCreatePost = (e) => {
+  const handleCreatePost = async (e) => {
     e.preventDefault();
     if (!isManagement) return;
     if (!newPostData.title.trim() || !newPostData.subtitle.trim()) return;
 
-    const today = new Date();
-    const dateString = today.toISOString().split('T')[0];
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
-    const formatted = `${today.getDate()} ${months[today.getMonth()]} ${today.getFullYear()}`;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
 
-    const newPost = {
-      id: Date.now(),
-      title: newPostData.title,
-      subtitle: newPostData.subtitle,
-      category: newPostData.category,
-      target: newPostData.target,
-      date: dateString,
-      dateFormatted: formatted,
-      status: newPostData.status
-    };
+      const { error } = await supabase
+        .from('informasi')
+        .insert({
+          judul: newPostData.title,
+          deskripsi: newPostData.subtitle,
+          kategori: newPostData.category,
+          target: newPostData.target,
+          is_published: newPostData.status === 'Tayang',
+          dibuat_oleh: user.id
+        });
 
-    setPosts(prev => [newPost, ...prev]);
-    setNewPostModalOpen(false);
-    setSuccessToast('Pengumuman baru berhasil dipublikasikan!');
-    setTimeout(() => setSuccessToast(''), 3000);
-
-    setNewPostData({ title: '', subtitle: '', category: 'Info', target: 'Semua', status: 'Tayang' });
+      if (error) throw error;
+      setNewPostModalOpen(false);
+      setSuccessToast('Pengumuman baru berhasil dipublikasikan!');
+      setTimeout(() => setSuccessToast(''), 3000);
+      setNewPostData({ title: '', subtitle: '', category: 'Info', target: 'Semua', status: 'Tayang' });
+      loadPosts();
+    } catch (err) {
+      console.error('Failed to create announcement:', err.message);
+    }
   };
+
+  if (loading) {
+    return <div className="p-6 text-muted text-sm">Memuat...</div>;
+  }
 
   const filteredPosts = posts
     .filter(post => {

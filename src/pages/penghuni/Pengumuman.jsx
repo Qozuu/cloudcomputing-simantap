@@ -1,38 +1,42 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Bell, Search, Filter } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 
 export default function Pengumuman() {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeCategory, setActiveCategory] = useState('Semua');
+  const [loading, setLoading] = useState(true);
+  const [announcements, setAnnouncements] = useState([]);
 
   const categories = ['Semua', 'Darurat', 'Info', 'Promo', 'Peraturan'];
 
-  const list = [
-    {
-      category: 'Darurat',
-      title: 'Pemadaman Listrik Tower B',
-      description: 'Pemadaman terjadwal Selasa 22 Apr pukul 09:00-12:00 untuk perbaikan panel utama lantai B2. Penghuni dimohon mempersiapkan kebutuhan sebelumnya.',
-      date: '21 Apr 2026'
-    },
-    {
-      category: 'Info',
-      title: 'Kolam Renang Kembali Dibuka',
-      description: 'Setelah perawatan rutin selama 3 hari, kolam renang kembali beroperasi normal mulai Senin 21 April 2026.',
-      date: '20 Apr 2026'
-    },
-    {
-      category: 'Promo',
-      title: 'Promo Sewa Ruang Serbaguna',
-      description: 'Diskon 30% untuk pemesanan Ruang Serbaguna di bulan April 2026. Hubungi admin untuk reservasi.',
-      date: '18 Apr 2026'
-    },
-    {
-      category: 'Peraturan',
-      title: 'Peraturan Parkir Baru Berlaku',
-      description: 'Mulai 1 Mei 2026, setiap kendaraan wajib memiliki stiker parkir resmi dari pengelola. Pendaftaran di kantor pengelola.',
-      date: '15 Apr 2026'
+  useEffect(() => {
+    async function loadData() {
+      try {
+        setLoading(true);
+        const { data, error } = await supabase
+          .from('informasi')
+          .select('*, pembuat:users(nama)')
+          .eq('is_published', true)
+          .order('created_at', { ascending: false });
+        
+        if (error) throw error;
+        
+        const mapped = (data || []).map(item => ({
+          category: item.kategori,
+          title: item.judul,
+          description: item.deskripsi,
+          date: new Date(item.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
+        }));
+        setAnnouncements(mapped);
+      } catch (err) {
+        console.error('Gagal memuat pengumuman:', err.message);
+      } finally {
+        setLoading(false);
+      }
     }
-  ];
+    loadData();
+  }, []);
 
   const getBadgeStyles = (category) => {
     switch (category) {
@@ -49,12 +53,16 @@ export default function Pengumuman() {
     }
   };
 
-  const filteredAnnouncements = list.filter(item => {
+  const filteredAnnouncements = announcements.filter(item => {
     const matchSearch = item.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
                         item.description.toLowerCase().includes(searchTerm.toLowerCase());
     const matchCategory = activeCategory === 'Semua' || item.category === activeCategory;
     return matchSearch && matchCategory;
   });
+
+  if (loading) {
+    return <div className="p-6 text-muted text-sm">Memuat...</div>;
+  }
 
   return (
     <div className="space-y-6 animate-fade-up">

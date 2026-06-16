@@ -1,32 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../../lib/supabase';
 
 export default function JadwalKebersihan() {
-  const [schedules, setSchedules] = useState([
-    {
-      day: 'Senin, 21 Apr',
-      items: [
-        { id: 1, area: 'Lobby Tower A', time: '06:00-08:00', team: 'Tim A', dotColor: 'bg-pastel-pink' },
-        { id: 2, area: 'Koridor Lt. 1-5', time: '08:00-10:00', team: 'Tim B', dotColor: 'bg-pastel-yellow' },
-        { id: 3, area: 'Kolam Renang', time: '10:00-12:00', team: 'Tim C', dotColor: 'bg-pastel-lavender' }
-      ]
-    },
-    {
-      day: 'Selasa, 22 Apr',
-      items: [
-        { id: 4, area: 'Lobby Tower A', time: '06:00-08:00', team: 'Tim A', dotColor: 'bg-pastel-pink' },
-        { id: 5, area: 'Koridor Lt. 1-5', time: '08:00-10:00', team: 'Tim B', dotColor: 'bg-pastel-yellow' },
-        { id: 6, area: 'Area Parkir', time: '10:00-12:00', team: 'Tim C', dotColor: 'bg-pastel-lavender' }
-      ]
-    },
-    {
-      day: 'Rabu, 23 Apr',
-      items: [
-        { id: 7, area: 'Lobby Tower A', time: '06:00-08:00', team: 'Tim A', dotColor: 'bg-pastel-pink' },
-        { id: 8, area: 'Koridor Lt. 1-5', time: '08:00-10:00', team: 'Tim B', dotColor: 'bg-pastel-yellow' },
-        { id: 9, area: 'Taman Outdoor', time: '10:00-12:00', team: 'Tim C', dotColor: 'bg-pastel-lavender' }
-      ]
-    }
-  ]);
+  const [schedules, setSchedules] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [formData, setFormData] = useState({
@@ -64,46 +41,114 @@ export default function JadwalKebersihan() {
     }
   };
 
+  const dateToDayStr = (dateStr) => {
+    if (!dateStr) return '';
+    const parts = dateStr.split('-');
+    if (parts.length !== 3) return dateStr;
+    const year = parseInt(parts[0]);
+    const month = parseInt(parts[1]);
+    const day = parseInt(parts[2]);
+    const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+    const monthsIndo = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+    const d = new Date(year, month - 1, day);
+    const dayName = days[d.getDay()];
+    return `${dayName}, ${day} ${monthsIndo[month - 1]}`;
+  };
+
+  const dayStrToDate = (dayStr) => {
+    const mapping = {
+      'Senin, 21 Apr': '2026-04-21',
+      'Selasa, 22 Apr': '2026-04-22',
+      'Rabu, 23 Apr': '2026-04-23',
+      'Kamis, 24 Apr': '2026-04-24',
+      'Jumat, 25 Apr': '2026-04-25',
+      'Sabtu, 26 Apr': '2026-04-26',
+      'Minggu, 27 Apr': '2026-04-27'
+    };
+    return mapping[dayStr] || dayStr;
+  };
+
+  const loadSchedules = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('jadwal')
+        .select('*, petugas:users(nama)')
+        .eq('jenis', 'kebersihan')
+        .order('tanggal');
+
+      if (error) throw error;
+
+      if (data) {
+        const groups = {};
+        data.forEach(item => {
+          const dayName = dateToDayStr(item.tanggal);
+          if (!groups[dayName]) {
+            groups[dayName] = [];
+          }
+          groups[dayName].push({
+            id: item.id,
+            area: item.area || item.keterangan || 'Umum',
+            time: item.waktu || '08:00-10:00',
+            team: item.tim || 'Tim A',
+            dotColor: getDotColorClass(item.tim || 'Tim A')
+          });
+        });
+
+        const formatted = Object.keys(groups).map(day => ({
+          day,
+          items: groups[day]
+        }));
+        setSchedules(formatted);
+      }
+    } catch (err) {
+      console.error('Failed to load schedules:', err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadSchedules();
+  }, []);
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleAddSchedule = (e) => {
+  const handleAddSchedule = async (e) => {
     e.preventDefault();
     if (!formData.area.trim()) return;
 
     const timeRange = `${formData.timeStart}-${formData.timeEnd}`;
-    const newScheduleItem = {
-      id: Date.now(),
-      area: formData.area,
-      time: timeRange,
-      team: formData.team,
-      dotColor: getDotColorClass(formData.team)
-    };
+    
+    try {
+      const { error } = await supabase
+        .from('jadwal')
+        .insert({
+          tanggal: dayStrToDate(formData.day),
+          area: formData.area,
+          waktu: timeRange,
+          tim: formData.team,
+          jenis: 'kebersihan'
+        });
 
-    setSchedules((prev) => {
-      // Check if day already exists
-      const dayIndex = prev.findIndex((s) => s.day === formData.day);
-      if (dayIndex > -1) {
-        const updated = [...prev];
-        updated[dayIndex] = {
-          ...updated[dayIndex],
-          items: [...updated[dayIndex].items, newScheduleItem]
-        };
-        return updated;
-      } else {
-        return [...prev, { day: formData.day, items: [newScheduleItem] }];
-      }
-    });
+      if (error) throw error;
 
-    setModalOpen(false);
-    setSuccessToast(`Jadwal area "${formData.area}" berhasil ditambahkan!`);
-    setTimeout(() => setSuccessToast(''), 3000);
-
-    // Reset input
-    setFormData((prev) => ({ ...prev, area: '' }));
+      setModalOpen(false);
+      setSuccessToast(`Jadwal area "${formData.area}" berhasil ditambahkan!`);
+      setTimeout(() => setSuccessToast(''), 3000);
+      setFormData((prev) => ({ ...prev, area: '' }));
+      loadSchedules();
+    } catch (err) {
+      console.error('Failed to insert schedule:', err.message);
+    }
   };
+
+  if (loading) {
+    return <div className="p-6 text-muted text-sm">Memuat...</div>;
+  }
 
   return (
     <div className="space-y-6 animate-fade-up relative">

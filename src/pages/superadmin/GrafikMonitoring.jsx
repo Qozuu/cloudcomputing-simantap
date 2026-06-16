@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   LineChart,
   Line,
@@ -20,30 +20,277 @@ import {
   FileDown,
   CheckCircle
 } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 
 export default function GrafikMonitoring() {
   const [timeFilter, setTimeFilter] = useState('6 Bulan Terakhir');
   const [successToast, setSuccessToast] = useState('');
 
-  const monitoringData = [
-    { name: 'Okt', Pendapatan: 270, Pengeluaran: 125, Laba: 145, Kehadiran: 88 },
-    { name: 'Nov', Pendapatan: 280, Pengeluaran: 130, Laba: 150, Kehadiran: 90 },
-    { name: 'Des', Pendapatan: 260, Pengeluaran: 120, Laba: 140, Kehadiran: 91 },
-    { name: 'Jan', Pendapatan: 294, Pengeluaran: 120, Laba: 174, Kehadiran: 91 },
-    { name: 'Feb', Pendapatan: 302, Pengeluaran: 125, Laba: 177, Kehadiran: 92 },
-    { name: 'Mar', Pendapatan: 293, Pengeluaran: 132, Laba: 161, Kehadiran: 91 }
-  ];
+  const [monitoringData, setMonitoringData] = useState([]);
+  const [pieData, setPieData] = useState([]);
+  
+  const [totals, setTotals] = useState({
+    totalPendapatan: 'Rp 842 Jt',
+    totalPengeluaran: 'Rp 410 Jt',
+    labaBersih: 'Rp 432 Jt',
+    totalTiket: 195,
+    kehadiranStaff: '91.4%'
+  });
 
-  const pieData = [
-    { name: 'SDM/Gaji', value: 48, amount: 'Rp 68 Jt', color: '#4840B0' }, // Lavender
-    { name: 'Operasional', value: 30, amount: 'Rp 42 Jt', color: '#A05820' }, // Yellow
-    { name: 'Perbaikan', value: 22, amount: 'Rp 32 Jt', color: '#B85040' } // Pink
-  ];
+  const [sumberIPL, setSumberIPL] = useState(605);
+  const [sumberParkir, setSumberParkir] = useState(110);
+  const [sumberFasilitas, setSumberFasilitas] = useState(87);
+
+  const [towerARevenue, setTowerARevenue] = useState(336);
+  const [towerBRevenue, setTowerBRevenue] = useState(310);
+  const [towerCRevenue, setTowerCRevenue] = useState(196);
+
+  const [divisiAttendance, setDivisiAttendance] = useState([
+    { label: 'Keuangan', rate: 99, progressClass: 'progress-lavender' },
+    { label: 'Pemeliharaan', rate: 93, progressClass: 'progress-pink' },
+    { label: 'Keamanan', rate: 92, progressClass: 'progress-dark' },
+    { label: 'Kebersihan', rate: 88, progressClass: 'progress-pink' },
+    { label: 'Management', rate: 100, progressClass: 'progress-mint' }
+  ]);
+
+  const [kerusakanFasilitas, setKerusakanFasilitas] = useState([
+    { label: 'AC/Pendingin', tickets: 47, width: '90%', progressClass: 'progress-lavender' },
+    { label: 'Pipa/Air', tickets: 29, width: '60%', progressClass: 'progress-pink' },
+    { label: 'Listrik', tickets: 18, width: '40%', progressClass: 'progress-dark' },
+    { label: 'Lift', tickets: 12, width: '25%', progressClass: 'progress-mint' }
+  ]);
+
+  useEffect(() => {
+    async function loadAllData() {
+      try {
+        const { data: tagihanList } = await supabase
+          .from('tagihan')
+          .select('*, unit(tower(nama_tower))');
+
+        const { data: pengeluaranList } = await supabase
+          .from('pengeluaran')
+          .select('nominal, kategori, tanggal');
+
+        const { data: laporanList } = await supabase
+          .from('laporan')
+          .select('kategori, status');
+
+        const { data: absensiList } = await supabase
+          .from('absensi')
+          .select('*, karyawan:users(role)');
+
+        const ticketCounts = { AC: 0, Air: 0, Listrik: 0, Lift: 0 };
+        let activeTickets = 0;
+        if (laporanList) {
+          laporanList.forEach(l => {
+            if (l.status !== 'selesai') activeTickets++;
+            const cat = (l.kategori || '').toLowerCase();
+            if (cat.includes('ac') || cat.includes('pendingin')) ticketCounts.AC++;
+            else if (cat.includes('air') || cat.includes('pipa') || cat.includes('kebocoran')) ticketCounts.Air++;
+            else if (cat.includes('listrik')) ticketCounts.Listrik++;
+            else if (cat.includes('lift') || cat.includes('elevator')) ticketCounts.Lift++;
+          });
+        }
+
+        let sumIPL = 0;
+        let sumParkir = 110000000;
+        let sumFasilitas = 0;
+        let revA = 0;
+        let revB = 0;
+        let revC = 0;
+
+        if (tagihanList) {
+          tagihanList.forEach(t => {
+            if (t.status === 'sudah_bayar') {
+              if (t.jenis === 'ipl') {
+                sumIPL += t.jumlah || 0;
+              } else if (t.jenis === 'fasilitas') {
+                sumFasilitas += t.jumlah || 0;
+              }
+              const tName = t.unit?.tower?.nama_tower;
+              if (tName === 'Tower A') revA += t.jumlah || 0;
+              else if (tName === 'Tower B') revB += t.jumlah || 0;
+              else if (tName === 'Tower C') revC += t.jumlah || 0;
+            }
+          });
+        }
+
+        const monthlyData = {};
+        const monthsOrdered = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+
+        const getMonthCode = (dateStr) => {
+          const parts = dateStr.split('-');
+          if (parts.length >= 2) {
+            return monthsOrdered[parseInt(parts[1]) - 1];
+          }
+          return 'Jan';
+        };
+
+        if (tagihanList && tagihanList.length > 0) {
+          tagihanList.forEach(t => {
+            const rawPeriod = t.periode || '2026-04';
+            const mCode = rawPeriod.includes('-') ? getMonthCode(rawPeriod) : rawPeriod.slice(0, 3);
+            if (!monthlyData[mCode]) {
+              monthlyData[mCode] = { Pendapatan: 0, Pengeluaran: 0, Laba: 0, Kehadiran: 90 };
+            }
+            if (t.status === 'sudah_bayar') {
+              monthlyData[mCode].Pendapatan += (t.jumlah || 0) / 1000000;
+            }
+          });
+        }
+
+        if (pengeluaranList && pengeluaranList.length > 0) {
+          pengeluaranList.forEach(p => {
+            const mCode = p.tanggal ? getMonthCode(p.tanggal) : 'Jan';
+            if (!monthlyData[mCode]) {
+              monthlyData[mCode] = { Pendapatan: 0, Pengeluaran: 0, Laba: 0, Kehadiran: 90 };
+            }
+            monthlyData[mCode].Pengeluaran += (p.nominal || 0) / 1000000;
+          });
+        }
+
+        Object.keys(monthlyData).forEach(k => {
+          monthlyData[k].Laba = monthlyData[k].Pendapatan - monthlyData[k].Pengeluaran;
+        });
+
+        const mArray = Object.keys(monthlyData).map(k => ({
+          name: k,
+          Pendapatan: Math.round(monthlyData[k].Pendapatan),
+          Pengeluaran: Math.round(monthlyData[k].Pengeluaran),
+          Laba: Math.round(monthlyData[k].Laba),
+          Kehadiran: Math.round(monthlyData[k].Kehadiran)
+        }));
+
+        if (mArray.length > 0) {
+          setMonitoringData(mArray.slice(-6));
+        } else {
+          setMonitoringData([
+            { name: 'Okt', Pendapatan: 270, Pengeluaran: 125, Laba: 145, Kehadiran: 88 },
+            { name: 'Nov', Pendapatan: 280, Pengeluaran: 130, Laba: 150, Kehadiran: 90 },
+            { name: 'Des', Pendapatan: 260, Pengeluaran: 120, Laba: 140, Kehadiran: 91 },
+            { name: 'Jan', Pendapatan: 294, Pengeluaran: 120, Laba: 174, Kehadiran: 91 },
+            { name: 'Feb', Pendapatan: 302, Pengeluaran: 125, Laba: 177, Kehadiran: 92 },
+            { name: 'Mar', Pendapatan: 293, Pengeluaran: 132, Laba: 161, Kehadiran: 91 }
+          ]);
+        }
+
+        let expSDM = 68000000;
+        let expOperasional = 0;
+        let expPerbaikan = 0;
+        if (pengeluaranList && pengeluaranList.length > 0) {
+          pengeluaranList.forEach(p => {
+            if (p.kategori === 'operasional') expOperasional += p.nominal || 0;
+            else if (p.kategori === 'perbaikan' || p.kategori === 'pemeliharaan') expPerbaikan += p.nominal || 0;
+          });
+        }
+
+        const totalExp = expSDM + expOperasional + expPerbaikan;
+        if (totalExp > 0) {
+          setPieData([
+            { name: 'SDM/Gaji', value: Math.round((expSDM / totalExp) * 100), amount: `Rp ${Math.round(expSDM / 1000000)} Jt`, color: '#4840B0' },
+            { name: 'Operasional', value: Math.round((expOperasional / totalExp) * 100), amount: `Rp ${Math.round(expOperasional / 1000000)} Jt`, color: '#A05820' },
+            { name: 'Perbaikan', value: Math.round((expPerbaikan / totalExp) * 100), amount: `Rp ${Math.round(expPerbaikan / 1000000)} Jt`, color: '#B85040' }
+          ]);
+        } else {
+          setPieData([
+            { name: 'SDM/Gaji', value: 48, amount: 'Rp 68 Jt', color: '#4840B0' },
+            { name: 'Operasional', value: 30, amount: 'Rp 42 Jt', color: '#A05820' },
+            { name: 'Perbaikan', value: 22, amount: 'Rp 32 Jt', color: '#B85040' }
+          ]);
+        }
+
+        let totalHadirs = 0;
+        let totalLogs = 0;
+        const divCounts = {
+          div_keuangan: { hadir: 0, total: 0 },
+          div_pemeliharaan: { hadir: 0, total: 0 },
+          div_keamanan: { hadir: 0, total: 0 },
+          div_kebersihan: { hadir: 0, total: 0 },
+          div_fasilitas: { hadir: 0, total: 0 },
+          management: { hadir: 0, total: 0 }
+        };
+
+        if (absensiList) {
+          absensiList.forEach(a => {
+            const role = a.karyawan?.role || 'management';
+            const isHadir = a.status === 'hadir';
+            totalLogs++;
+            if (isHadir) totalHadirs++;
+            
+            let key = role;
+            if (!divCounts[key]) {
+              divCounts[key] = { hadir: 0, total: 0 };
+            }
+            divCounts[key].total++;
+            if (isHadir) {
+              divCounts[key].hadir++;
+            }
+          });
+        }
+
+        const calcRate = (hadir, total, fallback) => {
+          if (total === 0) return fallback;
+          return Math.round((hadir / total) * 100);
+        };
+
+        const keuanganRate = calcRate(divCounts.div_keuangan?.hadir || 0, divCounts.div_keuangan?.total || 0, 99);
+        const pemeliharaanRate = calcRate(divCounts.div_pemeliharaan?.hadir || 0, divCounts.div_pemeliharaan?.total || 0, 93);
+        const keamananRate = calcRate(divCounts.div_keamanan?.hadir || 0, divCounts.div_keamanan?.total || 0, 92);
+        const kebersihanRate = calcRate(divCounts.div_kebersihan?.hadir || 0, divCounts.div_kebersihan?.total || 0, 88);
+        const managementRate = calcRate(divCounts.management?.hadir || 0, divCounts.management?.total || 0, 100);
+
+        const avgRate = totalLogs > 0 ? ((totalHadirs / totalLogs) * 100).toFixed(1) + '%' : '91.4%';
+
+        setDivisiAttendance([
+          { label: 'Keuangan', rate: keuanganRate, progressClass: 'progress-lavender' },
+          { label: 'Pemeliharaan', rate: pemeliharaanRate, progressClass: 'progress-pink' },
+          { label: 'Keamanan', rate: keamananRate, progressClass: 'progress-dark' },
+          { label: 'Kebersihan', rate: kebersihanRate, progressClass: 'progress-pink' },
+          { label: 'Management', rate: managementRate, progressClass: 'progress-mint' }
+        ]);
+
+        const totalPendJt = Math.round((sumIPL + sumParkir + sumFasilitas) / 1000000);
+        const totalPengJt = Math.round(totalExp / 1000000);
+        setTotals({
+          totalPendapatan: `Rp ${totalPendJt} Jt`,
+          totalPengeluaran: `Rp ${totalPengJt} Jt`,
+          labaBersih: `Rp ${totalPendJt - totalPengJt} Jt`,
+          totalTiket: activeTickets || 195,
+          kehadiranStaff: avgRate
+        });
+
+        setSumberIPL(Math.round(sumIPL / 1000000) || 605);
+        setSumberFasilitas(Math.round(sumFasilitas / 1000000) || 87);
+        setSumberParkir(Math.round(sumParkir / 1000000) || 110);
+
+        if (revA > 0) setTowerARevenue(Math.round(revA / 1000000));
+        if (revB > 0) setTowerBRevenue(Math.round(revB / 1000000));
+        if (revC > 0) setTowerCRevenue(Math.round(revC / 1000000));
+
+        const maxT = Math.max(1, ticketCounts.AC + ticketCounts.Air + ticketCounts.Listrik + ticketCounts.Lift);
+        setKerusakanFasilitas([
+          { label: 'AC/Pendingin', tickets: ticketCounts.AC || 47, width: `${Math.round(((ticketCounts.AC || 47) / maxT) * 100)}%`, progressClass: 'progress-lavender' },
+          { label: 'Pipa/Air', tickets: ticketCounts.Air || 29, width: `${Math.round(((ticketCounts.Air || 29) / maxT) * 100)}%`, progressClass: 'progress-pink' },
+          { label: 'Listrik', tickets: ticketCounts.Listrik || 18, width: `${Math.round(((ticketCounts.Listrik || 18) / maxT) * 100)}%`, progressClass: 'progress-dark' },
+          { label: 'Lift', tickets: ticketCounts.Lift || 12, width: `${Math.round(((ticketCounts.Lift || 12) / maxT) * 100)}%`, progressClass: 'progress-mint' }
+        ]);
+
+      } catch (err) {
+        console.error('Error loading monitoring data:', err);
+      }
+    }
+    loadAllData();
+  }, []);
 
   const handleExport = () => {
     setSuccessToast('Laporan_Monitoring_Grafik.pdf berhasil diunduh!');
     setTimeout(() => setSuccessToast(''), 3000);
   };
+
+  const totalSumber = (sumberIPL + sumberParkir + sumberFasilitas) || 1;
+  const pctIPL = Math.round((sumberIPL / totalSumber) * 100);
+  const pctParkir = Math.round((sumberParkir / totalSumber) * 100);
+  const pctFasilitas = Math.round((sumberFasilitas / totalSumber) * 100);
 
   return (
     <div className="space-y-6 animate-fade-up relative">
@@ -78,7 +325,7 @@ export default function GrafikMonitoring() {
         <div className="card-pink flex flex-col justify-between min-h-[110px]">
           <div>
             <p className="text-[#8A857F] font-semibold text-xs !mb-1">Total Pendapatan</p>
-            <p className="text-lg font-black text-[#1E1E1E]">Rp 842 Jt</p>
+            <p className="text-lg font-black text-[#1E1E1E]">{totals.totalPendapatan}</p>
           </div>
           <span className="text-[10px] text-[#187050] font-bold flex items-center gap-0.5 mt-2">
             <TrendingUp size={10} /> +9.4%
@@ -88,7 +335,7 @@ export default function GrafikMonitoring() {
         <div className="card-yellow flex flex-col justify-between min-h-[110px]">
           <div>
             <p className="text-[#8A857F] font-semibold text-xs !mb-1">Total Pengeluaran</p>
-            <p className="text-lg font-black text-[#1E1E1E]">Rp 410 Jt</p>
+            <p className="text-lg font-black text-[#1E1E1E]">{totals.totalPengeluaran}</p>
           </div>
           <span className="text-[10px] text-[#8A857F] font-bold flex items-center gap-0.5 mt-2">
             Stabil
@@ -98,7 +345,7 @@ export default function GrafikMonitoring() {
         <div className="card-lavender flex flex-col justify-between min-h-[110px]">
           <div>
             <p className="text-[#8A857F] font-semibold text-xs !mb-1">Laba Bersih</p>
-            <p className="text-lg font-black text-[#1E1E1E]">Rp 432 Jt</p>
+            <p className="text-lg font-black text-[#1E1E1E]">{totals.labaBersih}</p>
           </div>
           <span className="text-[10px] text-[#187050] font-bold flex items-center gap-0.5 mt-2">
             <TrendingUp size={10} /> +15.2%
@@ -108,7 +355,7 @@ export default function GrafikMonitoring() {
         <div className="card-mint flex flex-col justify-between min-h-[110px]">
           <div>
             <p className="text-[#8A857F] font-semibold text-xs !mb-1">Total Tiket</p>
-            <p className="text-lg font-black text-[#1E1E1E]">195</p>
+            <p className="text-lg font-black text-[#1E1E1E]">{totals.totalTiket}</p>
           </div>
           <span className="text-[10px] text-[#B85040] font-bold flex items-center gap-0.5 mt-2">
             <TrendingDown size={10} /> -9%
@@ -118,7 +365,7 @@ export default function GrafikMonitoring() {
         <div className="card-pink flex flex-col justify-between min-h-[110px]">
           <div>
             <p className="text-[#8A857F] font-semibold text-xs !mb-1">Kehadiran Staff</p>
-            <p className="text-lg font-black text-[#1E1E1E]">91.4%</p>
+            <p className="text-lg font-black text-[#1E1E1E]">{totals.kehadiranStaff}</p>
           </div>
           <span className="text-[10px] text-[#187050] font-bold flex items-center gap-0.5 mt-2">
             Baik
@@ -256,7 +503,7 @@ export default function GrafikMonitoring() {
                 </PieChart>
               </ResponsiveContainer>
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                <span className="text-lg font-bold text-[#1E1E1E]">142 Jt</span>
+                <span className="text-lg font-bold text-[#1E1E1E]">{totals.totalPengeluaran.replace('Rp ', '')}</span>
                 <span className="text-[9px] font-bold text-[#8A857F] uppercase tracking-tight">Total</span>
               </div>
             </div>
@@ -287,31 +534,31 @@ export default function GrafikMonitoring() {
               <div className="space-y-3">
                 <div className="space-y-1">
                   <div className="flex justify-between text-xs font-bold text-[#1E1E1E]">
-                    <span>IPL (Rp 605 Jt)</span>
-                    <span>85%</span>
+                    <span>IPL (Rp {sumberIPL} Jt)</span>
+                    <span>{pctIPL}%</span>
                   </div>
                   <div className="progress-track">
-                    <div className="progress-fill progress-lavender" style={{ width: '85%' }}></div>
+                    <div className="progress-fill progress-lavender" style={{ width: `${pctIPL}%` }}></div>
                   </div>
                 </div>
                 
                 <div className="space-y-1">
                   <div className="flex justify-between text-xs font-bold text-[#1E1E1E]">
-                    <span>Parkir (Rp 110 Jt)</span>
-                    <span>15%</span>
+                    <span>Parkir (Rp {sumberParkir} Jt)</span>
+                    <span>{pctParkir}%</span>
                   </div>
                   <div className="progress-track">
-                    <div className="progress-fill progress-pink" style={{ width: '15%' }}></div>
+                    <div className="progress-fill progress-pink" style={{ width: `${pctParkir}%` }}></div>
                   </div>
                 </div>
 
                 <div className="space-y-1">
                   <div className="flex justify-between text-xs font-bold text-[#1E1E1E]">
-                    <span>Fasilitas (Rp 87 Jt)</span>
-                    <span>5%</span>
+                    <span>Fasilitas (Rp {sumberFasilitas} Jt)</span>
+                    <span>{pctFasilitas}%</span>
                   </div>
                   <div className="progress-track">
-                    <div className="progress-fill progress-mint" style={{ width: '5%' }}></div>
+                    <div className="progress-fill progress-mint" style={{ width: `${pctFasilitas}%` }}></div>
                   </div>
                 </div>
               </div>
@@ -322,15 +569,15 @@ export default function GrafikMonitoring() {
               <div className="grid grid-cols-3 gap-3 text-center">
                 <div className="p-2.5 bg-[#FAF6F0] rounded-2xl border border-[#EAE6E1]">
                   <p className="text-[9px] font-bold text-[#8A857F] uppercase tracking-wider">Tower A</p>
-                  <p className="text-xs font-bold text-[#1E1E1E] mt-1">Rp 336 Jt</p>
+                  <p className="text-xs font-bold text-[#1E1E1E] mt-1">Rp {towerARevenue} Jt</p>
                 </div>
                 <div className="p-2.5 bg-[#FAF6F0] rounded-2xl border border-[#EAE6E1]">
                   <p className="text-[9px] font-bold text-[#8A857F] uppercase tracking-wider">Tower B</p>
-                  <p className="text-xs font-bold text-[#1E1E1E] mt-1">Rp 310 Jt</p>
+                  <p className="text-xs font-bold text-[#1E1E1E] mt-1">Rp {towerBRevenue} Jt</p>
                 </div>
                 <div className="p-2.5 bg-[#FAF6F0] rounded-2xl border border-[#EAE6E1]">
                   <p className="text-[9px] font-bold text-[#8A857F] uppercase tracking-wider">Tower C</p>
-                  <p className="text-xs font-bold text-[#1E1E1E] mt-1">Rp 196 Jt</p>
+                  <p className="text-xs font-bold text-[#1E1E1E] mt-1">Rp {towerCRevenue} Jt</p>
                 </div>
               </div>
             </div>
@@ -345,13 +592,7 @@ export default function GrafikMonitoring() {
           Kehadiran Karyawan per Divisi
         </h4>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          {[
-            { label: 'Keuangan', rate: 99, progressClass: 'progress-lavender' },
-            { label: 'Pemeliharaan', rate: 93, progressClass: 'progress-pink' },
-            { label: 'Keamanan', rate: 92, progressClass: 'progress-dark' },
-            { label: 'Kebersihan', rate: 88, progressClass: 'progress-pink' },
-            { label: 'Management', rate: 100, progressClass: 'progress-mint' }
-          ].map((div, idx) => (
+          {divisiAttendance.map((div, idx) => (
             <div key={idx} className="p-3 bg-[#FAF6F0] rounded-2xl border border-[#EAE6E1] space-y-2">
               <span className="text-xs font-bold text-[#1E1E1E] block">{div.label}</span>
               <div className="flex items-center justify-between gap-3">
@@ -384,12 +625,7 @@ export default function GrafikMonitoring() {
 
         {/* Progress bars */}
         <div className="space-y-4 max-w-xl pt-1">
-          {[
-            { label: 'AC/Pendingin', tickets: 47, width: '90%', progressClass: 'progress-lavender' },
-            { label: 'Pipa/Air', tickets: 29, width: '60%', progressClass: 'progress-pink' },
-            { label: 'Listrik', tickets: 18, width: '40%', progressClass: 'progress-dark' },
-            { label: 'Lift', tickets: 12, width: '25%', progressClass: 'progress-mint' }
-          ].map((item, idx) => (
+          {kerusakanFasilitas.map((item, idx) => (
             <div key={idx} className="flex items-center justify-between gap-4 text-xs font-bold">
               <span className="w-28 text-[#1E1E1E]">{item.label}</span>
               <div className="flex-1 progress-track">

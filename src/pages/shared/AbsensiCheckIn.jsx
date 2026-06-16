@@ -3,7 +3,17 @@ import { useNavigate } from 'react-router-dom';
 import { Building, LogIn, LogOut, Loader2, CheckCircle, AlertTriangle } from 'lucide-react';
 import { APARTMENT_CONFIG } from '../../constants/absensi';
 import { getDistanceMeters, getCurrentPosition } from '../../utils/geolocation';
-import { SESSION_KEYS, getSession, hasCheckedInToday, getLocalDateString } from '../../utils/authSession';
+import {
+  SESSION_KEYS,
+  getSession,
+  saveCheckIn,
+  saveCheckOut,
+  isCheckoutMode,
+  hasCheckedInToday,
+  clearSession,
+  getLocalDateString
+} from '../../utils/authSession';
+import { supabase } from '../../lib/supabase';
 
 export default function AbsensiCheckIn() {
   const navigate = useNavigate();
@@ -18,6 +28,10 @@ export default function AbsensiCheckIn() {
   const [clock, setClock] = useState('');
   const [currentDate, setCurrentDate] = useState('');
 
+  const [userName, setUserName] = useState('');
+  const [userRole, setUserRole] = useState('');
+  const [loading, setLoading] = useState(true);
+
   // Determine active profile details based on sessionStorage role
   const [profile, setProfile] = useState({
     name: 'Rina Kurnia',
@@ -29,33 +43,69 @@ export default function AbsensiCheckIn() {
   });
 
   useEffect(() => {
-    // Resolve logged role
-    const { role } = getSession();
-    const activeRole = (role || 'KEUANGAN').toUpperCase();
-    const profileMap = {
-      'SUPER_ADMIN': { name: 'Budi Santoso', roleName: 'General Manager', initials: 'BS', dashboardPath: '/super-admin/dashboard', bg: '#FEF0EE', color: '#C05040' },
-      'SUPERADMIN': { name: 'Budi Santoso', roleName: 'General Manager', initials: 'BS', dashboardPath: '/super-admin/dashboard', bg: '#FEF0EE', color: '#C05040' },
-      'GM': { name: 'Budi Santoso', roleName: 'General Manager', initials: 'BS', dashboardPath: '/super-admin/dashboard', bg: '#FEF0EE', color: '#C05040' },
-      'KEUANGAN': { name: 'Rina Kurnia', roleName: 'Divisi Keuangan', initials: 'RK', dashboardPath: '/keuangan/dashboard', bg: '#FEF7EC', color: '#A05820' },
-      'PEMELIHARAAN': { name: 'Reza Pratama', roleName: 'Divisi Pemeliharaan', initials: 'RP', dashboardPath: '/pemeliharaan/dashboard', bg: '#EEEDFB', color: '#5850C0' },
-      'KEBERSIHAN': { name: 'Siti Rahayu', roleName: 'Divisi Kebersihan', initials: 'SR', dashboardPath: '/kebersihan/jadwal', bg: '#E8FAF3', color: '#208060' },
-      'KEAMANAN': { name: 'Agus Pratama', roleName: 'Divisi Keamanan', initials: 'AP', dashboardPath: '/keamanan/dashboard', bg: '#FEF0EE', color: '#C05040' },
-      'FASILITAS': { name: 'Reza Pratama', roleName: 'Divisi Fasilitas', initials: 'RP', dashboardPath: '/fasilitas/dashboard', bg: '#FEF7EC', color: '#A05820' }
-    };
+    async function init() {
+      // 1. Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
 
-    if (profileMap[activeRole]) {
-      setProfile(profileMap[activeRole]);
+      // 2. Get name and role from users table
+      const { data: profileData } = await supabase
+        .from('users')
+        .select('nama, role')
+        .eq('id', user.id)
+        .single();
+
+      const name = profileData?.nama || 'Karyawan';
+      const role = profileData?.role || '';
+      setUserName(name);
+      setUserRole(role);
+
+      // Build profile details for UI
+      const activeRole = role.toUpperCase();
+      const profileMap = {
+        'SUPER_ADMIN': { name, roleName: 'General Manager', initials: name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2), bg: '#FEF0EE', color: '#C05040' },
+        'SUPERADMIN': { name, roleName: 'General Manager', initials: name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2), bg: '#FEF0EE', color: '#C05040' },
+        'GM': { name, roleName: 'General Manager', initials: name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2), bg: '#FEF0EE', color: '#C05040' },
+        'KEUANGAN': { name, roleName: 'Divisi Keuangan', initials: name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2), bg: '#FEF7EC', color: '#A05820' },
+        'PEMELIHARAAN': { name, roleName: 'Divisi Pemeliharaan', initials: name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2), bg: '#EEEDFB', color: '#5850C0' },
+        'KEBERSIHAN': { name, roleName: 'Divisi Kebersihan', initials: name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2), bg: '#E8FAF3', color: '#208060' },
+        'KEAMANAN': { name, roleName: 'Divisi Keamanan', initials: name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2), bg: '#FEF0EE', color: '#C05040' },
+        'FASILITAS': { name, roleName: 'Divisi Fasilitas', initials: name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2), bg: '#FEF7EC', color: '#A05820' }
+      };
+
+      const resolvedProfile = profileMap[activeRole] || {
+        name,
+        roleName: role,
+        initials: name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || '??',
+        bg: '#FEF7EC',
+        color: '#A05820'
+      };
+
+      setProfile(resolvedProfile);
+
+      // 3. Check today's absensi from database
+      const today = new Date().toISOString().split('T')[0];
+      const { data: absensiHariIni } = await supabase
+        .from('absensi')
+        .select('*')
+        .eq('karyawan_id', user.id)
+        .eq('tanggal', today)
+        .maybeSingle();
+
+      if (absensiHariIni) {
+        if (absensiHariIni.jam_masuk) {
+          setCheckedIn(true);
+          setJamMasuk(absensiHariIni.jam_masuk);
+          saveCheckIn(absensiHariIni.jam_masuk, absensiHariIni.id);
+        }
+        if (absensiHariIni.jam_keluar) {
+          setCheckedOut(true);
+          setJamKeluar(absensiHariIni.jam_keluar);
+        }
+      }
+      setLoading(false);
     }
-
-    // Recover sessions if exist using authSession helpers
-    const { checkinTime, checkoutTime } = getSession();
-    const hasCheckedIn = hasCheckedInToday();
-    const hasCheckedOut = !!checkoutTime;
-
-    if (checkinTime) setJamMasuk(checkinTime);
-    if (checkoutTime) setJamKeluar(checkoutTime);
-    if (hasCheckedIn) setCheckedIn(true);
-    if (hasCheckedOut) setCheckedOut(true);
+    init();
 
     // Dynamic Clock Ticks
     const updateTime = () => {
@@ -80,34 +130,54 @@ export default function AbsensiCheckIn() {
     setGpsDistance(null);
 
     try {
-      let coords;
+      let pos;
       if (simulatedPos) {
-        coords = simulatedPos;
+        pos = { coords: simulatedPos };
       } else {
-        coords = await getCurrentPosition();
+        pos = await getCurrentPosition();
       }
 
       const distance = getDistanceMeters(
-        coords.latitude,
-        coords.longitude,
-        APARTMENT_CONFIG.latitude,
-        APARTMENT_CONFIG.longitude
+        pos.coords.latitude, pos.coords.longitude,
+        APARTMENT_CONFIG.latitude, APARTMENT_CONFIG.longitude
       );
+      setGpsDistance(Math.round(distance));
 
-      const roundedDistance = Math.round(distance);
-      setGpsDistance(roundedDistance);
-
-      if (distance <= APARTMENT_CONFIG.radiusMeters) {
-        setGpsStatus('success');
-        const entryTime = getFormattedTime();
-        setJamMasuk(entryTime);
-        setCheckedIn(true);
-        sessionStorage.setItem(SESSION_KEYS.CHECKIN_TIME, entryTime);
-        sessionStorage.setItem(SESSION_KEYS.CHECKIN_DATE, getLocalDateString());
-      } else {
+      if (distance > APARTMENT_CONFIG.radiusMeters) {
         setGpsStatus('error');
-        setErrorMessage(`Lokasi di luar area apartemen (${roundedDistance}m dari lokasi)`);
+        setErrorMessage(`Lokasi di luar area apartemen (${Math.round(distance)}m dari lokasi)`);
+        return;
       }
+
+      setGpsStatus('success');
+
+      const { data: { user } } = await supabase.auth.getUser();
+      const today    = new Date().toISOString().split('T')[0];
+      const jamMasukTime = new Date().toTimeString().slice(0, 5);
+      const lokasi   = `${pos.coords.latitude},${pos.coords.longitude}`;
+
+      const { data, error } = await supabase
+        .from('absensi')
+        .insert({
+          karyawan_id: user.id,
+          tanggal:     today,
+          jam_masuk:   jamMasukTime,
+          status:      'hadir',
+          lokasi,
+        })
+        .select()
+        .single();
+
+      if (error) {
+        setGpsStatus('error');
+        setErrorMessage(error.message || 'Gagal menyimpan check-in ke server');
+        return;
+      }
+
+      saveCheckIn(data.jam_masuk, data.id);
+      setJamMasuk(data.jam_masuk);
+      setCheckedIn(true);
+
     } catch (err) {
       setGpsStatus('error');
       setErrorMessage(err.message || 'Izin lokasi ditolak');
@@ -120,40 +190,53 @@ export default function AbsensiCheckIn() {
     setGpsDistance(null);
 
     try {
-      let coords;
+      let pos;
       if (simulatedPos) {
-        coords = simulatedPos;
+        pos = { coords: simulatedPos };
       } else {
-        coords = await getCurrentPosition();
+        pos = await getCurrentPosition();
       }
 
       const distance = getDistanceMeters(
-        coords.latitude,
-        coords.longitude,
-        APARTMENT_CONFIG.latitude,
-        APARTMENT_CONFIG.longitude
+        pos.coords.latitude, pos.coords.longitude,
+        APARTMENT_CONFIG.latitude, APARTMENT_CONFIG.longitude
       );
 
-      const roundedDistance = Math.round(distance);
-      setGpsDistance(roundedDistance);
-
-      if (distance <= APARTMENT_CONFIG.radiusMeters) {
-        setGpsStatus('success');
-        const exitTime = getFormattedTime();
-        setJamKeluar(exitTime);
-        setCheckedOut(true);
-        sessionStorage.setItem(SESSION_KEYS.CHECKOUT_TIME, exitTime);
-
-        setTimeout(() => {
-          localStorage.clear();
-          sessionStorage.clear();
-          window.location.href = '/';
-        }, 1500);
-
-      } else {
+      if (distance > APARTMENT_CONFIG.radiusMeters) {
         setGpsStatus('error');
-        setErrorMessage(`Lokasi di luar area apartemen (${roundedDistance}m dari lokasi)`);
+        setErrorMessage(`Lokasi di luar area apartemen (${Math.round(distance)}m dari lokasi)`);
+        return;
       }
+
+      setGpsStatus('success');
+
+      const { data: { user } } = await supabase.auth.getUser();
+      const today     = new Date().toISOString().split('T')[0];
+      const jamKeluarTime = new Date().toTimeString().slice(0, 5);
+
+      const { error } = await supabase
+        .from('absensi')
+        .update({ jam_keluar: jamKeluarTime })
+        .eq('karyawan_id', user.id)
+        .eq('tanggal', today);
+
+      if (error) {
+        setGpsStatus('error');
+        setErrorMessage(error.message || 'Gagal menyimpan check-out ke server');
+        return;
+      }
+
+      saveCheckOut(jamKeluarTime);
+      setJamKeluar(jamKeluarTime);
+      setCheckedOut(true);
+
+      // After 2 seconds: full logout
+      setTimeout(async () => {
+        await supabase.auth.signOut();
+        clearSession();
+        navigate('/login');
+      }, 2000);
+
     } catch (err) {
       setGpsStatus('error');
       setErrorMessage(err.message || 'Izin lokasi ditolak');

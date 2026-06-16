@@ -195,6 +195,21 @@ export default function LoginPage() {
       // C. Tentukan Mapping Role & Penentuan Halaman Tujuan
       const dbRole    = profile?.role || 'penghuni';
       const frontRole = ROLE_MAP_REVERSE[dbRole] || dbRole;
+
+      // Get the role that was selected on RolePickerPage
+      // It is stored in the URL param: /login?role=keuangan
+      const selectedRole = searchParams.get('role'); // useSearchParams
+
+      if (selectedRole && frontRole !== selectedRole) {
+        setIsLoading(false);
+        setError(
+          `Akun ini bukan akun ${selectedRole}. ` +
+          `Silakan kembali dan pilih role yang sesuai.`
+        );
+        await supabase.auth.signOut(); // clear the session
+        return;
+      }
+
       let targetRoute = ROLE_ROUTES[frontRole] || '/penghuni/beranda';
 
       if (needsAttendance(frontRole)) {
@@ -458,8 +473,16 @@ export default function LoginPage() {
               </div>
 
               {error && (
-                <div className="p-3.5 mb-5 text-xs font-semibold text-[#C05040] bg-[#FEF0EE] border border-[#F9C3BA] rounded-xl animate-fade-up">
-                  {error}
+                <div className="mb-5">
+                  <div className="p-3.5 text-xs font-semibold text-[#C05040] bg-[#FEF0EE] border border-[#F9C3BA] rounded-xl animate-fade-up">
+                    {error}
+                  </div>
+                  <div
+                    onClick={() => navigate('/pilih-role')}
+                    className="text-sm font-semibold text-center cursor-pointer text-[#8A857F] hover:text-[#1E1E1E] mt-2 underline"
+                  >
+                    ← Kembali Pilih Role
+                  </div>
                 </div>
               )}
 

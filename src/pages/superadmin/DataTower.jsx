@@ -1,42 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, X, Building2, Info, Edit3, CheckCircle, BarChart3, Users } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 
 export default function DataTower() {
-  const [towers, setTowers] = useState([
-    {
-      id: 1,
-      name: 'Tower A',
-      floors: 22,
-      totalUnits: 176,
-      activeUnits: 168,
-      occupancy: 95,
-      emptyUnits: 8,
-      residents: 'Hendra Gunawan, Maya Sari, Dewi Lestari, Rian Kurniawan, Budi Santoso',
-      desc: 'Sektor Utama - Dekat fasilitas kolam renang dan lobi utama'
-    },
-    {
-      id: 2,
-      name: 'Tower B',
-      floors: 20,
-      totalUnits: 160,
-      activeUnits: 152,
-      occupancy: 95,
-      emptyUnits: 8,
-      residents: 'Rudi Hartono, Anita Kusuma, Agus Wijaya, Siti Rahma, Doni Putra',
-      desc: 'Sektor Barat - Akses langsung ke gedung parkir bertingkat B'
-    },
-    {
-      id: 3,
-      name: 'Tower C',
-      floors: 14,
-      totalUnits: 104,
-      activeUnits: 92,
-      occupancy: 88,
-      emptyUnits: 12,
-      residents: 'Dewi Permata, Rina Kurnia, Eko Prasetyo, Bima Sakti, Lina Karlina',
-      desc: 'Sektor Timur - Dekat area komersial dan taman bermain anak'
-    }
-  ]);
+  const [towers, setTowers] = useState([]);
 
   // Modal States
   const [modalOpen, setModalOpen] = useState(false);
@@ -50,30 +17,77 @@ export default function DataTower() {
   const [newTower, setNewTower] = useState({ name: '', floors: '', totalUnits: '', desc: '' });
   const [editFormData, setEditFormData] = useState({ name: '', floors: '', totalUnits: '', desc: '' });
 
+  const loadTowers = async () => {
+    try {
+      const { data } = await supabase
+        .from('tower')
+        .select('*, unit(count)')
+        .order('nama_tower');
+
+      if (data) {
+        const { data: allUnits } = await supabase
+          .from('unit')
+          .select('tower_id, status, penghuni:users!penghuni_id(nama)');
+
+        setTowers(data.map(t => {
+          const towerUnits = allUnits?.filter(u => u.tower_id === t.id) || [];
+          const totalUnits = t.unit?.[0]?.count ?? t.unit?.count ?? towerUnits.length ?? 0;
+          const activeUnits = towerUnits.filter(u => u.status === 'dihuni' || u.status === 'Dihuni').length;
+          const emptyUnits = totalUnits - activeUnits;
+          const occupancy = totalUnits > 0 ? Math.round((activeUnits / totalUnits) * 100) : 0;
+          
+          const residentNames = towerUnits
+            .filter(u => u.penghuni?.nama)
+            .map(u => u.penghuni.nama)
+            .slice(0, 5)
+            .join(', ');
+
+          return {
+            id: t.id,
+            name: t.nama_tower,
+            floors: t.jumlah_lantai,
+            totalUnits,
+            activeUnits,
+            occupancy,
+            emptyUnits,
+            residents: residentNames || 'Belum ada penghuni terdaftar...',
+            desc: t.alamat || 'Tidak ada keterangan tambahan.'
+          };
+        }));
+      }
+    } catch (err) {
+      console.error('Error loading towers:', err);
+    }
+  };
+
+  useEffect(() => {
+    loadTowers();
+  }, []);
+
   // Handle Add Tower
-  const handleAddTower = (e) => {
+  const handleAddTower = async (e) => {
     e.preventDefault();
-    if (!newTower.name || !newTower.floors || !newTower.totalUnits) return;
+    if (!newTower.name || !newTower.floors) return;
 
-    const floorNum = parseInt(newTower.floors);
-    const unitNum = parseInt(newTower.totalUnits);
-    const simulatedActive = Math.floor(unitNum * 0.9);
-
-    const added = {
-      id: Date.now(),
-      name: newTower.name,
-      floors: floorNum,
-      totalUnits: unitNum,
-      activeUnits: simulatedActive,
-      occupancy: 90,
-      emptyUnits: unitNum - simulatedActive,
-      residents: 'Belum ada penghuni baru terdaftar...',
-      desc: newTower.desc || 'Tidak ada keterangan tambahan.'
+    const formData = {
+      nama_tower: newTower.name,
+      jumlah_lantai: parseInt(newTower.floors),
+      alamat: newTower.desc || 'Grand Surabaya Apartment'
     };
 
-    setTowers(prev => [added, ...prev]);
-    setModalOpen(false);
-    setNewTower({ name: '', floors: '', totalUnits: '', desc: '' });
+    try {
+      const { error } = await supabase
+        .from('tower')
+        .insert(formData);
+
+      if (error) throw error;
+
+      setModalOpen(false);
+      setNewTower({ name: '', floors: '', totalUnits: '', desc: '' });
+      loadTowers();
+    } catch (err) {
+      console.error('Error adding tower:', err.message);
+    }
   };
 
   // Open Detail Modal
@@ -95,30 +109,29 @@ export default function DataTower() {
   };
 
   // Handle Update/Save Edit Tower
-  const handleUpdateTower = (e) => {
+  const handleUpdateTower = async (e) => {
     e.preventDefault();
-    setTowers(prev => prev.map(t => {
-      if (t.id === selectedTower.id) {
-        const totalUnits = parseInt(editFormData.totalUnits);
-        // Menjaga agar unit aktif tidak melebihi kapasitas total unit baru
-        const activeUnits = t.activeUnits > totalUnits ? totalUnits : t.activeUnits;
-        const emptyUnits = totalUnits - activeUnits;
-        const occupancy = totalUnits > 0 ? Math.round((activeUnits / totalUnits) * 100) : 0;
+    if (!selectedTower) return;
 
-        return {
-          ...t,
-          name: editFormData.name,
-          floors: parseInt(editFormData.floors),
-          totalUnits,
-          activeUnits,
-          emptyUnits,
-          occupancy,
-          desc: editFormData.desc
-        };
-      }
-      return t;
-    }));
-    setEditModalOpen(false);
+    const formData = {
+      nama_tower: editFormData.name,
+      jumlah_lantai: parseInt(editFormData.floors),
+      alamat: editFormData.desc
+    };
+
+    try {
+      const { error } = await supabase
+        .from('tower')
+        .update(formData)
+        .eq('id', selectedTower.id);
+
+      if (error) throw error;
+
+      setEditModalOpen(false);
+      loadTowers();
+    } catch (err) {
+      console.error('Error updating tower:', err.message);
+    }
   };
 
   return (

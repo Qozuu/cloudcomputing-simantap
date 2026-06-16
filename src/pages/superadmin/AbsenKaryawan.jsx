@@ -1,17 +1,51 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search, Calendar, Users, AlertCircle, CheckCircle, X, MapPin, Smartphone, Clock } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 
 export default function AbsenKaryawan() {
-  const [employees, setEmployees] = useState([
-    { id: 1, name: 'Rina Kurnia', division: 'Keuangan', checkIn: '08:02', checkOut: '17:05', status: 'Hadir', date: '20 Mei 2026', device: 'iPhone 13 (iOS)', location: 'Area Kantor Pengelola - Lantai 1', notes: 'Masuk tepat waktu' },
-    { id: 2, name: 'Doni Praetya', division: 'Pemeliharaan', checkIn: '07:55', checkOut: '17:00', status: 'Hadir', date: '20 Mei 2026', device: 'Samsung Galaxy S22', location: 'Gedung Tower A - Engineering Room', notes: 'Standby perawatan lift' },
-    { id: 3, name: 'Agus Wibowo', division: 'Keamanan', checkIn: '08:10', checkOut: '—', status: 'Hadir', date: '20 Mei 2026', device: 'Xiaomi Poco X5', location: 'Pos Gerbang Utama Barat', notes: 'Tugas Shift Pagi' },
-    { id: 4, name: 'Siti Rahayu', division: 'Kebersihan', checkIn: '06:00', checkOut: '14:00', status: 'Hadir', date: '20 Mei 2026', device: 'Oppo A78', location: 'Area Lobby & Koridor Tower B', notes: 'Selesai membersihkan sektor tengah' },
-    { id: 5, name: 'Pak Heri', division: 'Pemeliharaan', checkIn: '—', checkOut: '—', status: 'Tidak Hadir', date: '20 Mei 2026', device: '—', location: '—', notes: 'Izin (Sakit dengan surat keterangan dokter)' },
-    { id: 6, name: 'Pak Roni', division: 'Pemeliharaan', checkIn: '09:30', checkOut: '—', status: 'Hadir', date: '20 Mei 2026', device: 'Vivo Y35', location: 'Gedung Parkir P2', notes: 'Terlambat karena kendala pengiriman material' },
-    { id: 7, name: 'Budi Santoso', division: 'Management', checkIn: '09:00', checkOut: '—', status: 'Hadir', date: '20 Mei 2026', device: 'iPad Pro (iPadOS)', location: 'Ruang Direksi Utama', notes: 'Agenda rapat eksternal' },
-    { id: 8, name: 'Dewi Puspita', division: 'Kebersihan', checkIn: '—', checkOut: '—', status: 'Tidak Hadir', date: '20 Mei 2026', device: '—', location: '—', notes: 'Alpa (Tanpa keterangan tanpa respon)' }
-  ]);
+  const [employees, setEmployees] = useState([]);
+
+  useEffect(() => {
+    async function loadAttendance() {
+      try {
+        const todayStr = new Date().toISOString().split('T')[0];
+        const { data } = await supabase
+          .from('absensi')
+          .select('*, karyawan:users(nama,role)')
+          .eq('tanggal', todayStr);
+
+        if (data) {
+          setEmployees(data.map(item => {
+            let divName = 'Management';
+            if (item.karyawan?.role === 'div_keuangan') divName = 'Keuangan';
+            else if (item.karyawan?.role === 'div_pemeliharaan') divName = 'Pemeliharaan';
+            else if (item.karyawan?.role === 'div_keamanan') divName = 'Keamanan';
+            else if (item.karyawan?.role === 'div_kebersihan') divName = 'Kebersihan';
+            else if (item.karyawan?.role === 'div_fasilitas') divName = 'Fasilitas';
+
+            const dateObj = new Date(item.tanggal);
+            const formattedDate = dateObj.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+
+            return {
+              id: item.id,
+              name: item.karyawan?.nama || '—',
+              division: divName,
+              checkIn: item.jam_masuk || '—',
+              checkOut: item.jam_keluar || '—',
+              status: item.status === 'hadir' ? 'Hadir' : 'Tidak Hadir',
+              date: formattedDate,
+              device: item.device || 'Android Device',
+              location: item.lokasi || 'Area Apartemen',
+              notes: item.keterangan || (item.status === 'hadir' ? 'Tercatat di sistem' : 'Izin')
+            };
+          }));
+        }
+      } catch (err) {
+        console.error('Error fetching employee attendance:', err);
+      }
+    }
+    loadAttendance();
+  }, []);
 
   const [period, setPeriod] = useState('April 2026');
   const [divisionFilter, setDivisionFilter] = useState('Semua');

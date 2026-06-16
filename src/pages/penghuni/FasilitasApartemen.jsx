@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   MapPin,
   Clock,
@@ -9,6 +9,7 @@ import {
   Plus,
   Ban
 } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 
 export default function FasilitasApartemen() {
   const [successToast, setSuccessToast] = useState('');
@@ -16,51 +17,63 @@ export default function FasilitasApartemen() {
   const [selectedFacility, setSelectedFacility] = useState(null);
   const [bookingDate, setBookingDate] = useState('');
   const [bookingTime, setBookingTime] = useState('08:00 - 10:00');
+  const [loading, setLoading] = useState(true);
+  const [facilities, setFacilities] = useState([]);
 
-  const [facilities, setFacilities] = useState([
-    { 
-      id: 1, 
-      name: 'Kolam Renang Olympic', 
-      status: 'Buka', 
-      location: 'Lantai G Tower A', 
-      hours: '06:00 - 21:00', 
-      capacity: 'Maks. 50 orang', 
-      price: 'Gratis', 
-      priceRaw: 'Gratis', 
-      slots: '8/10', 
-      slotsLeft: 8, 
-      slotsTotal: 10, 
-      image: 'https://images.unsplash.com/photo-1576013551627-0cc20b96c2a7?auto=format&fit=crop&q=80&w=800' 
-    },
-    { 
-      id: 2, 
-      name: 'Fitness & Gym Center', 
-      status: 'Buka', 
-      location: 'Lantai 2 Tower A', 
-      hours: '06:00 - 22:00', 
-      capacity: 'Maks. 30 orang', 
-      price: 'Gratis', 
-      priceRaw: 'Gratis', 
-      slots: '12/20', 
-      slotsLeft: 12, 
-      slotsTotal: 20, 
-      image: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&q=80&w=800' 
-    },
-    { 
-      id: 3, 
-      name: 'Ruang Pertemuan / Ballroom', 
-      status: 'Maintenance', 
-      location: 'Lantai 1 Tower C', 
-      hours: '08:00 - 22:00', 
-      capacity: 'Maks. 100 orang', 
-      price: 'Rp 100.000/sesi', 
-      priceRaw: 'Rp 100.000', 
-      slots: '0/0', 
-      slotsLeft: 0, 
-      slotsTotal: 0, 
-      image: 'https://images.unsplash.com/photo-1431540015161-0bf868a2d407?auto=format&fit=crop&q=80&w=800' 
+  useEffect(() => {
+    async function loadData() {
+      try {
+        setLoading(true);
+        const { data, error } = await supabase
+          .from('fasilitas')
+          .select('*')
+          .eq('is_active', true)
+          .order('nama');
+        
+        if (error) throw error;
+        
+        const mapped = (data || []).map(fac => {
+          let defaultImage = 'https://images.unsplash.com/photo-1576013551627-0cc20b96c2a7?auto=format&fit=crop&q=80&w=800';
+          if (fac.nama.toLowerCase().includes('gym') || fac.nama.toLowerCase().includes('fit')) {
+            defaultImage = 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&q=80&w=800';
+          } else if (fac.nama.toLowerCase().includes('ball') || fac.nama.toLowerCase().includes('temu') || fac.nama.toLowerCase().includes('aula')) {
+            defaultImage = 'https://images.unsplash.com/photo-1431540015161-0bf868a2d407?auto=format&fit=crop&q=80&w=800';
+          }
+
+          const formattedPrice = fac.tarif === 0 || !fac.tarif
+            ? 'Gratis'
+            : new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(fac.tarif) + '/sesi';
+
+          const rawPrice = fac.tarif === 0 || !fac.tarif
+            ? 'Gratis'
+            : new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(fac.tarif);
+
+          return {
+            id: fac.id,
+            name: fac.nama,
+            status: fac.is_active ? 'Buka' : 'Maintenance',
+            location: fac.lokasi || 'Area Apartemen',
+            hours: fac.jam_operasional || '06:00 - 21:00',
+            capacity: `Maks. ${fac.kapasitas || 50} orang`,
+            price: formattedPrice,
+            priceRaw: rawPrice,
+            slots: `${fac.kapasitas || 10}/${fac.kapasitas || 10}`,
+            slotsLeft: fac.kapasitas || 10,
+            slotsTotal: fac.kapasitas || 10,
+            image: fac.foto_url || defaultImage,
+            raw: fac
+          };
+        });
+
+        setFacilities(mapped);
+      } catch (err) {
+        console.error('Gagal memuat fasilitas:', err.message);
+      } finally {
+        setLoading(false);
+      }
     }
-  ]);
+    loadData();
+  }, []);
 
   const handleOpenBooking = (facility) => {
     if (facility.status === 'Maintenance') return;
@@ -69,12 +82,44 @@ export default function FasilitasApartemen() {
     setModalOpen(true);
   };
 
-  const handleBookingSubmit = (e) => {
+  const handleBookingSubmit = async (e) => {
     e.preventDefault();
-    setModalOpen(false);
-    setSuccessToast(`Pemesanan ${selectedFacility.name} berhasil terkirim!`);
-    setTimeout(() => setSuccessToast(''), 4000);
+    if (!selectedFacility) return;
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const jamMulai = bookingTime.split(' - ')[0];
+      const jamSelesai = bookingTime.split(' - ')[1];
+
+      const newReservasi = {
+        fasilitas_id: selectedFacility.id,
+        penghuni_id: user.id,
+        tanggal: bookingDate,
+        jam_mulai: jamMulai,
+        jam_selesai: jamSelesai,
+        catatan: '',
+        status: 'menunggu'
+      };
+
+      const { error } = await supabase
+        .from('reservasi')
+        .insert(newReservasi);
+
+      if (error) throw error;
+
+      setModalOpen(false);
+      setSuccessToast(`Pemesanan ${selectedFacility.name} berhasil terkirim!`);
+      setTimeout(() => setSuccessToast(''), 4000);
+    } catch (err) {
+      console.error('Gagal melakukan reservasi:', err.message);
+    }
   };
+
+  if (loading) {
+    return <div className="p-6 text-muted text-sm">Memuat...</div>;
+  }
 
   return (
     <div className="space-y-6 animate-fade-up relative">

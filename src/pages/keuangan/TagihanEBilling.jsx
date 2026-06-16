@@ -1,16 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search, FileDown, Plus, X, Loader2, HelpCircle, Printer } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 
 export default function TagihanEBilling() {
-  const [bills, setBills] = useState([
-    { id: 1, unit: '12A', name: 'Hendra Gunawan', tower: 'Tower A', ipl: 770000, parkir: 150000, lainnya: 0, total: 920000, status: 'Lunas', payDate: '15 Apr 2026' },
-    { id: 2, unit: '05B', name: 'Maya Sari', tower: 'Tower A', ipl: 770000, parkir: 50000, lainnya: 0, total: 820000, status: 'Menunggu', payDate: '—' },
-    { id: 3, unit: '18C', name: 'Rudi Hartono', tower: 'Tower B', ipl: 770000, parkir: 150000, lainnya: 0, total: 920000, status: 'Terlambat', payDate: '—' },
-    { id: 4, unit: '07A', name: 'Dewi Lestari', tower: 'Tower A', ipl: 770000, parkir: 0, lainnya: 0, total: 770000, status: 'Lunas', payDate: '12 Apr 2026' },
-    { id: 5, unit: '22B', name: 'Fajar Nugraha', tower: 'Tower B', ipl: 770000, parkir: 150000, lainnya: 25000, total: 945000, status: 'Menunggu', payDate: '—' },
-    { id: 6, unit: '11B', name: 'Anita Kusuma', tower: 'Tower B', ipl: 770000, parkir: 0, lainnya: 0, total: 770000, status: 'Terlambat', payDate: '—' },
-    { id: 7, unit: '09C', name: 'Bima Rahardjo', tower: 'Tower C', ipl: 770000, parkir: 150000, lainnya: 0, total: 920000, status: 'Menunggu', payDate: '—' }
-  ]);
+  const [bills, setBills] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const [period, setPeriod] = useState('April 2026');
   const [statusFilter, setStatusFilter] = useState('Semua');
@@ -20,6 +14,40 @@ export default function TagihanEBilling() {
   const [loadingId, setLoadingId] = useState(null);
   const [successToast, setSuccessToast] = useState('');
 
+  useEffect(() => {
+    async function loadBills() {
+      try {
+        setLoading(true);
+        const { data, error } = await supabase
+          .from('tagihan')
+          .select('*, unit(nomor_unit, tower(nama_tower)), users(nama)')
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        if (data) {
+          setBills(data.map(row => ({
+            id: row.id,
+            unit: row.unit?.nomor_unit || '-',
+            name: row.users?.nama || row.penghuni?.nama || 'Anonim',
+            tower: row.unit?.tower?.nama_tower || '-',
+            ipl: row.ipl || 0,
+            parkir: row.parkir || 0,
+            lainnya: row.lainnya || 0,
+            total: row.total || row.jumlah || 0,
+            status: row.status === 'lunas' || row.status === 'Lunas' || row.status === 'sudah_bayar' ? 'Lunas' : row.status === 'menunggu' || row.status === 'Menunggu' ? 'Menunggu' : 'Terlambat',
+            payDate: row.tgl_bayar ? new Date(row.tgl_bayar).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'
+          })));
+        }
+      } catch (err) {
+        console.error('Error fetching bills:', err.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadBills();
+  }, []);
+
   const handleOpenConfirm = (bill) => {
     setConfirmTarget(bill);
   };
@@ -28,7 +56,7 @@ export default function TagihanEBilling() {
     setConfirmTarget(null);
   };
 
-  const handleExecuteLunas = () => {
+  const handleExecuteLunas = async () => {
     if (!confirmTarget) return;
     const targetId = confirmTarget.id;
     const targetName = confirmTarget.name;
@@ -36,16 +64,24 @@ export default function TagihanEBilling() {
     setConfirmTarget(null);
     setLoadingId(targetId);
 
-    setTimeout(() => {
+    try {
+      const today = new Date();
+      const { error } = await supabase
+        .from('tagihan')
+        .update({ status: 'sudah_bayar', tgl_bayar: today })
+        .eq('id', targetId);
+
+      if (error) throw error;
+
+      const formattedDate = today.toLocaleDateString('id-ID', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric'
+      });
+
       setBills(prev => 
         prev.map(b => {
           if (b.id === targetId) {
-            const today = new Date();
-            const formattedDate = today.toLocaleDateString('id-ID', {
-              day: 'numeric',
-              month: 'short',
-              year: 'numeric'
-            });
             return {
               ...b,
               status: 'Lunas',
@@ -55,9 +91,12 @@ export default function TagihanEBilling() {
           return b;
         })
       );
-      setLoadingId(null);
       showToast(`Konfirmasi Lunas untuk ${targetName} berhasil dilakukan!`);
-    }, 1500);
+    } catch (err) {
+      console.error('Error confirming payment:', err.message);
+    } finally {
+      setLoadingId(null);
+    }
   };
 
   const showToast = (msg) => {
@@ -84,6 +123,10 @@ export default function TagihanEBilling() {
       bill.unit.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesStatus && matchesSearch;
   });
+
+  if (loading) {
+    return <div className="p-6 text-muted text-sm">Memuat...</div>;
+  }
 
   return (
     <div className="space-y-6 animate-fade-up relative">

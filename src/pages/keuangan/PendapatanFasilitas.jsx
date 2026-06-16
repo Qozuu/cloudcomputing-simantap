@@ -1,16 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AlertCircle, Calendar, HelpCircle, Loader2, Search, DollarSign } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 
 export default function PendapatanFasilitas() {
-  // Data unit telah disesuaikan dengan format halaman GM (4 digit angka)
-  const [reservations, setReservations] = useState([
-    { id: 'RSV-0982', facility: 'Aula Clubhouse', unit: '1012', name: 'Hendra Gunawan', date: '30 Mei 2026', time: '09:00 - 13:00', price: 500000, status: 'Menunggu' },
-    { id: 'RSV-0981', facility: 'Lapangan Tenis', unit: '1005', name: 'Maya Sari', date: '29 Mei 2026', time: '16:00 - 18:00', price: 150000, status: 'Lunas' },
-    { id: 'RSV-0980', facility: 'Area BBQ Rooftop', unit: '1218', name: 'Rudi Hartono', date: '28 Mei 2026', time: '18:00 - 22:00', price: 300000, status: 'Menunggu' },
-    { id: 'RSV-0979', facility: 'Lapangan Tenis', unit: '1022', name: 'Fajar Nugraha', date: '27 Mei 2026', time: '08:00 - 10:00', price: 150000, status: 'Lunas' },
-    { id: 'RSV-0978', facility: 'Ruang Serbaguna', unit: '1102', name: 'Anita Kusuma', date: '26 Mei 2026', time: '13:00 - 17:00', price: 400000, status: 'Lunas' },
-    { id: 'RSV-0977', facility: 'Area BBQ Rooftop', unit: '1093', name: 'Bima Rahardjo', date: '25 Mei 2026', time: '17:00 - 21:00', price: 300000, status: 'Menunggu' }
-  ]);
+  const [reservations, setReservations] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [facilityFilter, setFacilityFilter] = useState('Semua');
@@ -19,6 +13,38 @@ export default function PendapatanFasilitas() {
   const [confirmTarget, setConfirmTarget] = useState(null);
   const [loadingId, setLoadingId] = useState(null);
   const [successToast, setSuccessToast] = useState('');
+
+  useEffect(() => {
+    async function loadReservations() {
+      try {
+        setLoading(true);
+        const { data, error } = await supabase
+          .from('tagihan_fasilitas')
+          .select('*, reservasi(tanggal, jam_mulai, jam_selesai, fasilitas(nama)), users(nama)')
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        if (data) {
+          setReservations(data.map(row => ({
+            id: row.id,
+            facility: row.reservasi?.fasilitas?.nama || 'Fasilitas',
+            unit: row.unit_id || '1012',
+            name: row.users?.nama || row.penghuni?.nama || 'Anonim',
+            date: row.reservasi?.tanggal ? new Date(row.reservasi.tanggal).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '—',
+            time: row.reservasi?.jam_mulai && row.reservasi?.jam_selesai ? `${row.reservasi.jam_mulai} - ${row.reservasi.jam_selesai}` : '—',
+            price: row.jumlah || row.total || row.price || 0,
+            status: row.status === 'sudah_bayar' || row.status === 'Lunas' ? 'Lunas' : 'Menunggu'
+          })));
+        }
+      } catch (err) {
+        console.error('Error fetching reservations:', err.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadReservations();
+  }, []);
 
   const formatRupiah = (val) => {
     return new Intl.NumberFormat('id-ID', {
@@ -36,7 +62,7 @@ export default function PendapatanFasilitas() {
     setConfirmTarget(null);
   };
 
-  const handleExecuteLunas = () => {
+  const handleExecuteLunas = async () => {
     if (!confirmTarget) return;
     const targetId = confirmTarget.id;
     const targetFacility = confirmTarget.facility;
@@ -45,7 +71,14 @@ export default function PendapatanFasilitas() {
     setConfirmTarget(null);
     setLoadingId(targetId);
 
-    setTimeout(() => {
+    try {
+      const { error } = await supabase
+        .from('tagihan_fasilitas')
+        .update({ status: 'sudah_bayar' })
+        .eq('id', targetId);
+
+      if (error) throw error;
+
       setReservations(prev =>
         prev.map(r => {
           if (r.id === targetId) {
@@ -54,9 +87,12 @@ export default function PendapatanFasilitas() {
           return r;
         })
       );
-      setLoadingId(null);
       showToast(`Konfirmasi Lunas reservasi ${targetFacility} atas nama ${targetName} sukses dilakukan!`);
-    }, 1500);
+    } catch (err) {
+      console.error('Error confirming facility payment:', err.message);
+    } finally {
+      setLoadingId(null);
+    }
   };
 
   const showToast = (msg) => {
@@ -77,6 +113,10 @@ export default function PendapatanFasilitas() {
   const lunasIncome = reservations.filter(r => r.status === 'Lunas').reduce((sum, r) => sum + r.price, 0);
   const pendingIncome = reservations.filter(r => r.status === 'Menunggu').reduce((sum, r) => sum + r.price, 0);
   const pendingCount = reservations.filter(r => r.status === 'Menunggu').length;
+
+  if (loading) {
+    return <div className="p-6 text-muted text-sm">Memuat...</div>;
+  }
 
   return (
     <div className="space-y-6 animate-fade-up relative">

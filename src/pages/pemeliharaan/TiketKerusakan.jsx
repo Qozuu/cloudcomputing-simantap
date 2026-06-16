@@ -1,74 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../../lib/supabase';
 
 export default function TiketKerusakan() {
-  // Data State awal tiket
-  const [tickets, setTickets] = useState([
-    {
-      id: 'TK-0088',
-      title: 'AC bocor di Unit 18C',
-      unit: 'Unit 18C',
-      date: '21 Apr 2026',
-      status: 'Proses',
-      teknisi: null
-    },
-    {
-      id: 'TK-0087',
-      title: 'Kran kamar mandi menetes',
-      unit: 'Unit 12A',
-      date: '20 Apr 2026',
-      status: 'Proses',
-      teknisi: 'Pak Heri'
-    },
-    {
-      id: 'TK-0086',
-      title: 'Pintu lift berbunyi',
-      unit: 'Tower B',
-      date: '19 Apr 2026',
-      status: 'Proses',
-      teknisi: null
-    },
-    {
-      id: 'TK-0085',
-      title: 'Saklar lampu mati',
-      unit: 'Unit 05B',
-      date: '18 Apr 2026',
-      status: 'Proses',
-      teknisi: 'Pak Heri'
-    },
-    {
-      id: 'TK-0084',
-      title: 'Kunci pintu balkon rusak',
-      unit: 'Unit 10C',
-      date: '17 Apr 2026',
-      status: 'Proses',
-      teknisi: null
-    },
-    {
-      id: 'TK-0083',
-      title: 'Intercom mati',
-      unit: 'Unit 08A',
-      date: '16 Apr 2026',
-      status: 'Proses',
-      teknisi: 'Pak Roni'
-    },
-    {
-      id: 'TK-0082',
-      title: 'Tempat parkir tergenang air',
-      unit: 'Basement 1',
-      date: '15 Apr 2026',
-      status: 'Proses',
-      teknisi: null
-    },
-    {
-      id: 'TK-0081',
-      title: 'Lampu koridor redup',
-      unit: 'Tower A Lt 5',
-      date: '14 Apr 2026',
-      status: 'Proses',
-      teknisi: 'Pak Agus'
-    }
-  ]);
-
+  const [tickets, setTickets] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [technicians, setTechnicians] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('Semua Status');
   const [filterDropdownOpen, setFilterDropdownOpen] = useState(false);
@@ -79,62 +15,167 @@ export default function TiketKerusakan() {
   const [newTitle, setNewTitle] = useState('');
   const [newUnit, setNewUnit] = useState('');
 
-  // Daftar nama teknisi yang tersedia
-  const techniciansList = ['Pak Heri', 'Pak Roni', 'Pak Agus', 'Pak Ridwan', 'Pak Riko'];
+  // Fetch data on mount
+  useEffect(() => {
+    async function loadData() {
+      try {
+        setLoading(true);
+        // Fetch tickets
+        const { data: ticketsData, error: ticketsError } = await supabase
+          .from('laporan')
+          .select('*, pelapor:users!pelapor_id(nama, no_hp), teknisi:users!ditugaskan_ke(nama), unit(nomor_unit, tower(nama_tower))')
+          .order('created_at', { ascending: false });
+
+        if (ticketsError) throw ticketsError;
+
+        if (ticketsData) {
+          const mapped = ticketsData.map(ticket => ({
+            id: String(ticket.id),
+            title: ticket.judul || ticket.deskripsi || 'Tidak ada judul',
+            unit: ticket.unit?.nomor_unit ? `Unit ${ticket.unit.nomor_unit}` : 'Umum',
+            date: new Date(ticket.created_at).toLocaleDateString('id-ID', {
+              day: 'numeric',
+              month: 'short',
+              year: 'numeric'
+            }),
+            status: ticket.status === 'selesai' || ticket.status === 'Selesai' ? 'Selesai' : 'Proses',
+            teknisi: ticket.teknisi?.nama || null
+          }));
+          setTickets(mapped);
+        }
+
+        // Fetch technicians
+        const { data: techData, error: techError } = await supabase
+          .from('users')
+          .select('id, nama, role')
+          .ilike('role', '%teknisi%');
+
+        if (techError) throw techError;
+
+        if (techData && techData.length > 0) {
+          setTechnicians(techData);
+        } else {
+          // Fallback if no technicians in DB
+          setTechnicians([
+            { id: 1, nama: 'Pak Heri', role: 'Teknisi' },
+            { id: 2, nama: 'Pak Roni', role: 'Teknisi' },
+            { id: 3, nama: 'Pak Agus', role: 'Teknisi' },
+            { id: 4, nama: 'Pak Ridwan', role: 'Teknisi' },
+            { id: 5, nama: 'Pak Riko', role: 'Teknisi' }
+          ]);
+        }
+      } catch (err) {
+        console.error('Error loading tickets:', err.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadData();
+  }, []);
 
   // Fungsi mengubah status menjadi Selesai
-  const handleMarkDone = (id) => {
-    setTickets(prevTickets => 
-      prevTickets.map(ticket => 
-        ticket.id === id ? { ...ticket, status: 'Selesai' } : ticket
-      )
-    );
+  const handleMarkDone = async (id) => {
+    try {
+      const { error } = await supabase
+        .from('laporan')
+        .update({ status: 'selesai', updated_at: new Date() })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setTickets(prevTickets => 
+        prevTickets.map(ticket => 
+          ticket.id === id ? { ...ticket, status: 'Selesai' } : ticket
+        )
+      );
+    } catch (err) {
+      console.error('Error updating ticket status:', err.message);
+    }
   };
 
   // Fungsi menugaskan teknisi baru
-  const handleAssignTeknisi = (id, teknisiName) => {
-    setTickets(prevTickets =>
-      prevTickets.map(ticket =>
-        ticket.id === id 
-          ? { ...ticket, teknisi: teknisiName, status: 'Proses' } 
-          : ticket
-      )
-    );
-    setAssigningTicketId(null);
+  const handleAssignTeknisi = async (id, tech) => {
+    try {
+      const { error } = await supabase
+        .from('laporan')
+        .update({ ditugaskan_ke: tech.id, status: 'proses' })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setTickets(prevTickets =>
+        prevTickets.map(ticket =>
+          ticket.id === id 
+            ? { ...ticket, teknisi: tech.nama, status: 'Proses' } 
+            : ticket
+        )
+      );
+      setAssigningTicketId(null);
+    } catch (err) {
+      console.error('Error assigning technician:', err.message);
+    }
   };
 
   // Fungsi menyimpan pembuatan tiket manual baru
-  const handleCreateTicket = (e) => {
+  const handleCreateTicket = async (e) => {
     e.preventDefault();
     if (!newTitle || !newUnit) return;
 
-    const nextIdNumber = tickets.length > 0 
-      ? parseInt(tickets[0].id.split('-')[1]) + 1 
-      : 89;
-    const generatedId = `TK-0${nextIdNumber}`;
+    try {
+      // Find unit_id matching newUnit
+      const { data: unitData } = await supabase
+        .from('unit')
+        .select('id')
+        .eq('nomor_unit', newUnit)
+        .single();
 
-    const today = new Date();
-    const formattedDate = today.toLocaleDateString('id-ID', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric'
-    });
+      const unitId = unitData ? unitData.id : null;
 
-    const newTicket = {
-      id: generatedId,
-      title: newTitle,
-      unit: newUnit,
-      date: formattedDate,
-      status: 'Proses', // Ketentuan: Tiket baru otomatis langsung berstatus Proses
-      teknisi: null
-    };
+      // Get current user id
+      const { data: { user } } = await supabase.auth.getUser();
+      const pelaporId = user ? user.id : null;
 
-    setTickets([newTicket, ...tickets]);
-    
-    // Reset parameter input form & tutup modal popup
-    setNewTitle('');
-    setNewUnit('');
-    setIsModalOpen(false);
+      const { data: insertedData, error } = await supabase
+        .from('laporan')
+        .insert({
+          judul: newTitle,
+          deskripsi: newTitle,
+          unit_id: unitId,
+          pelapor_id: pelaporId,
+          status: 'proses',
+          created_at: new Date()
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      if (insertedData) {
+        const formattedDate = new Date(insertedData.created_at).toLocaleDateString('id-ID', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric'
+        });
+
+        const newTicket = {
+          id: String(insertedData.id),
+          title: insertedData.judul || insertedData.deskripsi || 'Tidak ada judul',
+          unit: newUnit,
+          date: formattedDate,
+          status: 'Proses',
+          teknisi: null
+        };
+
+        setTickets(prev => [newTicket, ...prev]);
+      }
+      
+      // Reset parameter input form & tutup modal popup
+      setNewTitle('');
+      setNewUnit('');
+      setIsModalOpen(false);
+    } catch (err) {
+      console.error('Error creating manual ticket:', err.message);
+    }
   };
 
   // Logika Filter Pencarian dan Status Dropdown
@@ -152,6 +193,10 @@ export default function TiketKerusakan() {
 
   // Menghitung jumlah total tiket aktif saat ini (Proses)
   const activeCount = tickets.filter(t => t.status === 'Proses').length;
+
+  if (loading) {
+    return <div className="p-6 text-muted text-sm">Memuat...</div>;
+  }
 
   return (
     <div className="space-y-6 animate-fade-up relative overflow-visible">
@@ -328,13 +373,13 @@ export default function TiketKerusakan() {
                         <div className="fixed inset-0 z-30" onClick={() => setAssigningTicketId(null)}></div>
                         <div className="absolute left-0 bottom-full mb-2 w-48 bg-white border border-gray-200 rounded-xl shadow-xl z-40 py-1.5 animate-scale-in">
                           <p className="px-3 py-1 text-[10px] uppercase font-bold text-gray-400 tracking-wider border-b border-gray-50 pb-1 mb-1">Pilih Teknisi</p>
-                          {techniciansList.map((tech) => (
+                          {technicians.map((tech) => (
                             <button
-                              key={tech}
+                              key={tech.id}
                               onClick={() => handleAssignTeknisi(ticket.id, tech)}
                               className="w-full text-left px-3 py-1.5 text-xs font-semibold text-gray-800 hover:bg-gray-50 transition"
                             >
-                              {tech}
+                              {tech.nama}
                             </button>
                           ))}
                         </div>

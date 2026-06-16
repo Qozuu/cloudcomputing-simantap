@@ -1,14 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, X, Search } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 
 export default function DataUnit() {
-  const [units, setUnits] = useState([
-    { id: 1, noUnit: '12A', tower: 'Tower A', floor: 'Lt. 12', size: '42 m²', resident: 'Hendra Gunawan', status: 'Dihuni', ipl: 'Rp 770.000' },
-    { id: 2, noUnit: '05B', tower: 'Tower A', floor: 'Lt. 5', size: '36 m²', resident: 'Maya Sari', status: 'Dihuni', ipl: 'Rp 770.000' },
-    { id: 3, noUnit: '03A', tower: 'Tower A', floor: 'Lt. 3', size: '28 m²', resident: '—', status: 'Kosong', ipl: 'Rp 770.000' },
-    { id: 4, noUnit: '18C', tower: 'Tower B', floor: 'Lt. 18', size: '54 m²', resident: 'Rudi Hartono', status: 'Dihuni', ipl: 'Rp 770.000' },
-    { id: 5, noUnit: '07A', tower: 'Tower A', floor: 'Lt. 7', size: '42 m²', resident: 'Dewi Lestari', status: 'Dihuni', ipl: 'Rp 770.000' }
-  ]);
+  const [units, setUnits] = useState([]);
+  const [towers, setTowers] = useState([]);
 
   const [towerFilter, setTowerFilter] = useState('Semua');
   const [statusFilter, setStatusFilter] = useState('Semua');
@@ -17,30 +13,80 @@ export default function DataUnit() {
 
   const [newUnit, setNewUnit] = useState({
     noUnit: '',
-    tower: 'Tower A',
+    tower: '',
     floor: '',
     size: '',
     status: 'Kosong'
   });
 
-  const handleAddUnit = (e) => {
+  const loadData = async () => {
+    try {
+      const { data: unitData } = await supabase
+        .from('unit')
+        .select('*, tower(nama_tower), penghuni:users!penghuni_id(nama)')
+        .order('nomor_unit');
+
+      if (unitData) {
+        setUnits(unitData.map(u => ({
+          id: u.id,
+          noUnit: u.nomor_unit,
+          tower: u.tower?.nama_tower || '—',
+          floor: `Lt. ${u.lantai}`,
+          size: `${u.luas} m²`,
+          resident: u.penghuni?.nama || '—',
+          status: u.status === 'dihuni' ? 'Dihuni' : 'Kosong',
+          ipl: `Rp ${(u.luas * 18000).toLocaleString('id-ID')}`
+        })));
+      }
+
+      const { data: towerData } = await supabase
+        .from('tower')
+        .select('id, nama_tower')
+        .order('nama_tower');
+      if (towerData) {
+        setTowers(towerData);
+        if (towerData.length > 0 && !newUnit.tower) {
+          setNewUnit(prev => ({ ...prev, tower: towerData[0].nama_tower }));
+        }
+      }
+    } catch (err) {
+      console.error('Error loading unit data:', err);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const handleAddUnit = async (e) => {
     e.preventDefault();
     if (!newUnit.noUnit || !newUnit.floor || !newUnit.size) return;
 
-    const added = {
-      id: Date.now(),
-      noUnit: newUnit.noUnit,
-      tower: newUnit.tower,
-      floor: `Lt. ${newUnit.floor}`,
-      size: `${newUnit.size} m²`,
-      resident: newUnit.status === 'Dihuni' ? 'Penghuni Baru' : '—',
-      status: newUnit.status,
-      ipl: 'Rp 770.000'
+    const matchedTower = towers.find(t => t.nama_tower === newUnit.tower);
+    if (!matchedTower) return;
+
+    const formData = {
+      nomor_unit: newUnit.noUnit,
+      tower_id: matchedTower.id,
+      lantai: parseInt(newUnit.floor),
+      luas: parseInt(newUnit.size),
+      status: newUnit.status.toLowerCase(),
+      penghuni_id: null
     };
 
-    setUnits(prev => [added, ...prev]);
-    setModalOpen(false);
-    setNewUnit({ noUnit: '', tower: 'Tower A', floor: '', size: '', status: 'Kosong' });
+    try {
+      const { error } = await supabase
+        .from('unit')
+        .insert(formData);
+
+      if (error) throw error;
+
+      setModalOpen(false);
+      setNewUnit({ noUnit: '', tower: towers[0]?.nama_tower || '', floor: '', size: '', status: 'Kosong' });
+      loadData();
+    } catch (err) {
+      console.error('Error adding unit:', err.message);
+    }
   };
 
   const filteredUnits = units.filter(unit => {
@@ -65,9 +111,9 @@ export default function DataUnit() {
               className="select-modern input-modern text-xs font-bold py-1 px-3 w-32"
             >
               <option value="Semua">Semua Tower</option>
-              <option value="Tower A">Tower A</option>
-              <option value="Tower B">Tower B</option>
-              <option value="Tower C">Tower C</option>
+              {towers.map(t => (
+                <option key={t.id} value={t.nama_tower}>{t.nama_tower}</option>
+              ))}
             </select>
           </div>
 
@@ -204,9 +250,9 @@ export default function DataUnit() {
                     onChange={(e) => setNewUnit(prev => ({ ...prev, tower: e.target.value }))}
                     className="select-modern input-modern font-semibold"
                   >
-                    <option value="Tower A">Tower A</option>
-                    <option value="Tower B">Tower B</option>
-                    <option value="Tower C">Tower C</option>
+                    {towers.map(t => (
+                      <option key={t.id} value={t.nama_tower}>{t.nama_tower}</option>
+                    ))}
                   </select>
                 </div>
               </div>

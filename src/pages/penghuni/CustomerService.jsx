@@ -12,6 +12,7 @@ import {
   AlertCircle,
   ShieldAlert
 } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 
 // 📞 HOTLINE TUNGGAL PENGELOLA (Satu nomor untuk semua divisi)
 const HOTLINE_WA_PUSAT = '6288975285486';
@@ -54,17 +55,10 @@ export default function KontakPengelola() {
   // Panel Kiri - State Live Chat Utama
   const [csCategory, setCsCategory] = useState(DEPT_CONFIG.pemeliharaan.categories[0]);
   const [csInput, setCsInput] = useState('');
-  const [csMessages, setCsMessages] = useState([
-    {
-      id: 1,
-      sender: 'admin',
-      from: 'admin',
-      name: DEPT_CONFIG.pemeliharaan.adminLabel,
-      avatar: 'LT',
-      text: DEPT_CONFIG.pemeliharaan.welcome,
-      time: '09:00'
-    }
-  ]);
+  const [csMessages, setCsMessages] = useState([]);
+  const [conversationId, setConversationId] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   // Panel Kanan - State Widget AI
   const [aiInput, setAiInput] = useState('');
@@ -75,6 +69,182 @@ export default function KontakPengelola() {
       text: 'Halo! Saya SiManTap AI, asisten virtual Grand Surabaya. Saya bisa menjawab otomatis seputar info fasilitas umum, panduan tagihan, atau prosedur administrasi.'
     }
   ]);
+
+  // Fetch current user on mount
+  useEffect(() => {
+    async function initUser() {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          setCurrentUser(user);
+        }
+      } catch (err) {
+        console.error('Failed to get user:', err.message);
+      }
+    }
+    initUser();
+  }, []);
+
+  const loadMessages = async (convId, adminName) => {
+    try {
+      const { data: msgs, error } = await supabase
+        .from('messages')
+        .select('*, sender:users(nama, role)')
+        .eq('conversation_id', convId)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+
+      const formatted = msgs.map(m => {
+        const isMe = m.sender_id === currentUser?.id;
+        const avatar = selectedDept === 'pemeliharaan' ? 'LT' : (selectedDept === 'keuangan' ? 'AK' : 'AF');
+        return {
+          id: m.id,
+          sender: isMe ? 'user' : 'admin',
+          name: isMe ? 'Hendra' : adminName,
+          avatar: avatar,
+          text: m.body,
+          time: new Date(m.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+        };
+      });
+
+      if (formatted.length === 0) {
+        setCsMessages([
+          {
+            id: 'welcome',
+            sender: 'admin',
+            name: dept.adminLabel,
+            avatar: selectedDept === 'pemeliharaan' ? 'LT' : (selectedDept === 'keuangan' ? 'AK' : 'AF'),
+            text: dept.welcome,
+            time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+          }
+        ]);
+      } else {
+        setCsMessages(formatted);
+      }
+    } catch (err) {
+      console.error('Failed to load messages:', err.message);
+    }
+  };
+
+  // Setup conversation when department or user changes
+  useEffect(() => {
+    if (!currentUser) return;
+    
+    async function setupConversation() {
+      try {
+        setLoading(true);
+        const roleMap = {
+          pemeliharaan: 'div_pemeliharaan',
+          keuangan: 'div_keuangan',
+          fasilitas: 'div_fasilitas'
+        };
+        const targetRole = roleMap[selectedDept];
+        
+        // Find admin of that role
+        const { data: adminUser } = await supabase
+          .from('users')
+          .select('id, nama')
+          .eq('role', targetRole)
+          .limit(1)
+          .maybeSingle();
+
+        if (adminUser) {
+          // Find conversation
+          const { data: myParts } = await supabase
+            .from('conversation_participants')
+            .select('conversation_id')
+            .eq('user_id', currentUser.id);
+
+          const myConvIds = myParts?.map(p => p.conversation_id) || [];
+          
+          let activeConvId = null;
+          if (myConvIds.length > 0) {
+            const { data: adminParts } = await supabase
+              .from('conversation_participants')
+              .select('conversation_id')
+              .in('conversation_id', myConvIds)
+              .eq('user_id', adminUser.id)
+              .limit(1);
+
+            if (adminParts && adminParts.length > 0) {
+              activeConvId = adminParts[0].conversation_id;
+            }
+          }
+
+          if (!activeConvId) {
+            // Create conversation
+            const { data: newConv, error: cErr } = await supabase
+              .from('conversations')
+              .insert({})
+              .select('id')
+              .single();
+
+            if (cErr) throw cErr;
+
+            activeConvId = newConv.id;
+
+            // Insert participants
+            await supabase.from('conversation_participants').insert([
+              { conversation_id: activeConvId, user_id: currentUser.id },
+              { conversation_id: activeConvId, user_id: adminUser.id }
+            ]);
+          }
+
+          setConversationId(activeConvId);
+          await loadMessages(activeConvId, adminUser.nama);
+        }
+      } catch (err) {
+        console.error('Setup conversation error:', err.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    setupConversation();
+  }, [currentUser, selectedDept]);
+
+  // Realtime subscribe
+  useEffect(() => {
+    if (!conversationId || !currentUser) return;
+
+    const channel = supabase.channel(`messages-rt-${conversationId}`)
+      .on('postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'messages',
+          filter: `conversation_id=eq.${conversationId}` },
+        async (payload) => {
+          const isMe = payload.new.sender_id === currentUser.id;
+          
+          // Fetch sender details
+          const { data: senderUser } = await supabase
+            .from('users')
+            .select('nama')
+            .eq('id', payload.new.sender_id)
+            .single();
+
+          const avatar = selectedDept === 'pemeliharaan' ? 'LT' : (selectedDept === 'keuangan' ? 'AK' : 'AF');
+          const formattedMsg = {
+            id: payload.new.id,
+            sender: isMe ? 'user' : 'admin',
+            name: isMe ? 'Hendra' : (senderUser?.nama || 'Admin'),
+            avatar: avatar,
+            text: payload.new.body,
+            time: new Date(payload.new.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+          };
+
+          setCsMessages(prev => {
+            if (prev.some(m => m.id === formattedMsg.id)) return prev;
+            const filtered = prev.filter(m => m.id !== 'welcome');
+            return [...filtered, formattedMsg];
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [conversationId, currentUser, selectedDept]);
 
   // Otomatis scroll ke pesan paling bawah jika ada chat baru
   useEffect(() => {
@@ -100,59 +270,30 @@ export default function KontakPengelola() {
     return `whatsapp://send?phone=${HOTLINE_WA_PUSAT}&text=${encodeURIComponent(templateTeks)}`;
   };
 
-  // Handler Ganti Departemen (Dan reset isi chat simulasi)
+  // Handler Ganti Departemen
   const onDeptChange = (deptKey) => {
     setSelectedDept(deptKey);
-    const newDept = DEPT_CONFIG[deptKey];
-    setCsMessages([
-      {
-        id: Date.now(),
-        sender: 'admin',
-        from: 'admin',
-        name: newDept.adminLabel,
-        avatar: deptKey === 'pemeliharaan' ? 'LT' : (deptKey === 'keuangan' ? 'AK' : 'AF'),
-        text: newDept.welcome,
-        time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
-      }
-    ]);
   };
 
   // Handle Kirim Chat Utama
-  const handleCsSend = (e) => {
+  const handleCsSend = async (e) => {
     e.preventDefault();
-    if (!csInput.trim()) return;
+    if (!csInput.trim() || !conversationId || !currentUser) return;
 
-    const newMsg = {
-      id: Date.now(),
-      sender: 'user',
-      name: 'Hendra',
-      text: csInput,
-      time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
-    };
-
-    setCsMessages(prev => [...prev, newMsg]);
-    const userQuery = csInput;
+    const text = csInput;
     setCsInput('');
 
-    // Simulasi respons otomatis dari divisi admin terkait
-    setTimeout(() => {
-      const namaAdmin = dept.adminLabel;
-      const kodeAvatar = selectedDept === 'pemeliharaan' ? 'LT' : (selectedDept === 'keuangan' ? 'AK' : 'AF');
-      const teksBalasan = `Halo Pak/Bu, pesan Anda mengenai "${userQuery}" sudah masuk ke sistem antrean kami dengan Tag [${csCategory}]. Admin divisi ${dept.label} akan segera membalas chat Anda.`;
-      
-      setCsMessages(prev => [
-        ...prev,
-        {
-          id: Date.now() + 1,
-          sender: 'admin',
-          from: 'admin',
-          name: namaAdmin,
-          avatar: kodeAvatar,
-          text: teksBalasan,
-          time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
-        }
-      ]);
-    }, 1200);
+    try {
+      const { error } = await supabase.from('messages').insert({
+        conversation_id: conversationId,
+        sender_id: currentUser.id,
+        body: text
+      });
+
+      if (error) throw error;
+    } catch (err) {
+      console.error('Failed to send message:', err.message);
+    }
   };
 
   // Handle Kirim Chat AI
@@ -179,6 +320,10 @@ export default function KontakPengelola() {
       setAiMessages(prev => [...prev, { id: Date.now() + 1, sender: 'ai', text: aiResponseText }]);
     }, 700);
   };
+
+  if (loading) {
+    return <div className="p-6 text-muted text-sm">Memuat...</div>;
+  }
 
   return (
     <div className="space-y-6 text-zinc-800">

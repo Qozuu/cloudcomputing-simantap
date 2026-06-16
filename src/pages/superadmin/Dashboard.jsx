@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   BarChart,
   Bar,
@@ -16,9 +16,32 @@ import {
   Users,
   AlertCircle
 } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 
 export default function Dashboard() {
   const [selectedYear, setSelectedYear] = useState('2026');
+
+  // Dynamic counts state
+  const [unitCount, setUnitCount] = useState(440);
+  const [userCount, setUserCount] = useState(412);
+  const [tiketCount, setTiketCount] = useState(18);
+
+  useEffect(() => {
+    async function loadCounts() {
+      try {
+        const { count: uc } = await supabase.from('unit').select('id', { count: 'exact', head: true });
+        const { count: usc } = await supabase.from('users').select('id', { count: 'exact', head: true });
+        const { count: tkt } = await supabase.from('laporan').select('id', { count: 'exact', head: true }).neq('status', 'selesai');
+
+        if (uc !== null) setUnitCount(uc);
+        if (usc !== null) setUserCount(usc);
+        if (tkt !== null) setTiketCount(tkt);
+      } catch (err) {
+        console.error('Error fetching dashboard counts:', err);
+      }
+    }
+    loadCounts();
+  }, []);
 
   // Hardcoded data for 6 Months BarChart
   const barChartData = [
@@ -64,15 +87,15 @@ export default function Dashboard() {
         <div className="card-lavender flex flex-col justify-between min-h-[120px]">
           <div className="space-y-1">
             <p className="text-[#8A857F] font-semibold text-xs">Penghuni Aktif</p>
-            <p className="text-[#1E1E1E] font-black text-2xl mt-1">412</p>
+            <p className="text-[#1E1E1E] font-black text-2xl mt-1">{userCount}</p>
           </div>
-          <span className="text-[#8A857F] font-semibold text-xs mt-2 block">dari 440 unit</span>
+          <span className="text-[#8A857F] font-semibold text-xs mt-2 block">dari {unitCount} unit</span>
         </div>
 
         <div className="card-mint flex flex-col justify-between min-h-[120px]">
           <div className="space-y-1">
             <p className="text-[#8A857F] font-semibold text-xs">Tiket Komplain</p>
-            <p className="text-[#1E1E1E] font-black text-2xl mt-1">18</p>
+            <p className="text-[#1E1E1E] font-black text-2xl mt-1">{tiketCount}</p>
           </div>
           <span className="text-[#8A857F] font-semibold text-xs mt-2 block">Menunggu Tindakan</span>
         </div>

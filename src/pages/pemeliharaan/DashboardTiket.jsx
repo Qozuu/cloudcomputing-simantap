@@ -1,28 +1,32 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { supabase } from '../../lib/supabase';
 
 export default function DashboardTiket() {
-  const stats = [
+  const [tiket, setTiket] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [userName, setUserName] = useState('Pak Doni');
+  const [stats, setStats] = useState([
     {
       title: 'Tiket Urgent',
-      value: '2',
+      value: '0',
       subtitle: 'Perlu segera ditangani',
       borderColor: 'border-coral',
       valueColor: 'text-coral'
     },
     {
       title: 'Dalam Proses',
-      value: '8',
+      value: '0',
       subtitle: 'Teknisi sedang bekerja',
       borderColor: 'border-gold',
       valueColor: 'text-gold'
     },
     {
       title: 'Selesai Bulan Ini',
-      value: '47',
+      value: '0',
       subtitle: (
         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
-          ▲ 12% Baik
+          ▲ 0% Baik
         </span>
       ),
       borderColor: 'border-navy',
@@ -33,36 +37,136 @@ export default function DashboardTiket() {
       value: '1.2 hari',
       subtitle: 'Target: < 2 hari',
       borderColor: 'border-cream',
-      valueColor: 'text-navy'
+      valueColor: 'text-[#1E1E1E]'
     }
-  ];
+  ]);
 
-  const recentTickets = [
-    {
-      id: 'TK-0088',
-      title: 'AC bocor di Unit 18C',
-      unit: 'Unit 18C',
-      date: '21 Apr 2026',
-      status: 'Urgent',
-      statusClass: 'bg-coral text-white'
-    },
-    {
-      id: 'TK-0087',
-      title: 'Kran kamar mandi menetes',
-      unit: 'Unit 12A',
-      date: '20 Apr 2026',
-      status: 'Proses',
-      statusClass: 'bg-gold text-white'
-    },
-    {
-      id: 'TK-0086',
-      title: 'Pintu lift berbunyi',
-      unit: 'Tower B',
-      date: '19 Apr 2026',
-      status: 'Proses',
-      statusClass: 'bg-gold text-white'
+  useEffect(() => {
+    async function loadData() {
+      try {
+        setLoading(true);
+        // Get user details
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: profile } = await supabase.from('users').select('nama').eq('id', user.id).single();
+          if (profile?.nama) setUserName(profile.nama);
+        }
+
+        // Fetch recent tickets
+        const { data: recent, error } = await supabase
+          .from('laporan')
+          .select('*, pelapor:users!pelapor_id(nama), unit(nomor_unit)')
+          .order('created_at', { ascending: false })
+          .limit(5);
+
+        if (error) throw error;
+
+        if (recent) {
+          setTiket(recent);
+        }
+
+        // Fetch stats
+        const { data: allTickets } = await supabase.from('laporan').select('status, kategori, created_at, updated_at');
+        if (allTickets) {
+          const urgent = allTickets.filter(t => t.kategori === 'Urgent' || t.status?.toLowerCase() === 'urgent').length;
+          const proses = allTickets.filter(t => t.status?.toLowerCase() === 'proses' || t.status?.toLowerCase() === 'menunggu').length;
+          
+          const now = new Date();
+          const selesaiBulanIni = allTickets.filter(t => {
+            if (t.status?.toLowerCase() !== 'selesai') return false;
+            if (!t.updated_at) return false;
+            const updatedDate = new Date(t.updated_at);
+            return updatedDate.getMonth() === now.getMonth() && updatedDate.getFullYear() === now.getFullYear();
+          }).length;
+
+          // Calculate average resolution time
+          const resolvedTickets = allTickets.filter(t => t.status?.toLowerCase() === 'selesai' && t.created_at && t.updated_at);
+          let avgStr = '1.2 hari';
+          if (resolvedTickets.length > 0) {
+            const totalMs = resolvedTickets.reduce((acc, t) => acc + (new Date(t.updated_at) - new Date(t.created_at)), 0);
+            const avgDays = (totalMs / (1000 * 60 * 60 * 24 * resolvedTickets.length)).toFixed(1);
+            avgStr = `${avgDays} hari`;
+          }
+
+          setStats([
+            {
+              title: 'Tiket Urgent',
+              value: String(urgent),
+              subtitle: 'Perlu segera ditangani',
+              borderColor: 'border-coral',
+              valueColor: 'text-coral'
+            },
+            {
+              title: 'Dalam Proses',
+              value: String(proses),
+              subtitle: 'Teknisi sedang bekerja',
+              borderColor: 'border-gold',
+              valueColor: 'text-gold'
+            },
+            {
+              title: 'Selesai Bulan Ini',
+              value: String(selesaiBulanIni),
+              subtitle: (
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
+                  ▲ 12% Baik
+                </span>
+              ),
+              borderColor: 'border-navy',
+              valueColor: 'text-navy'
+            },
+            {
+              title: 'Avg Penyelesaian',
+              value: avgStr,
+              subtitle: 'Target: < 2 hari',
+              borderColor: 'border-cream',
+              valueColor: 'text-[#1E1E1E]'
+            }
+          ]);
+        }
+      } catch (err) {
+        console.error('Error loading dashboard tiket:', err.message);
+      } finally {
+        setLoading(false);
+      }
     }
-  ];
+
+    loadData();
+
+    // Subscribe to realtime changes
+    const channel = supabase.channel('laporan-rt')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'laporan' }, async (payload) => {
+        // Fetch full ticket details including relations
+        const { data: newTicket } = await supabase
+          .from('laporan')
+          .select('*, pelapor:users!pelapor_id(nama), unit(nomor_unit)')
+          .eq('id', payload.new.id)
+          .single();
+        
+        if (newTicket) {
+          setTiket(prev => [newTicket, ...prev].slice(0, 5));
+        } else {
+          setTiket(prev => [payload.new, ...prev].slice(0, 5));
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  if (loading) {
+    return <div className="p-6 text-muted text-sm">Memuat...</div>;
+  }
+
+  const recentTickets = tiket.map(t => ({
+    id: `TK-${String(t.id).padStart(4, '0')}`,
+    title: t.judul || t.deskripsi || 'Tidak ada judul',
+    unit: t.unit?.nomor_unit ? `Unit ${t.unit.nomor_unit}` : 'Umum',
+    date: new Date(t.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }),
+    status: t.status || 'Proses',
+    statusClass: t.status?.toLowerCase() === 'urgent' ? 'bg-coral text-white' : 'bg-gold text-white'
+  }));
 
   return (
     <div className="space-y-6 animate-fade-up">
@@ -72,9 +176,9 @@ export default function DashboardTiket() {
         <div className="absolute -left-16 -bottom-16 w-36 h-36 rounded-full bg-white/5 pointer-events-none"></div>
         
         <div>
-          <h3 className="text-xl font-bold text-[#FAF6F0] mb-1">Halo, Pak Doni!</h3>
+          <h3 className="text-xl font-bold text-[#FAF6F0] mb-1">Halo, {userName}!</h3>
           <p className="text-sm text-[#D8D2CC]">
-            Ada <strong className="text-[#FFFFFF]">2 tiket urgent</strong> baru yang memerlukan penanganan segera hari ini.
+            Ada <strong className="text-[#FFFFFF]">{stats[0].value} tiket urgent</strong> baru yang memerlukan penanganan segera hari ini.
           </p>
         </div>
         <Link 

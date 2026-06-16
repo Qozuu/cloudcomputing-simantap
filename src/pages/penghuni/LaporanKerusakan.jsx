@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Wrench,
   Calendar,
@@ -11,31 +11,71 @@ import {
   Eye,
   X
 } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 
 export default function LaporanKerusakan() {
   const fileInputRef = useRef(null);
   const [successToast, setSuccessToast] = useState('');
   const [selectedFileName, setSelectedFileName] = useState('');
-  
-  // State untuk melacak tiket mana yang sedang dibuka di modal detail
   const [activeModalTicket, setActiveModalTicket] = useState(null);
-
-  const [tickets, setTickets] = useState([
-    {
-      id: 'TK-0088',
-      title: 'AC bocor — air menetes ke lantai sangat deras sampai membanjiri karpet kamar utama dan berpotensi merusak kasur jika dibiarkan',
-      category: 'AC / Pendingin',
-      date: '19 April 2026',
-      teknisi: 'Pak Roni',
-      estimasi: '1-2 hari',
-      status: 'Proses'
-    }
-  ]);
+  const [loading, setLoading] = useState(true);
+  const [tickets, setTickets] = useState([]);
+  const [userProfile, setUserProfile] = useState(null);
 
   const [formData, setFormData] = useState({
     category: 'AC / Pendingin',
     description: ''
   });
+
+  async function fetchTickets(userId) {
+    const { data, error } = await supabase
+      .from('laporan')
+      .select('*, teknisi:users!ditugaskan_ke(nama)')
+      .eq('pelapor_id', userId)
+      .neq('status', 'selesai')
+      .order('created_at', { ascending: false });
+    
+    if (error) throw error;
+    
+    const mapped = (data || []).map(t => ({
+      id: `TK-${String(t.id).padStart(4, '0')}`,
+      title: t.deskripsi || t.judul,
+      category: t.kategori,
+      date: new Date(t.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }),
+      teknisi: t.teknisi?.nama || 'Sedang Diplot',
+      estimasi: t.estimasi_selesai || 'Verifikasi Admin',
+      status: t.status === 'menunggu' ? 'Menunggu' : t.status === 'proses' || t.status === 'Proses' ? 'Proses' : t.status,
+      raw: t
+    }));
+    setTickets(mapped);
+  }
+
+  useEffect(() => {
+    async function loadData() {
+      try {
+        setLoading(true);
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        // Fetch user profile (to get unit_id)
+        const { data: profile, error: profileErr } = await supabase
+          .from('users')
+          .select('*, unit(id, nomor_unit)')
+          .eq('id', user.id)
+          .single();
+        
+        if (profileErr) throw profileErr;
+        setUserProfile(profile);
+
+        await fetchTickets(user.id);
+      } catch (err) {
+        console.error('Gagal memuat keluhan:', err.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadData();
+  }, []);
 
   const handleUploadClick = () => {
     if (fileInputRef.current) {
@@ -50,39 +90,52 @@ export default function LaporanKerusakan() {
     }
   };
 
-  const handleFormSubmit = (e) => {
+  const handleFormSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.description.trim()) return;
+    if (!formData.description.trim() || !userProfile) return;
 
-    const lastTicketId = tickets.length > 0 
-      ? parseInt(tickets[0].id.split('-')[1]) 
-      : 87;
-    const nextIdNumber = lastTicketId + 1;
-    const ticketId = `TK-${String(nextIdNumber).padStart(4, '0')}`;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      const newLaporan = {
+        pelapor_id: user.id,
+        unit_id: userProfile.unit?.id || null,
+        judul: formData.description.substring(0, 100),
+        deskripsi: formData.description,
+        kategori: formData.category,
+        status: 'menunggu'
+      };
 
-    const newTicket = {
-      id: ticketId,
-      title: formData.description,
-      category: formData.category,
-      date: '03 Juni 2026',
-      teknisi: 'Sedang Diplot',
-      estimasi: 'Verifikasi Admin',
-      status: 'Proses'
-    };
+      const { data, error } = await supabase
+        .from('laporan')
+        .insert(newLaporan)
+        .select()
+        .single();
 
-    setTickets(prev => [newTicket, ...prev]);
-    setSuccessToast(`Laporan ${ticketId} berhasil terkirim!`);
-    setTimeout(() => setSuccessToast(''), 3000);
+      if (error) throw error;
 
-    setFormData({
-      category: 'AC / Pendingin',
-      description: ''
-    });
-    setSelectedFileName('');
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+      const ticketId = `TK-${String(data.id).padStart(4, '0')}`;
+      setSuccessToast(`Laporan ${ticketId} berhasil terkirim!`);
+      setTimeout(() => setSuccessToast(''), 3000);
+
+      setFormData({
+        category: 'AC / Pendingin',
+        description: ''
+      });
+      setSelectedFileName('');
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+
+      await fetchTickets(user.id);
+    } catch (err) {
+      console.error('Gagal mengirim laporan:', err.message);
     }
   };
+
+  if (loading) {
+    return <div className="p-6 text-muted text-sm">Memuat...</div>;
+  }
 
   return (
     <div className="space-y-6 animate-fade-up relative">
@@ -145,6 +198,11 @@ export default function LaporanKerusakan() {
               </div>
             );
           })}
+          {tickets.length === 0 && (
+            <div className="card-section p-6 text-center text-xs font-semibold text-muted">
+              Tidak ada laporan kerusakan aktif.
+            </div>
+          )}
         </div>
       </div>
 

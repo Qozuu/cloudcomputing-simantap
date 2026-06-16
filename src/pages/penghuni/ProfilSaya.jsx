@@ -1,31 +1,93 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { User, CheckCircle2, Shield, X, Save, AlertCircle } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 
 export default function ProfilSaya() {
   const [successToast, setSuccessToast] = useState('');
   const [editModalOpen, setEditModalOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   // Profile data state
   const [profile, setProfile] = useState({
-    name: 'Hendra Gunawan', 
+    name: '', 
     ktp: 'Belum diisi',     
-    phone: '0889-7528-5486', 
-    email: 'hendrag@email.com',
-    whatsapp: '0889-7528-5486',
+    phone: '', 
+    email: '',
+    whatsapp: '',
     emergencyContact: 'Belum diatur',
     emergencyName: '',
     emergencyPhone: '',
-    vehicle: '-', // ✨ SEKARANG BISA DIEDIT: Masuk ke data personal penghuni
+    vehicle: '-',
     
     // Data Hunian di bawah dikunci mati (Sistem / Admin Keuangan)
-    unit: '12A',
-    tower: 'Tower A',
-    layer: 'Lantai 12',
+    unit: '',
+    tower: '',
+    layer: '',
     space: '42 m²',
     joinDate: '28 Mei 2026'
   });
 
   const [tempProfile, setTempProfile] = useState({ ...profile });
+
+  useEffect(() => {
+    async function loadData() {
+      try {
+        setLoading(true);
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const { data: userProfile, error: userError } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+
+        if (userError) throw userError;
+
+        const { data: dataHunian, error: hunianError } = await supabase
+          .from('penghuni')
+          .select('*, unit(nomor_unit, lantai, luas_m2, tower(nama_tower))')
+          .eq('user_id', user.id)
+          .single();
+
+        if (hunianError) {
+          console.warn('Gagal memuat data hunian:', hunianError.message);
+        }
+
+        // format KTP
+        let formattedKtp = 'Belum diisi';
+        const ktpVal = dataHunian?.no_ktp || '';
+        if (ktpVal && ktpVal.length >= 8) {
+          formattedKtp = `${ktpVal.substring(0, 4)}xxxx${ktpVal.substring(ktpVal.length - 8)}`;
+        }
+
+        setProfile({
+          name: userProfile?.nama || 'Penghuni',
+          ktp: formattedKtp,
+          rawKtp: ktpVal,
+          phone: userProfile?.no_hp || '',
+          email: userProfile?.email || '',
+          whatsapp: dataHunian?.no_wa || userProfile?.no_hp || '',
+          emergencyContact: dataHunian?.kontak_darurat_nama && dataHunian?.kontak_darurat_no
+            ? `${dataHunian.kontak_darurat_nama} · ${dataHunian.kontak_darurat_no}`
+            : 'Belum diatur',
+          emergencyName: dataHunian?.kontak_darurat_nama || '',
+          emergencyPhone: dataHunian?.kontak_darurat_no || '',
+          vehicle: dataHunian?.no_plat_kendaraan || '-',
+          unit: dataHunian?.unit?.nomor_unit || '-',
+          tower: dataHunian?.unit?.tower?.nama_tower || '-',
+          layer: dataHunian?.unit?.lantai ? `Lantai ${dataHunian.unit.lantai}` : '-',
+          space: dataHunian?.unit?.luas_m2 ? `${dataHunian.unit.luas_m2} m²` : '42 m²',
+          joinDate: dataHunian?.tgl_masuk || '28 Mei 2026'
+        });
+      } catch (err) {
+        console.error('Gagal memuat profil:', err.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadData();
+  }, []);
 
   const handleOpenEdit = () => {
     setTempProfile({ 
@@ -36,39 +98,78 @@ export default function ProfilSaya() {
     setEditModalOpen(true);
   };
 
-  const handleEditSubmit = (e) => {
+  const handleEditSubmit = async (e) => {
     e.preventDefault();
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
 
-    // Logic menyamarkan KTP (Sensor xxxx)
-    let formattedKtp = tempProfile.ktp;
-    let rawKtpSaved = tempProfile.ktp;
-    if (tempProfile.ktp && tempProfile.ktp.length >= 8) {
-      formattedKtp = `${tempProfile.ktp.substring(0, 4)}xxxx${tempProfile.ktp.substring(tempProfile.ktp.length - 8)}`;
+      // Update users
+      const { error: userError } = await supabase
+        .from('users')
+        .update({
+          nama: tempProfile.name,
+          no_hp: tempProfile.phone,
+          email: tempProfile.email
+        })
+        .eq('id', user.id);
+
+      if (userError) throw userError;
+
+      // Update penghuni
+      const { error: penghuniError } = await supabase
+        .from('penghuni')
+        .update({
+          no_ktp: tempProfile.ktp,
+          no_wa: tempProfile.whatsapp,
+          no_plat_kendaraan: tempProfile.vehicle,
+          kontak_darurat_nama: tempProfile.emergencyName,
+          kontak_darurat_no: tempProfile.emergencyPhone
+        })
+        .eq('user_id', user.id);
+
+      if (penghuniError) {
+        console.warn('Gagal memperbarui tabel penghuni:', penghuniError.message);
+      }
+
+      // Logic menyamarkan KTP (Sensor xxxx)
+      let formattedKtp = tempProfile.ktp;
+      let rawKtpSaved = tempProfile.ktp;
+      if (tempProfile.ktp && tempProfile.ktp.length >= 8) {
+        formattedKtp = `${tempProfile.ktp.substring(0, 4)}xxxx${tempProfile.ktp.substring(tempProfile.ktp.length - 8)}`;
+      }
+
+      setProfile({
+        ...profile,
+        name: tempProfile.name,
+        ktp: formattedKtp || 'Belum diisi',
+        rawKtp: rawKtpSaved, 
+        phone: tempProfile.phone,
+        email: tempProfile.email,
+        whatsapp: tempProfile.whatsapp,
+        vehicle: tempProfile.vehicle || '-',
+        emergencyName: tempProfile.emergencyName,
+        emergencyPhone: tempProfile.emergencyPhone,
+        emergencyContact: tempProfile.emergencyName && tempProfile.emergencyPhone
+          ? `${tempProfile.emergencyName} · ${tempProfile.emergencyPhone}`
+          : 'Belum diatur'
+      });
+      
+      setEditModalOpen(false);
+      setSuccessToast('Profil berhasil diperbarui!');
+      setTimeout(() => setSuccessToast(''), 3000);
+    } catch (err) {
+      console.error('Gagal memperbarui profil:', err.message);
     }
-
-    setProfile({
-      ...profile,
-      ktp: formattedKtp || 'Belum diisi',
-      rawKtp: rawKtpSaved, 
-      phone: tempProfile.phone,
-      email: tempProfile.email,
-      whatsapp: tempProfile.whatsapp,
-      vehicle: tempProfile.vehicle || '-', // ✨ Simpan data kendaraan baru
-      emergencyName: tempProfile.emergencyName,
-      emergencyPhone: tempProfile.emergencyPhone,
-      emergencyContact: tempProfile.emergencyName && tempProfile.emergencyPhone
-        ? `${tempProfile.emergencyName} · ${tempProfile.emergencyPhone}`
-        : 'Belum diatur'
-    });
-    
-    setEditModalOpen(false);
-    setSuccessToast('Profil berhasil diperbarui!');
-    setTimeout(() => setSuccessToast(''), 3000);
   };
 
   const getInitials = (name) => {
-    return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+    return (name || '').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
   };
+
+  if (loading) {
+    return <div className="p-6 text-muted text-sm">Memuat...</div>;
+  }
 
   return (
     <div className="space-y-6 animate-fade-up relative">

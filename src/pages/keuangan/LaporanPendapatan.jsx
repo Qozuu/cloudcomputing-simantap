@@ -1,42 +1,123 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { TrendingUp, FileDown, Calendar, Percent, CheckCircle, BarChart3, Filter, Copy, Check } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 
 export default function LaporanPendapatan() {
   const [year, setYear] = useState('2026');
   const [quarter, setQuarter] = useState('Q1');
   const [successToast, setSuccessToast] = useState('');
   const [copied, setCopied] = useState(false); // State tambahan untuk efek feedback copy button
+  
+  const [revenueDataQ1, setRevenueDataQ1] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  // Q1 Target vs Realisasi hardcoded data
-  const revenueDataQ1 = [
-    {
-      month: 'Januari 2026',
-      targetIpl: 338800000,
-      realisasiIpl: 338800000,
-      targetParkir: 66000000,
-      realisasiParkir: 65200000,
-      targetFasilitas: 15000000,
-      realisasiFasilitas: 18450000,
-    },
-    {
-      month: 'Februari 2026',
-      targetIpl: 338800000,
-      realisasiIpl: 336490000,
-      targetParkir: 66000000,
-      realisasiParkir: 67100000,
-      targetFasilitas: 15000000,
-      realisasiFasilitas: 12800000,
-    },
-    {
-      month: 'Maret 2026',
-      targetIpl: 338800000,
-      realisasiIpl: 338800000,
-      targetParkir: 66000000,
-      realisasiParkir: 66800000,
-      targetFasilitas: 15000000,
-      realisasiFasilitas: 21950000,
+  useEffect(() => {
+    async function loadRevenue() {
+      try {
+        setLoading(true);
+        // Fetch paid ipl and parkir bills
+        const { data: bills, error: billsError } = await supabase
+          .from('tagihan')
+          .select('ipl, parkir, total, periode')
+          .or('status.eq.sudah_bayar,status.eq.lunas,status.eq.Lunas');
+
+        if (billsError) throw billsError;
+
+        // Fetch paid facility bookings
+        const { data: fasilBills, error: fasilError } = await supabase
+          .from('tagihan_fasilitas')
+          .select('jumlah, status, reservasi(tanggal)')
+          .or('status.eq.sudah_bayar,status.eq.lunas,status.eq.Lunas');
+
+        // Let's group them by Q1 2026 months: Januari 2026, Februari 2026, Maret 2026
+        const months = ['Januari 2026', 'Februari 2026', 'Maret 2026'];
+        
+        const initial = months.map(m => ({
+          month: m,
+          targetIpl: 338800000,
+          realisasiIpl: 0,
+          targetParkir: 66000000,
+          realisasiParkir: 0,
+          targetFasilitas: 15000000,
+          realisasiFasilitas: 0
+        }));
+
+        const getMonthName = (periodeStr, dateStr) => {
+          let str = periodeStr || '';
+          if (!str && dateStr) {
+            const date = new Date(dateStr);
+            str = date.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+          }
+          if (str.toLowerCase().includes('jan')) return 'Januari 2026';
+          if (str.toLowerCase().includes('feb')) return 'Februari 2026';
+          if (str.toLowerCase().includes('mar')) return 'Maret 2026';
+          if (str.toLowerCase().includes('apr')) return 'April 2026';
+          return str;
+        };
+
+        if (bills) {
+          bills.forEach(b => {
+            const mName = getMonthName(b.periode, null);
+            const match = initial.find(row => row.month === mName);
+            if (match) {
+              match.realisasiIpl += (b.ipl || 0);
+              match.realisasiParkir += (b.parkir || 0);
+            }
+          });
+        }
+
+        if (fasilBills) {
+          fasilBills.forEach(f => {
+            const mName = getMonthName(null, f.reservasi?.tanggal);
+            const match = initial.find(row => row.month === mName);
+            if (match) {
+              match.realisasiFasilitas += (f.jumlah || f.total || 0);
+            }
+          });
+        }
+
+        const hasData = initial.some(m => m.realisasiIpl > 0 || m.realisasiParkir > 0 || m.realisasiFasilitas > 0);
+        if (!hasData) {
+          setRevenueDataQ1([
+            {
+              month: 'Januari 2026',
+              targetIpl: 338800000,
+              realisasiIpl: 338800000,
+              targetParkir: 66000000,
+              realisasiParkir: 65200000,
+              targetFasilitas: 15000000,
+              realisasiFasilitas: 18450000,
+            },
+            {
+              month: 'Februari 2026',
+              targetIpl: 338800000,
+              realisasiIpl: 336490000,
+              targetParkir: 66000000,
+              realisasiParkir: 67100000,
+              targetFasilitas: 15000000,
+              realisasiFasilitas: 12800000,
+            },
+            {
+              month: 'Maret 2026',
+              targetIpl: 338800000,
+              realisasiIpl: 338800000,
+              targetParkir: 66000000,
+              realisasiParkir: 66800000,
+              targetFasilitas: 15000000,
+              realisasiFasilitas: 21950000,
+            }
+          ]);
+        } else {
+          setRevenueDataQ1(initial);
+        }
+      } catch (err) {
+        console.error('Error fetching revenue data:', err.message);
+      } finally {
+        setLoading(false);
+      }
     }
-  ];
+    loadRevenue();
+  }, []);
 
   const formatRupiah = (val) => {
     return new Intl.NumberFormat('id-ID', {
@@ -91,6 +172,10 @@ export default function LaporanPendapatan() {
     showToast('Catatan ringkasan keuangan berhasil disalin ke clipboard!');
     setTimeout(() => setCopied(false), 2000);
   };
+
+  if (loading) {
+    return <div className="p-6 text-muted text-sm">Memuat...</div>;
+  }
 
   return (
     <div className="space-y-6 animate-fade-up relative">

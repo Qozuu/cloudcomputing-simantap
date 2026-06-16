@@ -8,6 +8,7 @@ import {
   Info,
   LogOut
 } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 
 export default function LogTamu() {
   const [showToast, setShowToast] = useState(false);
@@ -20,29 +21,100 @@ export default function LogTamu() {
   const [keperluan, setKeperluan] = useState('Tamu pribadi');
   const [noKendaraan, setNoKendaraan] = useState('');
 
-  // Initial table data
-  const [tamuList, setTamuList] = useState([
-    {
-      id: 1,
-      nama: 'Budi Susanto',
-      unit: '12A - Hendra G.',
-      masuk: '09:30',
-      keluar: '-',
-      keperluan: 'Tamu pribadi',
-      status: 'Di Dalam'
-    },
-    {
-      id: 2,
-      nama: 'Delivery JNE',
-      unit: '05B - Maya S.',
-      masuk: '09:15',
-      keluar: '09:20',
-      keperluan: 'Pengiriman',
-      status: 'Keluar'
-    }
-  ]);
+  // Table data & units lookup
+  const [tamuList, setTamuList] = useState([]);
+  const [units, setUnits] = useState([]);
 
-  // Page mount auto-dismissing toast (4 seconds)
+  // Fetch visitors and subscribe to real-time updates
+  useEffect(() => {
+    async function init() {
+      try {
+        const { data: visitors } = await supabase
+          .from('visitor')
+          .select('*, unit_tujuan:unit(nomor_unit)')
+          .order('waktu_masuk', { ascending: false });
+
+        if (visitors) {
+          const tamuFormatted = visitors.map(v => {
+            const masukDate = new Date(v.waktu_masuk);
+            const masukStr = masukDate.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+            const keluarStr = v.waktu_keluar 
+              ? new Date(v.waktu_keluar).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+              : '-';
+            return {
+              id: v.id,
+              nama: v.nama_tamu,
+              unit: v.unit_tujuan?.nomor_unit || '—',
+              masuk: masukStr,
+              keluar: keluarStr,
+              keperluan: v.keperluan || '—',
+              status: v.waktu_keluar ? 'Keluar' : 'Di Dalam'
+            };
+          });
+          setTamuList(tamuFormatted);
+        }
+
+        const { data: unitData } = await supabase
+          .from('unit')
+          .select('id, nomor_unit');
+        if (unitData) {
+          setUnits(unitData);
+        }
+      } catch (err) {
+        console.error('Error fetching visitors:', err);
+      }
+    }
+
+    init();
+
+    // Subscribe to visitor postgres changes
+    const channel = supabase.channel('visitor-rt')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'visitor' }, async (payload) => {
+        const { data: newVisitor } = await supabase
+          .from('visitor')
+          .select('*, unit_tujuan:unit(nomor_unit)')
+          .eq('id', payload.new.id)
+          .single();
+
+        if (newVisitor) {
+          const masukDate = new Date(newVisitor.waktu_masuk);
+          const masukStr = masukDate.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+          const formatted = {
+            id: newVisitor.id,
+            nama: newVisitor.nama_tamu,
+            unit: newVisitor.unit_tujuan?.nomor_unit || '—',
+            masuk: masukStr,
+            keluar: '-',
+            keperluan: newVisitor.keperluan || '—',
+            status: 'Di Dalam'
+          };
+          setTamuList(prev => [formatted, ...prev]);
+        }
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'visitor' }, payload => {
+        setTamuList(prev =>
+          prev.map(tamu => {
+            if (tamu.id === payload.new.id) {
+              const keluarStr = payload.new.waktu_keluar 
+                ? new Date(payload.new.waktu_keluar).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+                : '-';
+              return {
+                ...tamu,
+                keluar: keluarStr,
+                status: payload.new.waktu_keluar ? 'Keluar' : 'Di Dalam'
+              };
+            }
+            return tamu;
+          })
+        );
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
   useEffect(() => {
     setShowToast(true);
     const timer = setTimeout(() => {
@@ -53,56 +125,63 @@ export default function LogTamu() {
 
   const handleScanClick = () => {
     setShowToast(true);
-    // Refresh dismissal
     setTimeout(() => {
       setShowToast(false);
     }, 4000);
   };
 
-  const handleCreateTamu = (e) => {
+  const handleCreateTamu = async (e) => {
     e.preventDefault();
     if (!namaTamu.trim() || !tujuanUnit.trim()) return;
 
-    const today = new Date();
-    const timeStr = today.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+    const cleanUnitInput = tujuanUnit.trim().toLowerCase();
+    const matchedUnit = units.find(u => 
+      cleanUnitInput.includes(u.nomor_unit.toLowerCase()) || 
+      u.nomor_unit.toLowerCase().includes(cleanUnitInput)
+    );
+    const unit_tujuan_id = matchedUnit ? matchedUnit.id : null;
 
-    const newTamu = {
-      id: Date.now(),
-      nama: namaTamu,
-      unit: tujuanUnit,
-      masuk: timeStr,
-      keluar: '-',
-      keperluan: keperluan,
-      status: 'Di Dalam'
-    };
+    try {
+      const { data: inserted, error } = await supabase
+        .from('visitor')
+        .insert({
+          nama_tamu: namaTamu,
+          unit_tujuan_id,
+          keperluan: keperluan,
+          no_ktp: null
+        })
+        .select()
+        .single();
 
-    setTamuList(prev => [newTamu, ...prev]);
-    setModalOpen(false);
+      if (error) throw error;
 
-    // Reset Form
-    setNamaTamu('');
-    setTujuanUnit('');
-    setKeperluan('Tamu pribadi');
-    setNoKendaraan('');
+      setModalOpen(false);
+      setNamaTamu('');
+      setTujuanUnit('');
+      setKeperluan('Tamu pribadi');
+      setNoKendaraan('');
 
-    // Success notification
-    setSuccessToast(`Tamu ${newTamu.nama} berhasil didaftarkan! QR Code tercetak.`);
-    setTimeout(() => setSuccessToast(''), 3000);
+      setSuccessToast(`Tamu ${inserted.nama_tamu} berhasil didaftarkan! QR Code tercetak.`);
+      setTimeout(() => setSuccessToast(''), 3000);
+    } catch (err) {
+      console.error('Failed to register visitor:', err.message);
+    }
   };
 
-  // Check out a guest
-  const handleCheckOut = (id) => {
-    const today = new Date();
-    const timeStr = today.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+  const handleCheckOut = async (id) => {
+    try {
+      const { error } = await supabase
+        .from('visitor')
+        .update({ waktu_keluar: new Date().toISOString() })
+        .eq('id', id);
 
-    setTamuList(prev =>
-      prev.map(tamu =>
-        tamu.id === id ? { ...tamu, keluar: timeStr, status: 'Keluar' } : tamu
-      )
-    );
+      if (error) throw error;
 
-    setSuccessToast('Tamu berhasil di-check out.');
-    setTimeout(() => setSuccessToast(''), 3000);
+      setSuccessToast('Tamu berhasil di-check out.');
+      setTimeout(() => setSuccessToast(''), 3000);
+    } catch (err) {
+      console.error('Failed to checkout visitor:', err.message);
+    }
   };
 
   return (

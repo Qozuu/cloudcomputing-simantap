@@ -1,66 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CalendarCheck } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 
 export default function ChatFasilitas() {
-  const [conversations, setConversations] = useState([
-    {
-      id: 'HG',
-      name: 'Hendra G.',
-      unit: 'Unit 12A',
-      lastMessage: 'Booking kolam renang pagi ini',
-      time: '09:45',
-      unread: true,
-      messages: [
-        { sender: 'resident', text: 'Selamat pagi admin, saya ingin konfirmasi booking kolam renang pagi ini.', time: '09:40' },
-        { sender: 'admin', text: 'Pagi Pak Hendra. Baik, silakan isi formulir atau infokan sesinya ya.', time: '09:42' },
-        { sender: 'resident', text: 'Booking kolam renang pagi ini ya, terima kasih.', time: '09:45' }
-      ]
-    },
-    {
-      id: 'MS',
-      name: 'Maya S.',
-      unit: 'Unit 05B',
-      lastMessage: 'Lapangan tenis jam 8 kosong?',
-      time: '09:20',
-      unread: true,
-      messages: [
-        { sender: 'admin', text: 'Halo! Selamat datang di CS Fasilitas SiManTap. Kami siap membantu pertanyaan seputar reservasi dan fasilitas apartemen.', time: '09:00' },
-        { sender: 'resident', text: 'Pak, saya mau booking lapangan tenis untuk besok jam 8 pagi.', time: '09:22' },
-        { sender: 'admin', text: 'Halo Bu Maya, kami cek dulu jadwalnya ya. Boleh kirim bukti pembayaran uang jaminannya via WhatsApp di tombol atas?', time: '09:24' },
-        { sender: 'resident', text: 'Lapangan tenis jam 8 kosong?', time: '09:25' }
-      ]
-    },
-    {
-      id: 'RH',
-      name: 'Rudi H.',
-      unit: 'Unit 18C',
-      lastMessage: 'Bisa reschedule ruang serbaguna?',
-      time: '08:55',
-      unread: false,
-      messages: [
-        { sender: 'resident', text: 'Pagi admin, untuk ruang serbaguna tanggal 25 besok apakah bisa di-reschedule?', time: '08:50' },
-        { sender: 'resident', text: 'Bisa reschedule ruang serbaguna?', time: '08:55' }
-      ]
-    },
-    {
-      id: 'DL',
-      name: 'Dewi L.',
-      unit: 'Unit 07A',
-      lastMessage: 'Terima kasih sudah disetujui',
-      time: '08:00',
-      unread: false,
-      messages: [
-        { sender: 'resident', text: 'Pagi admin, apakah reservasi gym saya sudah divalidasi?', time: '07:55' },
-        { sender: 'admin', text: 'Sudah kami setujui ya Bu Dewi. Silakan dicek di riwayat.', time: '07:58' },
-        { sender: 'resident', text: 'Terima kasih sudah disetujui', time: '08:00' }
-      ]
-    }
-  ]);
-
+  const [conversations, setConversations] = useState([]);
   const [activeId, setActiveId] = useState(null);
   const [replyText, setReplyText] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [successToast, setSuccessToast] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState(null);
   
   // Validation Modal Form Fields
   const [facilityName, setFacilityName] = useState('Kolam Renang');
@@ -71,62 +20,217 @@ export default function ChatFasilitas() {
 
   const activeChat = conversations.find(c => c.id === activeId);
 
-  // Mark chat as read when clicked
-  const handleSelectChat = (id) => {
-    setActiveId(id);
-    setConversations(prev => 
-      prev.map(c => c.id === id ? { ...c, unread: false } : c)
-    );
+  const loadConversations = async (adminId) => {
+    try {
+      const { data: participants, error: pError } = await supabase
+        .from('conversation_participants')
+        .select('conversation_id')
+        .eq('user_id', adminId);
+
+      if (pError) throw pError;
+      const convIds = participants?.map(p => p.conversation_id) || [];
+
+      if (convIds.length === 0) {
+        setConversations([]);
+        return;
+      }
+
+      const { data: otherParticipants, error: opError } = await supabase
+        .from('conversation_participants')
+        .select('conversation_id, user_id, users:users(nama, role)')
+        .in('conversation_id', convIds)
+        .neq('user_id', adminId);
+
+      if (opError) throw opError;
+
+      const residentIds = otherParticipants?.map(p => p.user_id) || [];
+
+      const { data: penghunis, error: pgError } = await supabase
+        .from('penghuni')
+        .select('user_id, unit(nomor_unit)')
+        .in('user_id', residentIds);
+
+      const { data: messages, error: mError } = await supabase
+        .from('messages')
+        .select('conversation_id, body, created_at')
+        .in('conversation_id', convIds)
+        .order('created_at', { ascending: false });
+
+      const mapped = otherParticipants.map(participant => {
+        const userId = participant.user_id;
+        const name = participant.users?.nama || 'Anonim';
+        const unitData = penghunis?.find(p => p.user_id === userId);
+        const unitNum = unitData?.unit?.nomor_unit || '—';
+        
+        const lastMsgObj = messages?.find(m => m.conversation_id === participant.conversation_id);
+        const lastMessage = lastMsgObj?.body || 'Belum ada pesan';
+        const time = lastMsgObj?.created_at
+          ? new Date(lastMsgObj.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          : '—';
+
+        return {
+          id: participant.conversation_id,
+          userId: userId,
+          name: name,
+          unit: unitNum !== '—' ? `Unit ${unitNum}` : '—',
+          lastMessage: lastMessage,
+          time: time,
+          unread: false,
+          messages: []
+        };
+      });
+
+      setConversations(mapped);
+    } catch (err) {
+      console.error('Failed to load conversations:', err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // Send message function
-  const handleSendMessage = (e) => {
-    e.preventDefault();
-    if (!replyText.trim() || !activeId) return;
-
-    const now = new Date();
-    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-    setConversations(prev =>
-      prev.map(c => {
-        if (c.id === activeId) {
-          return {
-            ...c,
-            lastMessage: replyText,
-            time: timeStr,
-            messages: [
-              ...c.messages,
-              { sender: 'admin', text: replyText, time: timeStr }
-            ]
-          };
+  useEffect(() => {
+    async function init() {
+      try {
+        setLoading(true);
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          setCurrentUser(user);
+          await loadConversations(user.id);
         }
-        return c;
-      })
-    );
+      } catch (err) {
+        console.error('Failed to init chat:', err.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+    init();
+  }, []);
 
-    setReplyText('');
+  useEffect(() => {
+    if (!activeId || !currentUser) return;
+
+    const channel = supabase.channel(`messages-rt-${activeId}`)
+      .on('postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'messages',
+          filter: `conversation_id=eq.${activeId}` },
+        async (payload) => {
+          const isAdmin = payload.new.sender_id === currentUser.id;
+          const formattedMsg = {
+            sender: isAdmin ? 'admin' : 'resident',
+            text: payload.new.body,
+            time: new Date(payload.new.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          };
+
+          setConversations(prev =>
+            prev.map(c => {
+              if (c.id === activeId) {
+                const exists = c.messages.some(m => m.text === formattedMsg.text && m.time === formattedMsg.time);
+                if (exists) return c;
+                return {
+                  ...c,
+                  lastMessage: formattedMsg.text,
+                  time: formattedMsg.time,
+                  messages: [...c.messages, formattedMsg]
+                };
+              }
+              return c;
+            })
+          );
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [activeId, currentUser]);
+
+  const handleSelectChat = async (id) => {
+    setActiveId(id);
+    try {
+      const { data: msgs, error } = await supabase
+        .from('messages')
+        .select('*, sender:users(nama, role)')
+        .eq('conversation_id', id)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+
+      const formatted = msgs.map(m => {
+        const isAdmin = m.sender?.role?.startsWith('div_') || m.sender_id === currentUser?.id;
+        return {
+          sender: isAdmin ? 'admin' : 'resident',
+          text: m.body,
+          time: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+      });
+
+      setConversations(prev =>
+        prev.map(c => c.id === id ? { ...c, messages: formatted, unread: false } : c)
+      );
+    } catch (err) {
+      console.error('Failed to load messages:', err.message);
+    }
   };
 
-  // Create Validation Submit
-  const handleCreateValidationSubmit = (e) => {
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+    if (!replyText.trim() || !activeId || !currentUser) return;
+
+    const text = replyText;
+    setReplyText('');
+
+    try {
+      const { error } = await supabase.from('messages').insert({
+        conversation_id: activeId,
+        sender_id: currentUser.id,
+        body: text
+      });
+
+      if (error) throw error;
+    } catch (err) {
+      console.error('Failed to send message:', err.message);
+    }
+  };
+
+  const handleCreateValidationSubmit = async (e) => {
     e.preventDefault();
     if (!activeChat) return;
 
-    setModalOpen(false);
-    setSuccessToast(`Agenda sewa untuk ${activeChat.name} berhasil divalidasi!`);
-    
-    // Clear toast after 3 seconds
-    setTimeout(() => {
-      setSuccessToast('');
-    }, 3000);
+    try {
+      const { data: fac } = await supabase
+        .from('fasilitas')
+        .select('id')
+        .eq('nama', facilityName)
+        .maybeSingle();
 
-    // Reset ticket fields
-    setBookingDate('');
-    setAdminNotes('');
+      const { error } = await supabase.from('reservasi').insert({
+        penghuni_id: activeChat.userId,
+        fasilitas_id: fac?.id || null,
+        tanggal: bookingDate,
+        jam_mulai: sessionTime.split('-')[0] || '08:00',
+        jam_selesai: sessionTime.split('-')[1] || '10:00',
+        status: approvalStatus.toLowerCase() === 'disetujui' ? 'disetujui' : 'ditolak',
+        keterangan: adminNotes || 'Validasi agenda sewa'
+      });
+
+      if (error) throw error;
+
+      setModalOpen(false);
+      setSuccessToast(`Agenda sewa untuk ${activeChat.name} berhasil divalidasi!`);
+      setTimeout(() => setSuccessToast(''), 3000);
+      setBookingDate('');
+      setAdminNotes('');
+    } catch (err) {
+      console.error('Failed to validate reservation:', err.message);
+    }
   };
 
-  // Count unread conversations
   const unreadCount = conversations.filter(c => c.unread).length;
+
+  if (loading) {
+    return <div className="p-6 text-muted text-sm">Memuat...</div>;
+  }
 
   return (
     <div className="h-[calc(100vh-140px)] flex flex-col md:flex-row border border-soft rounded-3xl bg-surface shadow-soft overflow-hidden animate-fade-up relative">
@@ -145,6 +249,7 @@ export default function ChatFasilitas() {
         <div className="flex-1 overflow-y-auto divide-y divide-gray-100">
           {conversations.map((chat) => {
             const isActiveItem = chat.id === activeId;
+            const initials = chat.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
             return (
               <button
                 key={chat.id}
@@ -157,7 +262,7 @@ export default function ChatFasilitas() {
               >
                 {/* Avatar Initials */}
                 <div className="avatar avatar-md avatar-lavender shadow-sm">
-                  {chat.id}
+                  {initials}
                 </div>
                 
                 {/* Content */}
@@ -192,7 +297,7 @@ export default function ChatFasilitas() {
               <div className="flex items-center gap-3">
                 <div className="relative">
                   <div className="avatar avatar-md avatar-lavender shadow-sm">
-                    {activeChat.id}
+                    {activeChat.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                   </div>
                   <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 rounded-full border-2 border-white"></span>
                 </div>

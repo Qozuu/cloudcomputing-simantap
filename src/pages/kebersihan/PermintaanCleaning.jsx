@@ -1,13 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../../lib/supabase';
 
 export default function PermintaanCleaning() {
-  const [requests, setRequests] = useState([
-    { id: 1, unit: '12A', name: 'Hendra G.', service: 'Deep cleaning', reqDate: '20 Apr', schedule: '22 Apr 09:00', status: 'Terjadwal', description: 'Deep cleaning seluruh area unit termasuk jendela luar, balkon, dan vacum karpet kamar utama.' },
-    { id: 2, unit: '05B', name: 'Maya S.', service: 'Cuci sofa', reqDate: '20 Apr', schedule: '—', status: 'Menunggu', description: 'Cuci sofa ruang tamu (3 seater) karena ketumpahan kopi, serta cuci karpet bulu ukuran 2x3 meter.' },
-    { id: 3, unit: '22B', name: 'Fajar N.', service: 'General cleaning', reqDate: '19 Apr', schedule: '21 Apr 14:00', status: 'Selesai', description: 'Pembersihan standar berkala: menyapu, mengepel, membersihkan debu meja, merapikan kasur.' },
-    { id: 4, unit: '18C', name: 'Rudi H.', service: 'Cuci AC & Sedot Tungau', reqDate: '21 Apr', schedule: '—', status: 'Menunggu', description: 'Sedot tungau kasur ukuran King size dan cuci AC inverter di ruang tidur utama.' },
-    { id: 5, unit: '07A', name: 'Dewi L.', service: 'Pembersihan Kamar Mandi', reqDate: '22 Apr', schedule: '—', status: 'Menunggu', description: 'Kerak di lantai kamar mandi cukup membandel, butuh pembersihan mendalam memakai cairan kimia khusus.' }
-  ]);
+  const [requests, setRequests] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
@@ -16,6 +12,51 @@ export default function PermintaanCleaning() {
   const [scheduleDate, setScheduleDate] = useState('22 Apr');
   const [scheduleTime, setScheduleTime] = useState('09:00');
   const [successToast, setSuccessToast] = useState('');
+
+  const loadRequests = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('reservasi')
+        .select('*, penghuni:users(nama), fasilitas(nama)')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      if (data) {
+        setRequests(data.map(item => {
+          const reqDateObj = new Date(item.created_at);
+          const reqDateFormatted = `${reqDateObj.getDate()} ${reqDateObj.toLocaleDateString('id-ID', { month: 'short' })}`;
+
+          const schDate = item.tanggal ? new Date(item.tanggal).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }) : '';
+          const schTime = item.jam_mulai ? item.jam_mulai.substring(0, 5) : '';
+          const scheduleFormatted = item.status && item.status.toLowerCase() === 'disetujui' && schDate && schTime ? `${schDate} ${schTime}` : '—';
+
+          const s = (item.status || '').toLowerCase();
+          const statusMapped = s === 'disetujui' ? 'Terjadwal' : (s === 'selesai' ? 'Selesai' : 'Menunggu');
+
+          return {
+            id: item.id,
+            unit: item.unit_no || item.nomor_unit || 'N/A',
+            name: item.penghuni?.nama || 'Warga',
+            service: item.fasilitas?.nama || 'Cleaning',
+            reqDate: reqDateFormatted,
+            schedule: scheduleFormatted,
+            status: statusMapped,
+            description: item.keterangan || item.deskripsi || 'Tidak ada keterangan tambahan.'
+          };
+        }));
+      }
+    } catch (err) {
+      console.error('Failed to load cleaning requests:', err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadRequests();
+  }, []);
 
   const getStatusBadge = (status) => {
     switch (status) {
@@ -55,30 +96,40 @@ export default function PermintaanCleaning() {
     setScheduleModalOpen(true);
   };
 
-  const handleScheduleSubmit = (e) => {
+  const handleScheduleSubmit = async (e) => {
     e.preventDefault();
     if (!schedulingId) return;
 
-    setRequests(prev =>
-      prev.map(req => {
-        if (req.id === schedulingId) {
-          return {
-            ...req,
-            status: 'Terjadwal',
-            schedule: `${scheduleDate} ${scheduleTime}`
-          };
-        }
-        return req;
-      })
-    );
+    try {
+      const day = scheduleDate.split(' ')[0];
+      const scheduleFormattedDate = `2026-04-${day.padStart(2, '0')}`;
 
-    const targetReq = requests.find(r => r.id === schedulingId);
-    setScheduleModalOpen(false);
-    setSuccessToast(`Permintaan cleaning ${targetReq ? targetReq.name : ''} berhasil dijadwalkan!`);
-    setTimeout(() => setSuccessToast(''), 3000);
+      const { error } = await supabase
+        .from('reservasi')
+        .update({
+          status: 'disetujui',
+          tanggal: scheduleFormattedDate,
+          jam_mulai: scheduleTime
+        })
+        .eq('id', schedulingId);
+
+      if (error) throw error;
+
+      const targetReq = requests.find(r => r.id === schedulingId);
+      setScheduleModalOpen(false);
+      setSuccessToast(`Permintaan cleaning ${targetReq ? targetReq.name : ''} berhasil dijadwalkan!`);
+      setTimeout(() => setSuccessToast(''), 3000);
+      loadRequests();
+    } catch (err) {
+      console.error('Failed to schedule cleaning request:', err.message);
+    }
   };
 
   const waitingCount = requests.filter(r => r.status === 'Menunggu').length;
+
+  if (loading) {
+    return <div className="p-6 text-muted text-sm">Memuat...</div>;
+  }
 
   return (
     <div className="space-y-6 animate-fade-up relative">

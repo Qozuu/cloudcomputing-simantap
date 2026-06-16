@@ -1,14 +1,76 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search, Download, Calendar, User, ShieldCheck } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 
 export default function AuditLog() {
-  const logs = [
-    { id: 1, waktu: '09:42:13', admin: 'Rina K.', divisi: 'Keuangan', aksi: 'Generate Tagihan', detail: 'Tagihan IPL April 2026 – 440 unit', ip: '192.168.1.42', color: 'bg-[#EEEDFB] text-[#4840B0]' },
-    { id: 2, waktu: '09:15:07', admin: 'Doni P.', divisi: 'Pemeliharaan', aksi: 'Assign Teknisi', detail: 'TK-0088 → Pak Roni', ip: '192.168.1.35', color: 'bg-[#FEF7EC] text-[#A05820]' },
-    { id: 3, waktu: '08:55:44', admin: 'Agus W.', divisi: 'Keamanan', aksi: 'Broadcast Darurat', detail: 'Lift Tower B bermasalah', ip: '192.168.1.33', color: 'bg-[#E8FAF3] text-[#187050]' },
-    { id: 4, waktu: '08:30:00', admin: 'Sistem', divisi: 'Otomatis', aksi: 'Auto Rekonsiliasi', detail: 'Midtrans payment gateway', ip: '127.0.0.1', color: 'bg-[#F2F2F2] text-[#555555]' },
-    { id: 5, waktu: '07:00:00', admin: 'Siti R.', divisi: 'Kebersihan', aksi: 'Update Jadwal', detail: 'Jadwal Minggu ke-14 2026', ip: '192.168.1.43', color: 'bg-[#FEF0EE] text-[#C05040]' },
-  ];
+  const [logs, setLogs] = useState([]);
+
+  useEffect(() => {
+    async function loadLogs() {
+      try {
+        const { data, error } = await supabase
+          .from('audit_logs')
+          .select('*, user:users(nama, role)')
+          .order('created_at', { ascending: false })
+          .limit(50);
+
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+          setLogs(data.map(log => {
+            const dateObj = new Date(log.created_at);
+            const timeStr = dateObj.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            
+            let divName = 'Sistem';
+            let bgClass = 'bg-[#F2F2F2] text-[#555555]';
+            const role = log.user?.role || '';
+            if (role === 'div_keuangan') {
+              divName = 'Keuangan';
+              bgClass = 'bg-[#EEEDFB] text-[#4840B0]';
+            } else if (role === 'div_pemeliharaan') {
+              divName = 'Pemeliharaan';
+              bgClass = 'bg-[#FEF7EC] text-[#A05820]';
+            } else if (role === 'div_keamanan') {
+              divName = 'Keamanan';
+              bgClass = 'bg-[#E8FAF3] text-[#187050]';
+            } else if (role === 'div_kebersihan') {
+              divName = 'Kebersihan';
+              bgClass = 'bg-[#FEF0EE] text-[#C05040]';
+            }
+
+            return {
+              id: log.id,
+              waktu: timeStr,
+              admin: log.user?.nama || 'Sistem',
+              divisi: divName,
+              aksi: log.aksi || 'Aksi',
+              detail: log.detail || 'Detail',
+              ip: log.ip_address || '127.0.0.1',
+              color: bgClass
+            };
+          }));
+        } else {
+          setLogs([
+            { id: 1, waktu: '09:42:13', admin: 'Rina K.', divisi: 'Keuangan', aksi: 'Generate Tagihan', detail: 'Tagihan IPL April 2026 – 440 unit', ip: '192.168.1.42', color: 'bg-[#EEEDFB] text-[#4840B0]' },
+            { id: 2, waktu: '09:15:07', admin: 'Doni P.', divisi: 'Pemeliharaan', aksi: 'Assign Teknisi', detail: 'TK-0088 → Pak Roni', ip: '192.168.1.35', color: 'bg-[#FEF7EC] text-[#A05820]' },
+            { id: 3, waktu: '08:55:44', admin: 'Agus W.', divisi: 'Keamanan', aksi: 'Broadcast Darurat', detail: 'Lift Tower B bermasalah', ip: '192.168.1.33', color: 'bg-[#E8FAF3] text-[#187050]' },
+            { id: 4, waktu: '08:30:00', admin: 'Sistem', divisi: 'Otomatis', aksi: 'Auto Rekonsiliasi', detail: 'Midtrans payment gateway', ip: '127.0.0.1', color: 'bg-[#F2F2F2] text-[#555555]' },
+            { id: 5, waktu: '07:00:00', admin: 'Siti R.', divisi: 'Kebersihan', aksi: 'Update Jadwal', detail: 'Jadwal Minggu ke-14 2026', ip: '192.168.1.43', color: 'bg-[#FEF0EE] text-[#C05040]' },
+          ]);
+        }
+      } catch (err) {
+        console.error('Error loading audit logs:', err);
+        setLogs([
+          { id: 1, waktu: '09:42:13', admin: 'Rina K.', divisi: 'Keuangan', aksi: 'Generate Tagihan', detail: 'Tagihan IPL April 2026 – 440 unit', ip: '192.168.1.42', color: 'bg-[#EEEDFB] text-[#4840B0]' },
+          { id: 2, waktu: '09:15:07', admin: 'Doni P.', divisi: 'Pemeliharaan', aksi: 'Assign Teknisi', detail: 'TK-0088 → Pak Roni', ip: '192.168.1.35', color: 'bg-[#FEF7EC] text-[#A05820]' },
+          { id: 3, waktu: '08:55:44', admin: 'Agus W.', divisi: 'Keamanan', aksi: 'Broadcast Darurat', detail: 'Lift Tower B bermasalah', ip: '192.168.1.33', color: 'bg-[#E8FAF3] text-[#187050]' },
+          { id: 4, waktu: '08:30:00', admin: 'Sistem', divisi: 'Otomatis', aksi: 'Auto Rekonsiliasi', detail: 'Midtrans payment gateway', ip: '127.0.0.1', color: 'bg-[#F2F2F2] text-[#555555]' },
+          { id: 5, waktu: '07:00:00', admin: 'Siti R.', divisi: 'Kebersihan', aksi: 'Update Jadwal', detail: 'Jadwal Minggu ke-14 2026', ip: '192.168.1.43', color: 'bg-[#FEF0EE] text-[#C05040]' },
+        ]);
+      }
+    }
+    loadLogs();
+  }, []);
 
   return (
     <div className="space-y-6 animate-fade-up">

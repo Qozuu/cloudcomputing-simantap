@@ -1,38 +1,52 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../../lib/supabase';
 
 export default function RiwayatPerbaikan() {
+  const [historyData, setHistoryData] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [toastVisible, setToastVisible] = useState(false);
   const [toastTimeoutId, setToastTimeoutId] = useState(null);
 
-  const historyData = [
-    {
-      id: 'TK-0085',
-      kerusakan: 'Saklar lampu mati',
-      unit: '05B',
-      teknisi: 'Pak Heri',
-      selesai: '18 Apr 2026',
-      durasi: '3 jam',
-      status: 'Selesai'
-    },
-    {
-      id: 'TK-0071',
-      kerusakan: 'Kran kamar mandi menetes',
-      unit: '12A',
-      teknisi: 'Pak Heri',
-      selesai: '16 Mar 2026',
-      durasi: '1 hari',
-      status: 'Selesai'
-    },
-    {
-      id: 'TK-0065',
-      kerusakan: 'Saklar lampu mati',
-      unit: '05B',
-      teknisi: 'Pak Roni',
-      selesai: '10 Mar 2026',
-      durasi: '4 jam',
-      status: 'Selesai'
+  useEffect(() => {
+    async function loadHistory() {
+      try {
+        setLoading(true);
+        const { data, error } = await supabase
+          .from('laporan')
+          .select('*, pelapor:users!pelapor_id(nama), teknisi:users!ditugaskan_ke(nama), unit(nomor_unit)')
+          .eq('status', 'selesai')
+          .order('updated_at', { ascending: false });
+
+        if (error) throw error;
+
+        if (data) {
+          const mapped = data.map(row => {
+            let durasi = '—';
+            if (row.created_at && row.updated_at) {
+              const diffMs = new Date(row.updated_at) - new Date(row.created_at);
+              const diffHrs = Math.floor(diffMs / (1000 * 60 * 60));
+              durasi = diffHrs < 24 ? `${diffHrs} jam` : `${Math.floor(diffHrs / 24)} hari`;
+            }
+            return {
+              id: `TK-${String(row.id).padStart(4, '0')}`,
+              kerusakan: row.judul || row.deskripsi || 'Tidak ada keterangan',
+              unit: row.unit?.nomor_unit ? `${row.unit.nomor_unit}` : 'Umum',
+              teknisi: row.teknisi?.nama || 'Tidak ada',
+              selesai: row.updated_at ? new Date(row.updated_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '—',
+              durasi,
+              status: 'Selesai'
+            };
+          });
+          setHistoryData(mapped);
+        }
+      } catch (err) {
+        console.error('Error fetching repair history:', err.message);
+      } finally {
+        setLoading(false);
+      }
     }
-  ];
+    loadHistory();
+  }, []);
 
   const handleExport = () => {
     // Clear any existing timeout
@@ -48,6 +62,10 @@ export default function RiwayatPerbaikan() {
     }, 3000);
     setToastTimeoutId(timeout);
   };
+
+  if (loading) {
+    return <div className="p-6 text-muted text-sm">Memuat...</div>;
+  }
 
   return (
     <div className="space-y-6 animate-fade-up relative">

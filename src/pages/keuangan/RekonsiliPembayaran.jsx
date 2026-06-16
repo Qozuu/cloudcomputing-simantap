@@ -1,43 +1,75 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { RefreshCw, FileDown, Check, Loader2 } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 
 export default function RekonsiliPembayaran() {
-  const [transactions, setTransactions] = useState([
-    { id: 'TXN-202604-0012', unit: '12A', name: 'Hendra G.', amount: 920000, gateway: 'Transfer Bank', payDate: '20 Apr 2026', status: 'Sukses' },
-    { id: 'TXN-202604-0011', unit: '07A', name: 'Dewi L.', amount: 770000, gateway: 'GoPay', payDate: '19 Apr 2026', status: 'Sukses' },
-    { id: 'TXN-202604-0010', unit: '15B', name: 'Eko P.', amount: 920000, gateway: 'OVO', payDate: '18 Apr 2026', status: 'Sukses' },
-    { id: 'TXN-202604-0009', unit: '22B', name: 'Fajar N.', amount: 945000, gateway: 'Transfer Bank', payDate: '17 Apr 2026', status: 'Pending' }
-  ]);
+  const [transactions, setTransactions] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const [period, setPeriod] = useState('April 2026');
   const [syncing, setSyncing] = useState(false);
   const [successToast, setSuccessToast] = useState('');
 
-  const handleSync = () => {
+  useEffect(() => {
+    async function loadTransactions() {
+      try {
+        setLoading(true);
+        const { data, error } = await supabase
+          .from('tagihan')
+          .select('*, unit(nomor_unit), users(nama)')
+          .eq('status', 'sudah_bayar')
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        if (data) {
+          setTransactions(data.map((row) => ({
+            id: `TXN-${row.periode ? row.periode.replace(' ', '') : '202604'}-${String(row.id).padStart(4, '0')}`,
+            unit: row.unit?.nomor_unit || '-',
+            name: row.users?.nama || row.penghuni?.nama || 'Anonim',
+            amount: row.total || row.jumlah || 0,
+            gateway: row.metode_bayar || 'Transfer Bank',
+            payDate: row.tgl_bayar ? new Date(row.tgl_bayar).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '—',
+            status: 'Sukses'
+          })));
+        }
+      } catch (err) {
+        console.error('Error fetching reconciliation transactions:', err.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadTransactions();
+  }, []);
+
+  const handleSync = async () => {
     setSyncing(true);
-    // Simulate sync lag
-    setTimeout(() => {
-      setTransactions(prev =>
-        prev.map(t => {
-          if (t.status === 'Pending') {
-            const today = new Date();
-            const formattedDate = today.toLocaleDateString('id-ID', {
-              day: 'numeric',
-              month: 'short',
-              year: 'numeric'
-            });
-            return {
-              ...t,
-              status: 'Sukses',
-              payDate: formattedDate
-            };
-          }
-          return t;
-        })
-      );
+    try {
+      const { data, error } = await supabase
+        .from('tagihan')
+        .select('*, unit(nomor_unit), users(nama)')
+        .eq('status', 'sudah_bayar')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      if (data) {
+        setTransactions(data.map((row) => ({
+          id: `TXN-${row.periode ? row.periode.replace(' ', '') : '202604'}-${String(row.id).padStart(4, '0')}`,
+          unit: row.unit?.nomor_unit || '-',
+          name: row.users?.nama || row.penghuni?.nama || 'Anonim',
+          amount: row.total || row.jumlah || 0,
+          gateway: row.metode_bayar || 'Transfer Bank',
+          payDate: row.tgl_bayar ? new Date(row.tgl_bayar).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '—',
+          status: 'Sukses'
+        })));
+        showToast('Sinkronisasi berhasil — data diperbarui dari payment gateway');
+      }
+    } catch (err) {
+      console.error('Error syncing:', err.message);
+    } finally {
       setSyncing(false);
-      showToast('Sinkronisasi berhasil — 4 transaksi diperbarui');
-    }, 1500);
+    }
   };
 
   const showToast = (msg) => {
@@ -61,6 +93,10 @@ export default function RekonsiliPembayaran() {
       default: return 'badge-base badge-gray';
     }
   };
+
+  if (loading) {
+    return <div className="p-6 text-muted text-sm">Memuat...</div>;
+  }
 
   return (
     <div className="space-y-6 animate-fade-up relative">

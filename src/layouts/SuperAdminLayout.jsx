@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import LogoutModal from '../components/shared/LogoutModal';
 import NotificationBell from '../components/shared/NotificationBell';
@@ -24,6 +25,49 @@ import {
 import LogoSiManTap from '../assets/logo.png';
 
 export default function SuperAdminLayout() {
+  const [userProfile, setUserProfile] = useState(null);
+
+  useEffect(() => {
+    async function fetchProfile() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data } = await supabase
+        .from('users')
+        .select('nama, role, no_hp')
+        .eq('id', user.id)
+        .single();
+      setUserProfile(data);
+    }
+    fetchProfile();
+  }, []);
+
+  const getNama = () => userProfile?.nama || 'Pengguna';
+  
+  const getInitials = () => {
+    const nama = userProfile?.nama || '';
+    return nama.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || '??';
+  };
+
+  const getRoleLabel = () => {
+    const map = {
+      super_admin:        'General Manager',
+      superadmin:         'General Manager',
+      gm:                 'General Manager',
+      admin_keuangan:     'Admin Keuangan',
+      div_keuangan:       'Admin Keuangan',
+      admin_pemeliharaan: 'Admin Pemeliharaan',
+      div_pemeliharaan:   'Admin Pemeliharaan',
+      admin_kebersihan:   'Admin Kebersihan',
+      div_kebersihan:     'Admin Kebersihan',
+      admin_keamanan:     'Admin Keamanan',
+      div_keamanan:       'Admin Keamanan',
+      admin_fasilitas:    'Admin Fasilitas',
+      div_fasilitas:      'Admin Fasilitas',
+      penghuni:           'Penghuni',
+    };
+    return map[userProfile?.role] || userProfile?.role || 'Staff';
+  };
+
   const location = useLocation();
   const navigate = useNavigate();
   const currentPath = location.pathname;
@@ -156,11 +200,11 @@ export default function SuperAdminLayout() {
             <div className="p-4 border-t border-gray-100 space-y-3">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center font-bold text-sm shrink-0">
-                  BS
+                  {getInitials()}
                 </div>
                 <div className="flex flex-col min-w-0">
-                  <span className="text-sm font-bold text-[#1E1E1E] truncate">Budi Santoso</span>
-                  <span className="text-xs text-gray-400 truncate">General Manager</span>
+                  <span className="text-sm font-bold text-[#1E1E1E] truncate">{getNama()}</span>
+                  <span className="text-xs text-gray-400 truncate">{getRoleLabel()}</span>
                 </div>
               </div>
               <button
@@ -228,10 +272,10 @@ export default function SuperAdminLayout() {
           {/* Footer Profile Area */}
           <div className="mt-auto pt-4 border-t border-soft flex flex-col gap-3 p-4 md:p-0">
             <div className="sidebar-profile-footer">
-              <div className="sidebar-user-avatar">BS</div>
+              <div className="sidebar-user-avatar">{getInitials()}</div>
               <div className="sidebar-profile-info">
-                <span className="sidebar-profile-name">Budi Santoso</span>
-                <span className="sidebar-profile-role">General Manager</span>
+                <span className="sidebar-profile-name">{getNama()}</span>
+                <span className="sidebar-profile-role">{getRoleLabel()}</span>
               </div>
             </div>
             <div
@@ -262,7 +306,7 @@ export default function SuperAdminLayout() {
 
             <div className="flex flex-col">
               <span className="topbar-role">
-                General Manager
+                {getRoleLabel()}
               </span>
               <h2 className="topbar-title">
                 {getPageTitle()}
@@ -290,15 +334,10 @@ export default function SuperAdminLayout() {
       {/* Logout Confirmation Modal */}
       <LogoutModal 
         isOpen={showLogout}
-        onConfirm={() => {
-          setShowLogout(false);
-          localStorage.removeItem('userRole');
-          sessionStorage.clear(); // FIX: Diperbaiki dari sessionSession ke sessionStorage asli browser
-          navigate('/login');
-        }}
+        onConfirm={() => setShowLogout(false)}
         onCancel={() => setShowLogout(false)}
-        userName="Budi Santoso"
-        roleName="General Manager"
+        userName={getNama()}
+        roleName={getRoleLabel()}
       />
     </div>
   );

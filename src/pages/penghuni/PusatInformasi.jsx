@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   PhoneCall,
   Clock,
@@ -8,9 +8,34 @@ import {
   Car,
   Info
 } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 
 export default function PusatInformasi() {
-  const cards = [
+  const [loading, setLoading] = useState(true);
+  const [announcements, setAnnouncements] = useState([]);
+
+  useEffect(() => {
+    async function loadData() {
+      try {
+        setLoading(true);
+        const { data, error } = await supabase
+          .from('informasi')
+          .select('*')
+          .eq('is_published', true)
+          .order('created_at', { ascending: false });
+        
+        if (error) throw error;
+        setAnnouncements(data || []);
+      } catch (err) {
+        console.error('Gagal memuat pengumuman:', err.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadData();
+  }, []);
+
+  const staticCards = [
     {
       icon: PhoneCall,
       title: 'Kontak Darurat',
@@ -76,6 +101,18 @@ export default function PusatInformasi() {
     }
   ];
 
+  if (loading) {
+    return <div className="p-6 text-muted text-sm">Memuat...</div>;
+  }
+
+  const annCards = announcements.map(ann => ({
+    icon: Info,
+    title: ann.judul,
+    content: <p className="leading-relaxed">{ann.deskripsi}</p>
+  }));
+
+  const allCards = [...staticCards, ...annCards];
+
   return (
     <div className="space-y-6 animate-fade-up">
       {/* Visual Info Grid */}
@@ -88,7 +125,7 @@ export default function PusatInformasi() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {cards.map((card, idx) => {
+          {allCards.map((card, idx) => {
             const IconComponent = card.icon;
             
             const cardColors = ['card-pink', 'card-yellow', 'card-lavender', 'card-mint'];

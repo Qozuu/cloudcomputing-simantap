@@ -1,111 +1,51 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../../lib/supabase';
 
 export default function TagihanReservasi() {
-  const [bills, setBills] = useState([
-    {
-      id: 'TGF-001',
-      resident: 'Rudi Hartono',
-      unit: '18C',
-      facility: 'Ruang Serbaguna',
-      session: '21 Apr 13:00-17:00',
-      cost: 300000,
-      status: 'Belum Bayar'
-    },
-    {
-      id: 'TGF-002',
-      resident: 'Maya Sari',
-      unit: '05B',
-      facility: 'Lapangan Tenis',
-      session: '22 Apr 08:00-10:00',
-      cost: 75000,
-      status: 'Belum Bayar'
-    },
-    {
-      id: 'TGF-004',
-      resident: 'Budi Santoso',
-      unit: '10A',
-      facility: 'Lapangan Tenis',
-      session: '23 Apr 10:00-12:00',
-      cost: 115000,
-      status: 'Belum Bayar'
-    },
-    {
-      id: 'TGF-003',
-      resident: 'Ilma Rahardjo',
-      unit: '22C',
-      facility: 'Ruang Serbaguna',
-      session: '18 Apr 18:00-22:00',
-      cost: 300000,
-      status: 'Lunas'
-    },
-    {
-      id: 'TGF-005',
-      resident: 'Dewi Lestari',
-      unit: '14B',
-      facility: 'Ruang Serbaguna',
-      session: '17 Apr 10:00-14:00',
-      cost: 300000,
-      status: 'Lunas'
-    },
-    {
-      id: 'TGF-006',
-      resident: 'Joko Widodo',
-      unit: '03A',
-      facility: 'Lapangan Tenis',
-      session: '16 Apr 08:00-10:00',
-      cost: 75000,
-      status: 'Lunas'
-    },
-    {
-      id: 'TGF-007',
-      resident: 'Siti Badriah',
-      unit: '09D',
-      facility: 'Lapangan Tenis',
-      session: '15 Apr 15:00-17:00',
-      cost: 75000,
-      status: 'Lunas'
-    },
-    {
-      id: 'TGF-008',
-      resident: 'Prabowo Subianto',
-      unit: '01A',
-      facility: 'Ruang Serbaguna',
-      session: '14 Apr 18:00-22:00',
-      cost: 300000,
-      status: 'Lunas'
-    },
-    {
-      id: 'TGF-009',
-      resident: 'Megawati S.',
-      unit: '02B',
-      facility: 'Ruang Serbaguna',
-      session: '12 Apr 13:00-17:00',
-      cost: 100000,
-      status: 'Lunas'
-    },
-    {
-      id: 'TGF-010',
-      resident: 'Susilo Bambang',
-      unit: '08C',
-      facility: 'Ruang Serbaguna',
-      session: '10 Apr 09:00-13:00',
-      cost: 100000,
-      status: 'Lunas'
-    },
-    {
-      id: 'TGF-011',
-      resident: 'Anies Baswedan',
-      unit: '11F',
-      facility: 'Lapangan Tenis',
-      session: '09 Apr 16:00-18:00',
-      cost: 80000,
-      status: 'Lunas'
-    }
-  ]);
+  const [bills, setBills] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const [toastMessage, setToastMessage] = useState('');
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
+
+  const loadBills = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('tagihan_fasilitas')
+        .select('*, reservasi(tanggal, jam_mulai, jam_selesai, fasilitas(nama)), penghuni:users(nama)');
+
+      if (error) throw error;
+
+      if (data) {
+        setBills(data.map(item => {
+          const tgl = item.reservasi?.tanggal ? new Date(item.reservasi.tanggal).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }) : '';
+          const start = (item.reservasi?.jam_mulai || '').substring(0, 5);
+          const end = (item.reservasi?.jam_selesai || '').substring(0, 5);
+          const sessionMapped = tgl ? `${tgl} ${start}-${end}` : '—';
+          
+          return {
+            id: item.id,
+            resident: item.penghuni?.nama || 'Warga',
+            unit: item.unit_no || item.unit || 'N/A',
+            facility: item.reservasi?.fasilitas?.nama || 'Fasilitas',
+            session: sessionMapped,
+            cost: item.cost || item.nominal || item.total_biaya || 0,
+            status: item.status && item.status.toLowerCase() === 'sudah_bayar' ? 'Lunas' : 'Belum Bayar'
+          };
+        }));
+      }
+    } catch (err) {
+      console.error('Failed to load facility bills:', err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadBills();
+  }, []);
 
   // Dynamic calculations based on state values
   const unpaidBills = bills.filter(b => b.status === 'Belum Bayar');
@@ -119,11 +59,20 @@ export default function TagihanReservasi() {
 
   const totalSum = paidSum + unpaidSum;
 
-  const handleConfirmPayment = (id) => {
-    setBills(prev =>
-      prev.map(b => b.id === id ? { ...b, status: 'Lunas' } : b)
-    );
-    showToast(`Pembayaran tagihan ${id} telah berhasil dikonfirmasi!`);
+  const handleConfirmPayment = async (id) => {
+    try {
+      const { error } = await supabase
+        .from('tagihan_fasilitas')
+        .update({ status: 'sudah_bayar' })
+        .eq('id', id);
+
+      if (error) throw error;
+      showToast(`Pembayaran tagihan ${id} telah berhasil dikonfirmasi!`);
+      loadBills();
+    } catch (err) {
+      console.error('Failed to confirm payment:', err.message);
+      showToast(`Gagal konfirmasi: ${err.message}`);
+    }
   };
 
   const handleShowInvoice = (bill) => {
@@ -139,6 +88,10 @@ export default function TagihanReservasi() {
   const formatRupiah = (val) => {
     return `Rp ${val.toLocaleString('id-ID')}`;
   };
+
+  if (loading) {
+    return <div className="p-6 text-muted text-sm">Memuat...</div>;
+  }
 
   return (
     <div className="space-y-6 animate-fade-up relative">

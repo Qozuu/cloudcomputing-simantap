@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Megaphone,
   CheckCircle2,
   Send,
   History
 } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 
 export default function BroadcastPesan() {
   const [successToast, setSuccessToast] = useState('');
@@ -15,25 +16,45 @@ export default function BroadcastPesan() {
   const [judul, setJudul] = useState('');
   const [isi, setIsi] = useState('');
 
-  // Riwayat list state
-  const [broadcasts, setBroadcasts] = useState([
-    {
-      id: 1,
-      waktu: '21 Apr 09:00',
-      judul: 'Pemadaman Listrik Tower B',
-      target: 'Tower B',
-      prioritas: 'Darurat',
-      terkirim: '412 penerima'
-    },
-    {
-      id: 2,
-      waktu: '18 Apr 14:30',
-      judul: 'Kolam Renang Ditutup Sementara',
-      target: 'Semua',
-      prioritas: 'Info',
-      terkirim: '412 penerima'
+  // User and broadcasts state
+  const [broadcasts, setBroadcasts] = useState([]);
+  const [currentUser, setCurrentUser] = useState(null);
+
+  const loadBroadcasts = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      setCurrentUser(user);
+
+      const { data: infos } = await supabase
+        .from('broadcast_pesan')
+        .select('*, pembuat:users(nama)')
+        .order('created_at', { ascending: false });
+
+      if (infos) {
+        const formatted = infos.map(bc => {
+          const bcDate = new Date(bc.created_at);
+          const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+          const dateStr = `${bcDate.getDate()} ${months[bcDate.getMonth()]} ${bcDate.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`;
+          
+          return {
+            id: bc.id,
+            waktu: dateStr,
+            judul: bc.judul,
+            target: bc.target || 'Semua',
+            prioritas: bc.prioritas || 'Darurat',
+            terkirim: `${bc.jumlah_penerima ?? 0} penerima`
+          };
+        });
+        setBroadcasts(formatted);
+      }
+    } catch (err) {
+      console.error('Error loading broadcasts:', err);
     }
-  ]);
+  };
+
+  useEffect(() => {
+    loadBroadcasts();
+  }, []);
 
   const getRecipientCount = (tgt) => {
     switch (tgt) {
@@ -51,35 +72,35 @@ export default function BroadcastPesan() {
     }
   };
 
-  const handleBroadcastSubmit = (e) => {
+  const handleBroadcastSubmit = async (e) => {
     e.preventDefault();
-    if (!judul.trim() || !isi.trim()) return;
+    if (!judul.trim() || !isi.trim() || !currentUser) return;
 
-    const today = new Date();
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
-    const timeStr = `${today.getDate()} ${months[today.getMonth()]} ${today.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`;
+    try {
+      const { error } = await supabase
+        .from('broadcast_pesan')
+        .insert({
+          judul,
+          isi: isi,
+          target,
+          prioritas,
+          jumlah_penerima: 0,
+          created_by: currentUser.id
+        });
 
-    const targetLabel = target === 'Semua Penghuni' ? 'Semua' : target;
-    const recipientCount = getRecipientCount(target);
+      if (error) throw error;
 
-    const newBroadcast = {
-      id: Date.now(),
-      waktu: timeStr,
-      judul: judul,
-      target: targetLabel,
-      prioritas: prioritas,
-      terkirim: `${recipientCount} penerima`
-    };
+      // Success toast
+      setSuccessToast(`Broadcast berhasil dikirim!`);
+      setTimeout(() => setSuccessToast(''), 3000);
 
-    setBroadcasts(prev => [newBroadcast, ...prev]);
-
-    // Success toast
-    setSuccessToast(`Broadcast berhasil dikirim ke ${recipientCount} penerima`);
-    setTimeout(() => setSuccessToast(''), 3000);
-
-    // Reset Form fields
-    setJudul('');
-    setIsi('');
+      // Reset Form fields
+      setJudul('');
+      setIsi('');
+      loadBroadcasts();
+    } catch (err) {
+      console.error('Error sending broadcast:', err.message);
+    }
   };
 
   const getPrioritasBadge = (pri) => {

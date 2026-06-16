@@ -1,38 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { supabase } from '../../lib/supabase';
 
 export default function ReservasiMasuk() {
-  const [reservations, setReservations] = useState([
-    {
-      id: 'RSV-001',
-      resident: 'Hendra Gunawan',
-      unit: '12A',
-      facility: 'Kolam Renang',
-      date: '22 Apr 2026',
-      session: '06:00-08:00',
-      cost: 'Gratis',
-      status: 'Menunggu'
-    },
-    {
-      id: 'RSV-002',
-      resident: 'Maya Sari',
-      unit: '05B',
-      facility: 'Lapangan Tenis',
-      date: '22 Apr 2026',
-      session: '08:00-10:00',
-      cost: 75000,
-      status: 'Menunggu'
-    },
-    {
-      id: 'RSV-003',
-      resident: 'Rudi Hartono',
-      unit: '18C',
-      facility: 'Ruang Serbaguna',
-      date: '21 Apr 2026',
-      session: '13:00-17:00',
-      cost: 100000,
-      status: 'Disetujui'
-    }
-  ]);
+  const [reservations, setReservations] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const [selectedFacilityFilter, setSelectedFacilityFilter] = useState('Semua Fasilitas');
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('Semua Status');
@@ -47,8 +18,44 @@ export default function ReservasiMasuk() {
   const facilityRef = useRef(null);
   const statusRef = useRef(null);
 
+  const loadReservations = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('reservasi')
+        .select('*, fasilitas(nama, harga_sewa), penghuni:users(nama), unit:users!penghuni_id(id)')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      if (data) {
+        setReservations(data.map(item => {
+          const rawCost = item.biaya || item.fasilitas?.harga_sewa || 0;
+          const costMapped = rawCost === 0 || rawCost === '0' || rawCost === 'Gratis' ? 'Gratis' : Number(rawCost);
+          
+          return {
+            id: item.id,
+            resident: item.penghuni?.nama || 'Warga',
+            unit: item.unit_no || item.unit?.id || item.nomor_unit || 'N/A',
+            facility: item.fasilitas?.nama || 'Fasilitas',
+            date: item.tanggal ? new Date(item.tanggal).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : new Date(item.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }),
+            session: `${(item.jam_mulai || '').substring(0, 5)}-${(item.jam_selesai || '').substring(0, 5)}`,
+            cost: costMapped,
+            status: item.status ? (item.status.toLowerCase() === 'disetujui' ? 'Disetujui' : (item.status.toLowerCase() === 'ditolak' ? 'Ditolak' : 'Menunggu')) : 'Menunggu'
+          };
+        }));
+      }
+    } catch (err) {
+      console.error('Failed to load reservations:', err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Close dropdowns on outside clicks
   useEffect(() => {
+    loadReservations();
+
     function handleClickOutside(event) {
       if (facilityRef.current && !facilityRef.current.contains(event.target)) {
         setFacilityDropdownOpen(false);
@@ -61,16 +68,36 @@ export default function ReservasiMasuk() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const handleSetujui = (id) => {
-    setReservations(prev =>
-      prev.map(r => r.id === id ? { ...r, status: 'Disetujui' } : r)
-    );
-    showToast(`Reservasi ${id} berhasil disetujui!`);
+  const handleSetujui = async (id) => {
+    try {
+      const { error } = await supabase
+        .from('reservasi')
+        .update({ status: 'disetujui' })
+        .eq('id', id);
+
+      if (error) throw error;
+      showToast(`Reservasi ${id} berhasil disetujui!`);
+      loadReservations();
+    } catch (err) {
+      console.error('Failed to approve reservation:', err.message);
+      showToast(`Gagal menyetujui: ${err.message}`);
+    }
   };
 
-  const handleTolak = (id) => {
-    setReservations(prev => prev.filter(r => r.id !== id));
-    showToast(`Reservasi ${id} ditolak dan dihapus.`);
+  const handleTolak = async (id) => {
+    try {
+      const { error } = await supabase
+        .from('reservasi')
+        .update({ status: 'ditolak' })
+        .eq('id', id);
+
+      if (error) throw error;
+      showToast(`Reservasi ${id} ditolak.`);
+      loadReservations();
+    } catch (err) {
+      console.error('Failed to reject reservation:', err.message);
+      showToast(`Gagal menolak: ${err.message}`);
+    }
   };
 
   const handleExport = () => {
@@ -109,6 +136,10 @@ export default function ReservasiMasuk() {
 
   const facilityOptions = ['Semua Fasilitas', 'Kolam Renang', 'Lapangan Tenis', 'Ruang Serbaguna'];
   const statusOptions = ['Semua Status', 'Menunggu', 'Disetujui'];
+
+  if (loading) {
+    return <div className="p-6 text-muted text-sm">Memuat...</div>;
+  }
 
   return (
     <div className="space-y-6 animate-fade-up relative">

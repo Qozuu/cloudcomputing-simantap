@@ -1,14 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom'; // Tambahan ini
+import { useNavigate } from 'react-router-dom';
 import { Bell, X, CheckCheck, AlertTriangle, Info, Wrench, CreditCard } from 'lucide-react';
-
-const MOCK_NOTIFS = [
-  { id: 1, type: 'urgent',  icon: AlertTriangle, title: 'Tiket Urgent Baru', desc: 'AC bocor di Unit 18C perlu ditangani segera.', time: '5 mnt lalu', read: false },
-  { id: 2, type: 'info',    icon: Info,          title: 'Pengumuman Baru', desc: 'Kolam renang kembali dibuka mulai besok.', time: '1 jam lalu', read: false },
-  { id: 3, type: 'billing', icon: CreditCard,    title: 'Tagihan Dikonfirmasi', desc: 'Pembayaran IPL Unit 12A April 2026 berhasil.', time: '2 jam lalu', read: false },
-  { id: 4, type: 'repair',  icon: Wrench,        title: 'Tiket Selesai', desc: 'Kran kamar mandi Unit 07A sudah diperbaiki.', time: 'Kemarin', read: true },
-  { id: 5, type: 'info',    icon: Info,          title: 'Jadwal Kebersihan', desc: 'Jadwal cleaning minggu ini telah diperbarui.', time: 'Kemarin', read: true },
-];
+import { supabase } from '../../lib/supabase';
 
 const TYPE_STYLES = {
   urgent:  { bg: 'bg-[#FEF0EE]', color: 'text-[#C05040]' },
@@ -19,11 +12,46 @@ const TYPE_STYLES = {
 
 export default function NotificationBell() {
   const [open, setOpen]     = useState(false);
-  const [notifs, setNotifs] = useState(MOCK_NOTIFS);
+  const [notifs, setNotifs] = useState([]);
   const ref = useRef(null);
-  const navigate = useNavigate(); // Inisialisasi navigate
+  const navigate = useNavigate();
 
   const unreadCount = notifs.filter(n => !n.read).length;
+
+  useEffect(() => {
+    async function loadNotifications() {
+      try {
+        const { data, error } = await supabase
+          .from('informasi')
+          .select('*')
+          .eq('is_published', true)
+          .order('created_at', { ascending: false })
+          .limit(10);
+
+        if (error) throw error;
+
+        const formatDate = (dateStr) => {
+          if (!dateStr) return '';
+          const d = new Date(dateStr);
+          const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+          return `${d.getDate()} ${months[d.getMonth()]}`;
+        };
+
+        const mapped = (data || []).map(item => ({
+          id: item.id,
+          title: item.judul,
+          desc: item.isi,
+          time: formatDate(item.created_at),
+          read: false,
+          type: item.prioritas === 'Darurat' ? 'urgent' : item.prioritas === 'Peringatan' ? 'repair' : 'info'
+        }));
+        setNotifs(mapped);
+      } catch (err) {
+        console.error('Gagal memuat notifikasi:', err.message);
+      }
+    }
+    loadNotifications();
+  }, []);
 
   useEffect(() => {
     const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
@@ -83,7 +111,7 @@ export default function NotificationBell() {
           <div style={{ maxHeight: 340, overflowY: 'auto' }}>
             {notifs.map(n => {
               const s = TYPE_STYLES[n.type] || TYPE_STYLES.info;
-              const Icon = n.icon;
+              const Icon = n.type === 'urgent' ? AlertTriangle : n.type === 'billing' ? CreditCard : n.type === 'repair' ? Wrench : Info;
               return (
                 <div key={n.id} onClick={() => markRead(n.id)} style={{ display: 'flex', padding: '12px 14px', background: n.read ? '#FFFFFF' : '#FAF6F0', borderBottom: '1px solid rgba(30,30,30,0.05)', cursor: 'pointer' }}>
                   <div style={{ width: 34, height: 34, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: 12 }} className={s.bg}>

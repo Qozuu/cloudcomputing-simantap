@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   BarChart2,
@@ -10,9 +10,34 @@ import {
   TrendingUp,
   ArrowRight
 } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 
 export default function Homepage() {
   const navigate = useNavigate();
+
+  const [towerCount, setTowerCount] = useState(3);
+  const [unitCount, setUnitCount] = useState(440);
+  const [userCount, setUserCount] = useState(412);
+  const [tiketCount, setTiketCount] = useState(18);
+
+  useEffect(() => {
+    async function loadCounts() {
+      try {
+        const { count: tc } = await supabase.from('tower').select('id', { count: 'exact', head: true });
+        const { count: uc } = await supabase.from('unit').select('id', { count: 'exact', head: true });
+        const { count: usc } = await supabase.from('users').select('id', { count: 'exact', head: true });
+        const { count: tkt } = await supabase.from('laporan').select('id', { count: 'exact', head: true }).neq('status', 'selesai');
+
+        if (tc !== null) setTowerCount(tc);
+        if (uc !== null) setUnitCount(uc);
+        if (usc !== null) setUserCount(usc);
+        if (tkt !== null) setTiketCount(tkt);
+      } catch (err) {
+        console.error('Error fetching dashboard counts:', err);
+      }
+    }
+    loadCounts();
+  }, []);
 
   // 🛡️ AMANKAN TRANSISE INTERNAL: Mencegah kedipan form login kosong saat navigasi berpindah
   const handleSafeRedirect = (path) => {
@@ -37,7 +62,7 @@ export default function Homepage() {
     },
     {
       title: 'Tiket Aktif',
-      value: '18',
+      value: String(tiketCount),
       badge: '2 urgent ditangani',
       badgeClass: 'badge-lavender',
       colorClass: 'stat-lavender',
@@ -126,15 +151,15 @@ export default function Homepage() {
         {/* Banner Right Stats */}
         <div className="grid grid-cols-2 gap-x-8 gap-y-4 border-t border-white/10 md:border-t-0 md:border-l md:border-white/15 pt-5 md:pt-0 md:pl-8 z-10 flex-shrink-0">
           <div className="space-y-0.5">
-            <p className="text-2xl font-black text-white">440</p>
+            <p className="text-2xl font-black text-white">{unitCount}</p>
             <p className="text-[10px] text-[#8A857F] font-bold uppercase tracking-wider">Total Unit</p>
           </div>
           <div className="space-y-0.5">
-            <p className="text-2xl font-black text-white">412</p>
+            <p className="text-2xl font-black text-white">{userCount}</p>
             <p className="text-[10px] text-[#8A857F] font-bold uppercase tracking-wider">Penghuni Aktif</p>
           </div>
           <div className="space-y-0.5">
-            <p className="text-2xl font-black text-white font-serif">3 Tower</p>
+            <p className="text-2xl font-black text-white font-serif">{towerCount} Tower</p>
             <p className="text-[10px] text-[#8A857F] font-bold uppercase tracking-wider">Tower Utama</p>
           </div>
           <div className="space-y-0.5">

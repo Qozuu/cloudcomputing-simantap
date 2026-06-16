@@ -1,13 +1,100 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { supabase } from '../../lib/supabase';
 
 export default function DashboardFasilitas() {
-  const recentActivities = [
-    { id: 1, text: 'Hendra Gunawan memesan Kolam Renang', time: '10 menit yang lalu', status: 'Menunggu' },
-    { id: 2, text: 'Maya Sari memesan Lapangan Tenis', time: '45 menit yang lalu', status: 'Menunggu' },
-    { id: 3, text: 'Rudi Hartono melunasi tagihan Ruang Serbaguna', time: '2 jam yang lalu', status: 'Lunas' },
-    { id: 4, text: 'Pembatalan otomatis reservasi Lapangan Tenis Unit 08C', time: '3 jam yang lalu', status: 'Batal' }
-  ];
+  const [reservations, setReservations] = useState([]);
+  const [bills, setBills] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadDashboardData() {
+      try {
+        setLoading(true);
+        const { data: rsvData, error: rsvError } = await supabase
+          .from('reservasi')
+          .select('*, fasilitas(nama), penghuni:users(nama)')
+          .order('created_at', { ascending: false });
+
+        if (rsvError) throw rsvError;
+        setReservations(rsvData || []);
+
+        const { data: billData, error: billError } = await supabase
+          .from('tagihan_fasilitas')
+          .select('*, reservasi(fasilitas(nama))');
+
+        if (billError) throw billError;
+        setBills(billData || []);
+      } catch (err) {
+        console.error('Failed to load dashboard data:', err.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadDashboardData();
+  }, []);
+
+  const formatTimeAgo = (dateStr) => {
+    const diffMs = new Date() - new Date(dateStr);
+    const diffMins = Math.floor(diffMs / 60000);
+    if (diffMins < 1) return 'Baru saja';
+    if (diffMins < 60) return `${diffMins} menit yang lalu`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours} jam yang lalu`;
+    const diffDays = Math.floor(diffHours / 24);
+    return `${diffDays} hari yang lalu`;
+  };
+
+  const getTodayDateStr = () => {
+    return new Date().toISOString().split('T')[0];
+  };
+
+  const isCurrentMonth = (dateStr) => {
+    if (!dateStr) return false;
+    const d = new Date(dateStr);
+    const now = new Date();
+    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+  };
+
+  // Calculations
+  const waitingCount = reservations.filter(r => {
+    const s = (r.status || '').toLowerCase();
+    return s === 'menunggu' || s === 'proses';
+  }).length;
+
+  const monthCount = reservations.filter(r => isCurrentMonth(r.tanggal || r.created_at)).length;
+
+  const totalRevenue = bills
+    .filter(b => (b.status || '').toLowerCase() === 'sudah_bayar' || (b.status || '').toLowerCase() === 'lunas')
+    .reduce((sum, b) => sum + (b.cost || b.nominal || 0), 0);
+
+  const formatRevenueShort = (val) => {
+    if (val >= 1000000) return `Rp ${(val / 1000000).toFixed(1)}Jt`;
+    return `Rp ${(val / 1000).toFixed(0)}Rb`;
+  };
+
+  const todayStr = getTodayDateStr();
+  const activeTodayCount = reservations.filter(r => (r.tanggal === todayStr || r.created_at?.startsWith(todayStr)) && (r.status || '').toLowerCase() === 'disetujui').length;
+
+  const unpaidCount = bills.filter(b => (b.status || '').toLowerCase() === 'belum_bayar' || (b.status || '').toLowerCase() === 'proses').length;
+
+  const rejectedCount = reservations.filter(r => (r.status || '').toLowerCase() === 'ditolak' && isCurrentMonth(r.tanggal || r.created_at)).length;
+
+  const recentActivities = reservations.slice(0, 5).map(r => {
+    const timeStr = r.created_at ? formatTimeAgo(r.created_at) : 'Baru saja';
+    const s = (r.status || '').toLowerCase();
+    const statusFormatted = s === 'disetujui' ? 'Lunas' : (s === 'ditolak' ? 'Batal' : 'Menunggu');
+    return {
+      id: r.id,
+      text: `${r.penghuni?.nama || 'Warga'} memesan ${r.fasilitas?.nama || 'Fasilitas'}`,
+      time: timeStr,
+      status: statusFormatted
+    };
+  });
+
+  if (loading) {
+    return <div className="p-6 text-muted text-sm">Memuat...</div>;
+  }
 
   return (
     <div className="space-y-6 animate-fade-up">
@@ -25,15 +112,15 @@ export default function DashboardFasilitas() {
         {/* Right side inline stats */}
         <div className="flex flex-wrap items-center gap-3.5 bg-[#FAF6F0] p-3 rounded-2xl border border-soft text-xs font-bold">
           <div className="px-2.5 py-1 bg-pastel-pink-bg text-[#E06E5D] border border-pastel-pink/30 rounded-full font-bold text-[11px]">
-            2 Menunggu
+            {waitingCount} Menunggu
           </div>
           <div className="w-px h-3 bg-[#EAE5DF]"></div>
           <div className="text-ink font-semibold">
-            28 Bulan Ini
+            {monthCount} Bulan Ini
           </div>
           <div className="w-px h-3 bg-[#EAE5DF]"></div>
           <div className="text-ink font-bold">
-            Rp 1.8Jt Pendapatan
+            {formatRevenueShort(totalRevenue)} Pendapatan
           </div>
         </div>
       </div>
@@ -49,7 +136,7 @@ export default function DashboardFasilitas() {
             </span>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-[#1E1E1E] font-black text-3xl">2</span>
+            <span className="text-[#1E1E1E] font-black text-3xl">{waitingCount}</span>
             <span className="text-[#8A857F] font-semibold text-xs">reservasi baru</span>
           </div>
         </div>
@@ -61,7 +148,7 @@ export default function DashboardFasilitas() {
             <span className="text-[#8A857F] font-semibold text-xs mt-0.5 block">Sesi terselesaikan</span>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-[#1E1E1E] font-black text-3xl">5</span>
+            <span className="text-[#1E1E1E] font-black text-3xl">{activeTodayCount}</span>
             <span className="text-[#8A857F] font-semibold text-xs">aktif hari ini</span>
           </div>
         </div>
@@ -73,7 +160,7 @@ export default function DashboardFasilitas() {
             <span className="text-[#8A857F] font-semibold text-xs mt-0.5 block">Segera konfirmasi</span>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-[#1E1E1E] font-black text-3xl">3</span>
+            <span className="text-[#1E1E1E] font-black text-3xl">{unpaidCount}</span>
             <span className="text-[#8A857F] font-semibold text-xs">invoices pending</span>
           </div>
         </div>
@@ -85,7 +172,7 @@ export default function DashboardFasilitas() {
             <span className="text-[#8A857F] font-semibold text-xs mt-0.5 block">Dibatalkan/tidak sah</span>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-[#1E1E1E] font-black text-3xl">3</span>
+            <span className="text-[#1E1E1E] font-black text-3xl">{rejectedCount}</span>
             <span className="text-[#8A857F] font-semibold text-xs">reservasi ditolak</span>
           </div>
         </div>

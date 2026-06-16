@@ -1,66 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CheckCircle } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 
 export default function ChatKeuangan() {
-  const [conversations, setConversations] = useState([
-    {
-      id: 'HG',
-      name: 'Hendra G.',
-      unit: 'Unit 12A',
-      lastMessage: 'Tagihan April belum terupdate',
-      time: '09:45',
-      unread: true,
-      messages: [
-        { sender: 'resident', text: 'Selamat pagi admin, saya mau tanya kenapa tagihan IPL April saya belum terupdate ya?', time: '09:40' },
-        { sender: 'admin', text: 'Pagi Pak Hendra. Kami cek dulu ya.', time: '09:42' },
-        { sender: 'resident', text: 'Tagihan April belum terupdate', time: '09:45' }
-      ]
-    },
-    {
-      id: 'MS',
-      name: 'Maya S.',
-      unit: 'Unit 05B',
-      lastMessage: 'Sudah transfer tapi belum lunas',
-      time: '09:20',
-      unread: true,
-      messages: [
-        { sender: 'admin', text: 'Halo! Selamat datang di CS Keuangan SiManTap. Kami siap membantu pertanyaan seputar tagihan dan pembayaran apartemen Anda.', time: '09:00' },
-        { sender: 'resident', text: 'Pak, saya sudah transfer tagihan IPL April 3 hari yang lalu tapi statusnya masih belum bayar.', time: '09:22' },
-        { sender: 'admin', text: 'Halo Bu Maya, kami cek dulu datanya ya. Boleh kirim bukti transfernya via WhatsApp di tombol atas agar kami bisa verifikasi lebih cepat?', time: '09:24' },
-        { sender: 'resident', text: 'Sudah transfer tapi belum lunas', time: '09:25' }
-      ]
-    },
-    {
-      id: 'RH',
-      name: 'Rudi H.',
-      unit: 'Unit 18C',
-      lastMessage: 'Ada biaya tambahan di tagihan',
-      time: '08:55',
-      unread: false,
-      messages: [
-        { sender: 'resident', text: 'Pagi, kenapa bulan ini ada biaya tambahan di rincian tagihan IPL saya ya?', time: '08:50' },
-        { sender: 'resident', text: 'Ada biaya tambahan di tagihan', time: '08:55' }
-      ]
-    },
-    {
-      id: 'DL',
-      name: 'Dewi L.',
-      unit: 'Unit 07A',
-      lastMessage: 'Terima kasih sudah dikonfirmasi',
-      time: '08:00',
-      unread: false,
-      messages: [
-        { sender: 'resident', text: 'Halo, saya sudah upload bukti pembayaran kemarin.', time: '07:50' },
-        { sender: 'admin', text: 'Baik Bu Dewi, pembayarannya sudah kami verifikasi dan statusnya sekarang Lunas.', time: '07:55' },
-        { sender: 'resident', text: 'Terima kasih sudah dikonfirmasi', time: '08:00' }
-      ]
-    }
-  ]);
-
+  const [conversations, setConversations] = useState([]);
   const [activeId, setActiveId] = useState(null);
   const [replyText, setReplyText] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [successToast, setSuccessToast] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState(null);
   
   // Validation Modal Form Fields
   const [billingType, setBillingType] = useState('IPL Bulanan');
@@ -74,65 +23,227 @@ export default function ChatKeuangan() {
 
   const activeChat = conversations.find(c => c.id === activeId);
 
-  // Mark chat as read when clicked
-  const handleSelectChat = (id) => {
-    setActiveId(id);
-    setConversations(prev => 
-      prev.map(c => c.id === id ? { ...c, unread: false } : c)
-    );
+  const loadConversations = async (adminId) => {
+    try {
+      const { data: participants, error: pError } = await supabase
+        .from('conversation_participants')
+        .select('conversation_id')
+        .eq('user_id', adminId);
+
+      if (pError) throw pError;
+      const convIds = participants?.map(p => p.conversation_id) || [];
+
+      if (convIds.length === 0) {
+        setConversations([]);
+        return;
+      }
+
+      const { data: otherParticipants, error: opError } = await supabase
+        .from('conversation_participants')
+        .select('conversation_id, user_id, users:users(nama, role)')
+        .in('conversation_id', convIds)
+        .neq('user_id', adminId);
+
+      if (opError) throw opError;
+
+      const residentIds = otherParticipants?.map(p => p.user_id) || [];
+
+      const { data: penghunis, error: pgError } = await supabase
+        .from('penghuni')
+        .select('user_id, unit(nomor_unit)')
+        .in('user_id', residentIds);
+
+      const { data: messages, error: mError } = await supabase
+        .from('messages')
+        .select('conversation_id, body, created_at')
+        .in('conversation_id', convIds)
+        .order('created_at', { ascending: false });
+
+      const mapped = otherParticipants.map(participant => {
+        const userId = participant.user_id;
+        const name = participant.users?.nama || 'Anonim';
+        const unitData = penghunis?.find(p => p.user_id === userId);
+        const unitNum = unitData?.unit?.nomor_unit || '—';
+        
+        const lastMsgObj = messages?.find(m => m.conversation_id === participant.conversation_id);
+        const lastMessage = lastMsgObj?.body || 'Belum ada pesan';
+        const time = lastMsgObj?.created_at
+          ? new Date(lastMsgObj.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          : '—';
+
+        return {
+          id: participant.conversation_id,
+          userId: userId,
+          name: name,
+          unit: unitNum !== '—' ? `Unit ${unitNum}` : '—',
+          lastMessage: lastMessage,
+          time: time,
+          unread: false,
+          messages: []
+        };
+      });
+
+      setConversations(mapped);
+    } catch (err) {
+      console.error('Failed to load conversations:', err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // Send message function
-  const handleSendMessage = (e) => {
-    e.preventDefault();
-    if (!replyText.trim() || !activeId) return;
-
-    const now = new Date();
-    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-    setConversations(prev =>
-      prev.map(c => {
-        if (c.id === activeId) {
-          return {
-            ...c,
-            lastMessage: replyText,
-            time: timeStr,
-            messages: [
-              ...c.messages,
-              { sender: 'admin', text: replyText, time: timeStr }
-            ]
-          };
+  useEffect(() => {
+    async function init() {
+      try {
+        setLoading(true);
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          setCurrentUser(user);
+          await loadConversations(user.id);
         }
-        return c;
-      })
-    );
+      } catch (err) {
+        console.error('Failed to init chat:', err.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+    init();
+  }, []);
 
-    setReplyText('');
+  useEffect(() => {
+    if (!activeId || !currentUser) return;
+
+    const channel = supabase.channel(`messages-rt-${activeId}`)
+      .on('postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'messages',
+          filter: `conversation_id=eq.${activeId}` },
+        async (payload) => {
+          const isAdmin = payload.new.sender_id === currentUser.id;
+          const formattedMsg = {
+            sender: isAdmin ? 'admin' : 'resident',
+            text: payload.new.body,
+            time: new Date(payload.new.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          };
+
+          setConversations(prev =>
+            prev.map(c => {
+              if (c.id === activeId) {
+                const exists = c.messages.some(m => m.text === formattedMsg.text && m.time === formattedMsg.time);
+                if (exists) return c;
+                return {
+                  ...c,
+                  lastMessage: formattedMsg.text,
+                  time: formattedMsg.time,
+                  messages: [...c.messages, formattedMsg]
+                };
+              }
+              return c;
+            })
+          );
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [activeId, currentUser]);
+
+  const handleSelectChat = async (id) => {
+    setActiveId(id);
+    try {
+      const { data: msgs, error } = await supabase
+        .from('messages')
+        .select('*, sender:users(nama, role)')
+        .eq('conversation_id', id)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+
+      const formatted = msgs.map(m => {
+        const isAdmin = m.sender?.role?.startsWith('div_') || m.sender_id === currentUser?.id;
+        return {
+          sender: isAdmin ? 'admin' : 'resident',
+          text: m.body,
+          time: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+      });
+
+      setConversations(prev =>
+        prev.map(c => c.id === id ? { ...c, messages: formatted, unread: false } : c)
+      );
+    } catch (err) {
+      console.error('Failed to load messages:', err.message);
+    }
   };
 
-  // Create Validation Submit
-  const handleCreateValidationSubmit = (e) => {
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+    if (!replyText.trim() || !activeId || !currentUser) return;
+
+    const text = replyText;
+    setReplyText('');
+
+    try {
+      const { error } = await supabase.from('messages').insert({
+        conversation_id: activeId,
+        sender_id: currentUser.id,
+        body: text
+      });
+
+      if (error) throw error;
+    } catch (err) {
+      console.error('Failed to send message:', err.message);
+    }
+  };
+
+  const handleCreateValidationSubmit = async (e) => {
     e.preventDefault();
     if (!activeChat) return;
 
-    setModalOpen(false);
-    setSuccessToast(`Konfirmasi pembayaran untuk ${activeChat.name} berhasil disimpan!`);
-    
-    // Clear toast after 3 seconds
-    setTimeout(() => {
-      setSuccessToast('');
-    }, 3000);
+    try {
+      // Find the first unpaid bill (tagihan) for this resident
+      const { data: tagihans } = await supabase
+        .from('tagihan')
+        .select('id')
+        .or(`user_id.eq.${activeChat.userId},penghuni_id.eq.${activeChat.userId}`)
+        .eq('status', 'belum_bayar')
+        .limit(1);
 
-    // Reset fields
-    setBillingPeriod('');
-    setAmount('');
-    setTransactionId('');
-    setPaymentDate('');
-    setInternalNotes('');
+      let targetId = null;
+      if (tagihans && tagihans.length > 0) {
+        targetId = tagihans[0].id;
+      }
+
+      if (targetId) {
+        const { error } = await supabase
+          .from('tagihan')
+          .update({
+            status: 'sudah_bayar',
+            tgl_bayar: new Date()
+          })
+          .eq('id', targetId);
+
+        if (error) throw error;
+      }
+
+      setModalOpen(false);
+      setSuccessToast(`Konfirmasi pembayaran untuk ${activeChat.name} berhasil disimpan!`);
+      setTimeout(() => setSuccessToast(''), 3000);
+      setBillingPeriod('');
+      setAmount('');
+      setTransactionId('');
+      setPaymentDate('');
+      setInternalNotes('');
+    } catch (err) {
+      console.error('Failed to validate payment:', err.message);
+    }
   };
 
-  // Count unread conversations
   const unreadCount = conversations.filter(c => c.unread).length;
+
+  if (loading) {
+    return <div className="p-6 text-muted text-sm">Memuat...</div>;
+  }
 
   return (
     <div className="h-[calc(100vh-140px)] flex flex-col md:flex-row border border-soft rounded-3xl bg-surface shadow-soft overflow-hidden animate-fade-up relative">
@@ -151,16 +262,20 @@ export default function ChatKeuangan() {
         <div className="flex-1 overflow-y-auto divide-y divide-gray-100">
           {conversations.map((chat) => {
             const isActiveItem = chat.id === activeId;
+            const initials = chat.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
             return (
               <button
                 key={chat.id}
                 onClick={() => handleSelectChat(chat.id)}
                 className="w-full text-left p-4 transition duration-150 flex items-start gap-3 hover:bg-app-bg border-l-[3.5px]"
-                style={{ borderColor: isActiveItem ? 'var(--ink)' : 'transparent', backgroundColor: isActiveItem ? 'var(--app-bg)' : 'var(--surface)' }}
+                style={{ 
+                  borderColor: isActiveItem ? 'var(--ink)' : 'transparent', 
+                  backgroundColor: isActiveItem ? 'var(--app-bg)' : 'var(--surface)' 
+                }}
               >
                 {/* Avatar Initials */}
                 <div className="avatar avatar-md avatar-lavender shadow-sm">
-                  {chat.id}
+                  {initials}
                 </div>
                 
                 {/* Content */}
@@ -195,7 +310,7 @@ export default function ChatKeuangan() {
               <div className="flex items-center gap-3">
                 <div className="relative">
                   <div className="avatar avatar-md avatar-lavender shadow-sm">
-                    {activeChat.id}
+                    {activeChat.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                   </div>
                   <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 rounded-full border-2 border-white"></span>
                 </div>
@@ -266,7 +381,7 @@ export default function ChatKeuangan() {
                 </button>
               </div>
               <p className="text-[10px] text-muted font-semibold text-center mt-2.5">
-                Chat di aplikasi untuk komunikasi teks · Gunakan WhatsApp untuk kirim foto bukti pembayaran
+                Chat di aplikasi untuk komunikasi teks internal aplikasi SiManTap
               </p>
             </form>
           </>
@@ -285,14 +400,14 @@ export default function ChatKeuangan() {
         )}
       </div>
 
-      {/* CATAT KONFIRMASI PEMBAYARAN MODAL */}
+      {/* CATAT KONFIRMASI BAYAR MODAL */}
       {modalOpen && activeChat && (
         <div className="modal-overlay">
-          <div className="modal-box max-w-lg relative overflow-hidden">
+          <div className="modal-box max-w-lg">
             
             {/* Modal Header */}
             <div className="modal-header">
-              <h3 className="text-sm font-bold text-ink uppercase tracking-wider">Catat Konfirmasi Pembayaran</h3>
+              <h3 className="text-sm font-bold text-ink uppercase tracking-wider">Catat Konfirmasi Bayar</h3>
               <button 
                 onClick={() => setModalOpen(false)}
                 className="text-muted hover:text-ink transition"
@@ -303,22 +418,16 @@ export default function ChatKeuangan() {
               </button>
             </div>
 
-            {/* Info Banner - PERBAIKAN: Ditambahkan ukuran inline style pada SVG agar tidak jadi raksasa */}
-            <div className="px-5 py-3 bg-[#EEEDFB] border-b border-soft text-xs font-bold text-ink flex items-center gap-2">
-              <svg 
-                style={{ width: '18px', height: '18px' }} 
-                className="text-[#4840B0] flex-shrink-0" 
-                fill="none" 
-                viewBox="0 0 24 24" 
-                stroke="currentColor"
-              >
+            {/* Info Banner */}
+            <div className="px-5 py-3 bg-[#EEEDFB] border-b border-soft text-[11px] font-bold text-[#4840B0] flex items-center gap-2">
+              <svg className="w-4 h-4 shrink-0 text-[#4840B0]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              <span>Konfirmasi dibuat berdasarkan chat dari penghuni {activeChat.name} · Unit {activeChat.unit.replace('Unit ', '')}</span>
+              <span className="leading-tight">Catat konfirmasi pembayaran berdasarkan chat dari penghuni {activeChat.name} · Unit {activeChat.unit.replace('Unit ', '')}</span>
             </div>
 
             {/* Form */}
-            <form onSubmit={handleCreateValidationSubmit} className="modal-body space-y-4 p-5 max-h-[70vh] overflow-y-auto">
+            <form onSubmit={handleCreateValidationSubmit} className="modal-body space-y-4 p-5">
               <div className="grid grid-cols-2 gap-4">
                 {/* Resident Name */}
                 <div>
@@ -343,19 +452,17 @@ export default function ChatKeuangan() {
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                {/* Jenis Tagihan */}
+                {/* Tipe Tagihan */}
                 <div>
-                  <label className="label-modern">Jenis Tagihan</label>
+                  <label className="label-modern">Tipe Tagihan</label>
                   <select
                     value={billingType}
                     onChange={(e) => setBillingType(e.target.value)}
                     className="select-modern input-modern font-semibold"
                   >
                     <option value="IPL Bulanan">IPL Bulanan</option>
-                    <option value="Listrik">Listrik</option>
-                    <option value="Air">Air</option>
-                    <option value="Tagihan Fasilitas">Tagihan Fasilitas</option>
-                    <option value="Lainnya">Lainnya</option>
+                    <option value="Sewa Fasilitas">Sewa Fasilitas</option>
+                    <option value="Denda / Lainnya">Denda / Lainnya</option>
                   </select>
                 </div>
                 
@@ -363,43 +470,42 @@ export default function ChatKeuangan() {
                 <div>
                   <label className="label-modern">Periode Tagihan</label>
                   <input
-                    type="month"
+                    type="text"
                     required
                     value={billingPeriod}
                     onChange={(e) => setBillingPeriod(e.target.value)}
+                    placeholder="Contoh: April 2026"
                     className="input-modern font-semibold"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                {/* Jumlah Tagihan */}
+                {/* Jumlah Nominal */}
                 <div>
-                  <label className="label-modern">Jumlah Tagihan (Rp)</label>
+                  <label className="label-modern">Nominal Pembayaran</label>
                   <input
                     type="number"
                     required
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
-                    placeholder="Contoh: 920000"
+                    placeholder="Contoh: 250000"
                     className="input-modern font-semibold"
                   />
                 </div>
 
                 {/* Metode Pembayaran */}
                 <div>
-                  <label className="label-modern">Metode Pembayaran</label>
+                  <label className="label-modern">Metode</label>
                   <select
                     value={paymentMethod}
                     onChange={(e) => setPaymentMethod(e.target.value)}
                     className="select-modern input-modern font-semibold"
                   >
                     <option value="Transfer Bank">Transfer Bank</option>
-                    <option value="GoPay">GoPay</option>
-                    <option value="OVO">OVO</option>
-                    <option value="DANA">DANA</option>
+                    <option value="Virtual Account">Virtual Account</option>
+                    <option value="QRIS">QRIS</option>
                     <option value="Tunai">Tunai</option>
-                    <option value="Lainnya">Lainnya</option>
                   </select>
                 </div>
               </div>
@@ -417,42 +523,42 @@ export default function ChatKeuangan() {
                   />
                 </div>
 
-                {/* Status Konfirmasi */}
+                {/* ID Transaksi / Reference */}
                 <div>
-                  <label className="label-modern">Status Konfirmasi</label>
-                  <select
-                    value={confirmationStatus}
-                    onChange={(e) => setConfirmationStatus(e.target.value)}
-                    className="select-modern input-modern font-semibold"
-                  >
-                    <option value="Lunas — Pembayaran Terverifikasi">Lunas — Pembayaran Terverifikasi</option>
-                    <option value="Perlu Verifikasi Lebih Lanjut">Perlu Verifikasi Lebih Lanjut</option>
-                    <option value="Ditolak — Bukti Tidak Valid">Ditolak — Bukti Tidak Valid</option>
-                    <option value="Ditolak — Jumlah Tidak Sesuai">Ditolak — Jumlah Tidak Sesuai</option>
-                  </select>
+                  <label className="label-modern">ID Transaksi / Ref</label>
+                  <input
+                    type="text"
+                    required
+                    value={transactionId}
+                    onChange={(e) => setTransactionId(e.target.value)}
+                    placeholder="Contoh: TRX-12345"
+                    className="input-modern font-semibold"
+                  />
                 </div>
               </div>
 
-              {/* ID Transaksi / Referensi */}
+              {/* Status Konfirmasi */}
               <div>
-                <label className="label-modern">ID Transaksi / Referensi</label>
-                <input
-                  type="text"
-                  value={transactionId}
-                  onChange={(e) => setTransactionId(e.target.value)}
-                  placeholder="Contoh: TXN-202604-0012"
-                  className="input-modern font-semibold"
-                />
+                <label className="label-modern">Status Verifikasi</label>
+                <select
+                  value={confirmationStatus}
+                  onChange={(e) => setConfirmationStatus(e.target.value)}
+                  className="select-modern input-modern font-semibold"
+                >
+                  <option value="Lunas — Pembayaran Terverifikasi">Lunas — Pembayaran Terverifikasi</option>
+                  <option value="Proses Pengecekan">Proses Pengecekan</option>
+                  <option value="Ditolak — Bukti Tidak Valid">Ditolak — Bukti Tidak Valid</option>
+                </select>
               </div>
 
-              {/* Catatan Internal */}
+              {/* Description / Internal Notes */}
               <div>
                 <label className="label-modern">Catatan Internal</label>
                 <textarea
-                  rows={3}
+                  rows={2}
                   value={internalNotes}
                   onChange={(e) => setInternalNotes(e.target.value)}
-                  placeholder="Catatan untuk tim keuangan..."
+                  placeholder="Catatan verifikasi pembayaran..."
                   className="textarea-modern font-semibold"
                 ></textarea>
               </div>
@@ -463,8 +569,7 @@ export default function ChatKeuangan() {
                   type="submit"
                   className="flex-1 btn-primary justify-center py-2.5 rounded-xl text-xs font-bold tracking-wide"
                 >
-                  <CheckCircle size={14} className="mr-1" />
-                  <span>Simpan Konfirmasi</span>
+                  <span>✓ Simpan Konfirmasi</span>
                 </button>
                 <button
                   type="button"

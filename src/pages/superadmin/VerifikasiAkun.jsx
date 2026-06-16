@@ -1,60 +1,96 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Check } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 
 export default function AktivasiAkun() {
-  // Mengubah status awal menjadi 'Menunggu Aktivasi'
-  const [pendingActivation, setPendingActivation] = useState([
-    { id: 1, name: 'Eko Prasetyo', unit: '9A', email: 'eko.p@email.com', dateReg: '21 Apr 2026', status: 'Menunggu Aktivasi' },
-    { id: 2, name: 'Anita Kusuma', unit: '31B', email: 'anita.k@email.com', dateReg: '21 Apr 2026', status: 'Menunggu Aktivasi' },
-    { id: 3, name: 'Bima Rahardjo', unit: '22C', email: 'bima.r@email.com', dateReg: '21 Apr 2026', status: 'Menunggu Aktivasi' }
-  ]);
-
-  const [activeAccounts, setActiveAccounts] = useState([
-    { id: 101, name: 'Hendra Gunawan', unit: '12A', email: 'hendra.g@email.com', dateActive: '20 Apr 2026', status: 'Aktif' },
-    { id: 102, name: 'Maya Sari', unit: '05B', email: 'maya.s@email.com', dateActive: '19 Apr 2026', status: 'Aktif' },
-    { id: 103, name: 'Rudi Hartono', unit: '18C', email: 'rudi.h@email.com', dateActive: '18 Apr 2026', status: 'Aktif' }
-  ]);
-
+  const [pendingActivation, setPendingActivation] = useState([]);
+  const [activeAccounts, setActiveAccounts] = useState([]);
   const [toastMessage, setToastMessage] = useState('');
 
-  // Handler untuk menyetujui aktivasi akun
-  const handleActivate = (id) => {
-    const target = pendingActivation.find(acc => acc.id === id);
-    if (!target) return;
+  const loadData = async () => {
+    try {
+      const { data: pendingData } = await supabase
+        .from('users')
+        .select('*, unit(nomor_unit)')
+        .eq('role', 'penghuni')
+        .eq('must_change_password', true)
+        .order('nama');
 
-    // Hapus dari daftar tunggu aktivasi
-    setPendingActivation(prev => prev.filter(acc => acc.id !== id));
+      if (pendingData) {
+        setPendingActivation(pendingData.map(acc => {
+          const unitObj = acc.unit?.[0] || acc.unit;
+          return {
+            id: acc.id,
+            name: acc.nama,
+            unit: unitObj?.nomor_unit || '—',
+            email: acc.email,
+            dateReg: acc.created_at ? new Date(acc.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '—',
+            status: 'Menunggu Aktivasi'
+          };
+        }));
+      }
 
-    // Format tanggal aktivasi hari ini
-    const today = new Date();
-    const formattedDate = today.toLocaleDateString('id-ID', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric'
-    });
+      const { data: activeData } = await supabase
+        .from('users')
+        .select('*, unit(nomor_unit)')
+        .eq('role', 'penghuni')
+        .eq('must_change_password', false)
+        .order('nama');
 
-    const activated = {
-      id: target.id,
-      name: target.name,
-      unit: target.unit,
-      email: target.email,
-      dateActive: formattedDate,
-      status: 'Aktif'
-    };
-
-    setActiveAccounts(prev => [activated, ...prev]);
-    showToast(`Akun ${target.name} berhasil diaktifkan!`);
+      if (activeData) {
+        setActiveAccounts(activeData.map(acc => {
+          const unitObj = acc.unit?.[0] || acc.unit;
+          return {
+            id: acc.id,
+            name: acc.nama,
+            unit: unitObj?.nomor_unit || '—',
+            email: acc.email,
+            dateActive: acc.updated_at ? new Date(acc.updated_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '—',
+            status: 'Aktif'
+          };
+        }));
+      }
+    } catch (err) {
+      console.error('Error loading account verification data:', err);
+    }
   };
 
-  // Handler untuk menolak atau membatalkan permintaan aktivasi
-  const handleRejectActivation = (id) => {
-    const target = pendingActivation.find(acc => acc.id === id);
-    if (!target) return;
+  useEffect(() => {
+    loadData();
+  }, []);
 
-    const confirmReject = window.confirm(`Apakah Anda yakin ingin menolak permintaan aktivasi akun untuk ${target.name}?`);
+  const handleActivate = async (id) => {
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({ must_change_password: false })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      showToast(`Akun berhasil diaktifkan!`);
+      loadData();
+    } catch (err) {
+      console.error('Failed to activate account:', err.message);
+    }
+  };
+
+  const handleRejectActivation = async (id) => {
+    const confirmReject = window.confirm(`Apakah Anda yakin ingin menolak permintaan aktivasi akun?`);
     if (confirmReject) {
-      setPendingActivation(prev => prev.filter(acc => acc.id !== id));
-      showToast(`Permintaan aktivasi akun ${target.name} ditolak.`);
+      try {
+        const { error } = await supabase
+          .from('users')
+          .delete()
+          .eq('id', id);
+
+        if (error) throw error;
+
+        showToast(`Permintaan aktivasi akun ditolak.`);
+        loadData();
+      } catch (err) {
+        console.error('Failed to reject activation:', err.message);
+      }
     }
   };
 

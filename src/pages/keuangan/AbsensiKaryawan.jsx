@@ -1,15 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { UserCheck, Clock, UserX, Plus, X, Search, Calendar, FileText, CheckCircle2 } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 
 export default function AbsensiKaryawan() {
-  const [logs, setLogs] = useState([
-    { id: 1, name: 'Rina Kurnia', role: 'Supervisor Keuangan', date: '28 Mei 2026', checkIn: '07:45', checkOut: '17:00', status: 'Hadir', note: 'Absen pagi tepat waktu' },
-    { id: 2, name: 'Ahmad Fauzi', role: 'Staff Kasir & EBilling', date: '28 Mei 2026', checkIn: '07:58', checkOut: '17:05', status: 'Hadir', note: 'Tepat waktu' },
-    { id: 3, name: 'Sri Wahyuni', role: 'Staff Akunting & Pajak', date: '28 Mei 2026', checkIn: '08:15', checkOut: '—', status: 'Terlambat', note: 'Ban motor bocor dijalan' },
-    { id: 4, name: 'Ahmad Fauzi', role: 'Staff Kasir & EBilling', date: '27 Mei 2026', checkIn: '07:50', checkOut: '17:00', status: 'Hadir', note: 'Tepat waktu' },
-    { id: 5, name: 'Sri Wahyuni', role: 'Staff Akunting & Pajak', date: '27 Mei 2026', checkIn: '07:55', checkOut: '17:00', status: 'Hadir', note: 'Tepat waktu' },
-    { id: 6, name: 'Rina Kurnia', role: 'Supervisor Keuangan', date: '27 Mei 2026', checkIn: '07:40', checkOut: '17:15', status: 'Hadir', note: 'Absen pagi tepat waktu' }
-  ]);
+  const [logs, setLogs] = useState([]);
+  const [availableEmployees, setAvailableEmployees] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('Semua');
@@ -27,12 +23,61 @@ export default function AbsensiKaryawan() {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
 
-  // Daftar data staf untuk pencarian
-  const availableEmployees = [
-    { name: 'Ahmad Fauzi', desc: 'Staff Kasir & EBilling' },
-    { name: 'Sri Wahyuni', desc: 'Staff Akunting & Pajak' },
-    { name: 'Rina Kurnia', desc: 'Supervisor Keuangan' }
-  ];
+  useEffect(() => {
+    async function loadData() {
+      try {
+        setLoading(true);
+        // Fetch all employees in finance roles
+        const { data: employeesData, error: empError } = await supabase
+          .from('users')
+          .select('id, nama, role')
+          .or('role.ilike.%keuangan%,role.ilike.%kasir%,role.ilike.%billing%,role.ilike.%akunting%,role.ilike.%pajak%');
+
+        if (empError) throw empError;
+
+        if (employeesData && employeesData.length > 0) {
+          setAvailableEmployees(employeesData.map(e => ({ name: e.nama, desc: e.role, id: e.id })));
+        } else {
+          // Fallback to mock employees
+          setAvailableEmployees([
+            { name: 'Ahmad Fauzi', desc: 'Staff Kasir & EBilling' },
+            { name: 'Sri Wahyuni', desc: 'Staff Akunting & Pajak' },
+            { name: 'Rina Kurnia', desc: 'Supervisor Keuangan' }
+          ]);
+        }
+
+        // Fetch attendance for today
+        const todayStr = new Date().toISOString().split('T')[0];
+        const { data: attData, error: attError } = await supabase
+          .from('absensi')
+          .select('*, karyawan:users(nama, role)')
+          .eq('tanggal', todayStr);
+
+        if (attError) throw attError;
+
+        if (attData && attData.length > 0) {
+          setLogs(attData.map(row => ({
+            id: row.id,
+            name: row.karyawan?.nama || 'Anonim',
+            role: row.karyawan?.role || 'Staff',
+            date: row.tanggal ? new Date(row.tanggal).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '—',
+            checkIn: row.jam_masuk || '—',
+            checkOut: row.jam_keluar || '—',
+            status: row.status || 'Hadir',
+            note: row.keterangan || row.note || 'Tepat waktu',
+            karyawan_id: row.karyawan_id
+          })));
+        } else {
+          setLogs([]);
+        }
+      } catch (err) {
+        console.error('Error fetching attendance:', err.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadData();
+  }, []);
 
   // Effect pelindung: Klik di luar list dropdown akan otomatis menutup menu pencarian
   useEffect(() => {
@@ -56,7 +101,7 @@ export default function AbsensiKaryawan() {
   };
 
   const handleOpenModal = () => {
-    setFormName('Ahmad Fauzi');
+    setFormName(availableEmployees.length > 0 ? availableEmployees[0].name : '');
     setFormStatus('Hadir');
     setFormCheckIn('08:00');
     setFormCheckOut('17:00');
@@ -69,29 +114,55 @@ export default function AbsensiKaryawan() {
     setIsModalOpen(false);
   };
 
-  const handleSaveAbsensi = (e) => {
+  const handleSaveAbsensi = async (e) => {
     e.preventDefault();
 
-    const rolesMap = {
-      'Rina Kurnia': 'Supervisor Keuangan',
-      'Ahmad Fauzi': 'Staff Kasir & EBilling',
-      'Sri Wahyuni': 'Staff Akunting & Pajak'
-    };
+    const matchedEmployee = availableEmployees.find(emp => emp.name === formName);
+    if (!matchedEmployee) {
+      alert('Silakan pilih nama karyawan yang valid!');
+      return;
+    }
 
-    const newLog = {
-      id: Date.now(),
-      name: formName,
-      role: rolesMap[formName] || 'Staff Keuangan',
-      date: '28 Mei 2026',
-      checkIn: formStatus === 'Alpa' || formStatus === 'Izin' || formStatus === 'Sakit' ? '—' : formCheckIn,
-      checkOut: formStatus === 'Alpa' || formStatus === 'Izin' || formStatus === 'Sakit' ? '—' : formCheckOut,
-      status: formStatus,
-      note: formNote || (formStatus === 'Hadir' ? 'Tepat waktu' : formStatus)
-    };
+    try {
+      const jamMasuk = formStatus === 'Alpa' || formStatus === 'Izin' || formStatus === 'Sakit' ? '—' : formCheckIn;
+      const jamKeluar = formStatus === 'Alpa' || formStatus === 'Izin' || formStatus === 'Sakit' ? '—' : formCheckOut;
+      const note = formNote || (formStatus === 'Hadir' ? 'Tepat waktu' : formStatus);
 
-    setLogs(prev => [newLog, ...prev]);
-    setIsModalOpen(false);
-    showToast(`Berhasil mencatat absensi manual untuk ${formName}!`);
+      const { data, error } = await supabase
+        .from('absensi')
+        .insert({
+          karyawan_id: matchedEmployee.id,
+          tanggal: new Date().toISOString().split('T')[0],
+          jam_masuk: jamMasuk,
+          jam_keluar: jamKeluar,
+          status: formStatus,
+          keterangan: note
+        })
+        .select('*, karyawan:users(nama, role)')
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        const newLog = {
+          id: data.id,
+          name: data.karyawan?.nama || matchedEmployee.name,
+          role: data.karyawan?.role || matchedEmployee.desc,
+          date: new Date(data.tanggal).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }),
+          checkIn: data.jam_masuk || '—',
+          checkOut: data.jam_keluar || '—',
+          status: data.status || 'Hadir',
+          note: data.keterangan || 'Tepat waktu',
+          karyawan_id: data.karyawan_id
+        };
+        setLogs(prev => [newLog, ...prev]);
+      }
+      showToast(`Berhasil mencatat absensi manual untuk ${formName}!`);
+    } catch (err) {
+      console.error('Error saving attendance:', err.message);
+    } finally {
+      setIsModalOpen(false);
+    }
   };
 
   const showToast = (msg) => {
@@ -110,6 +181,10 @@ export default function AbsensiKaryawan() {
   const searchedEmployees = availableEmployees.filter(emp =>
     emp.name.toLowerCase().includes(formName.toLowerCase())
   );
+
+  if (loading) {
+    return <div className="p-6 text-muted text-sm">Memuat...</div>;
+  }
 
   return (
     <div className="space-y-6 animate-fade-up relative">
