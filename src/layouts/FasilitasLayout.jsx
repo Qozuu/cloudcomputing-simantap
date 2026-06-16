@@ -1,8 +1,5 @@
 import React, { useState, useEffect } from 'react';
-<<<<<<< HEAD
 import { supabase } from '../lib/supabase';
-=======
->>>>>>> e32d36c224751aff27181e88a579f767cedb6182
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import LogoutModal from '../components/shared/LogoutModal';
 import NotificationBell from '../components/shared/NotificationBell';
