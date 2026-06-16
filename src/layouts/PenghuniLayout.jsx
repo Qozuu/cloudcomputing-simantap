@@ -12,13 +12,12 @@ import {
   Building,
   MessageSquare,
   User,
-  LogOut,
-  Menu,
-  X
+  LogOut
 } from 'lucide-react';
 
-// 1. IMPORT LOGO ASSET BIAR SELARAS TOTAL
+// 1. IMPORT LOGO ASSET BIAR SELARAS TOTAL JIRR
 import LogoSiManTap from '../assets/logo.png';
+
 
 export default function PenghuniLayout() {
   const [userProfile, setUserProfile] = useState(null);
@@ -67,7 +66,32 @@ export default function PenghuniLayout() {
   const navigate = useNavigate();
   const currentPath = location.pathname;
   const [showLogout, setShowLogout] = useState(false);
-  const [isMobileOpen, setIsMobileOpen] = useState(false); // State pengontrol drawer mobile
+
+  // 🛠️ TAMBAHKAN KODE INI DI SINI:
+  const [namaUser, setNamaUser] = useState('');
+
+  React.useEffect(() => {
+    // Cari otomatis nama user di sessionStorage
+    for (let i = 0; i < sessionStorage.length; i++) {
+      const key = sessionStorage.key(i);
+      const value = sessionStorage.getItem(key);
+      
+      if (value && !value.includes('@') && value.length < 30 && key.toLowerCase().includes('name')) {
+        setNamaUser(value);
+        break;
+      }
+    }
+  }, []);
+
+  // Fungsi untuk membuat inisial avatar otomatis (contoh: Qozu -> QO, Hendra Gunawan -> HG)
+  const getAvatarInitials = (name) => {
+    if (!name) return '??';
+    const parts = name.trim().split(' ');
+    if (parts.length > 1) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return parts[0].substring(0, 2).toUpperCase();
+  };
 
   // Active state checker
   const isActive = (path) => currentPath === path;
@@ -107,6 +131,7 @@ export default function PenghuniLayout() {
       icon: Building
     },
     {
+      // ✨ PERUBAHAN: Nama menu diubah menjadi 'Kontak Pengelola' agar selaras dengan halaman utama
       name: 'Kontak Pengelola',
       path: '/penghuni/cs',
       icon: MessageSquare,
@@ -311,7 +336,7 @@ export default function PenghuniLayout() {
         </header>
 
         {/* Content Outlet */}
-        <main className="flex-1 px-4 md:px-6 pb-8">
+        <main className="flex-1 px-6 pb-8">
           <Outlet />
         </main>
       </div>
@@ -329,3 +354,4 @@ export default function PenghuniLayout() {
     </div>
   );
 }
+

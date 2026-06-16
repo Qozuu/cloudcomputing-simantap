@@ -19,37 +19,17 @@ const ROLE_CONFIG = {
     label:       'Super Admin',
     portal:      'Login Portal Super Admin',
     description: 'Akses penuh ke seluruh sistem manajemen SiManTap.',
-    username:    'budi', // Disesuaikan dengan Budi Santoso (super_admin)
+    username:    'Teddy', // Disesuaikan dengan Budi Santoso (super_admin)
     color:       '#1C3657',
     colorLight:  '#EEF2F8',
     icon:        'Crown',
     route:       '/superadmin/homepage',
   },
-  gm: {
-    label:       'General Manager',
-    portal:      'Login Portal General Manager',
-    description: 'Akses penuh ke seluruh sistem manajemen SiManTap.',
-    username:    'budi', 
-    color:       '#1C3657',
-    colorLight:  '#EEF2F8',
-    icon:        'Crown',
-    route:       '/superadmin/homepage',
-  },
-  manager: {
-    label:       'Manager',
-    portal:      'Login Portal Manager',
-    description: 'Akses penuh ke seluruh sistem manajemen SiManTap.',
-    username:    'budi', 
-    color:       '#1C3657',
-    colorLight:  '#EEF2F8',
-    icon:        'Crown',
-    route:       '/superadmin/homepage',
-  },
-  keuangan: {
+    keuangan: {
     label:       'Keuangan',
     portal:      'Login Portal Keuangan',
     description: 'Kelola tagihan, pembayaran, dan laporan keuangan apartemen.',
-    username:    'rina', // Disesuaikan dengan Rina Kurnia
+    username:    'Dadan', 
     color:       '#1D4ED8',
     colorLight:  '#EFF6FF',
     icon:        'Wallet',
@@ -59,7 +39,7 @@ const ROLE_CONFIG = {
     label:       'Pemeliharaan',
     portal:      'Login Portal Pemeliharaan',
     description: 'Kelola tiket kerusakan, teknisi, dan jadwal perbaikan.',
-    username:    'doni', // Disesuaikan dengan Doni Praetya
+    username:    'Bahlil', 
     color:       '#C2410C',
     colorLight:  '#FFF7ED',
     icon:        'Wrench',
@@ -69,7 +49,7 @@ const ROLE_CONFIG = {
     label:       'Keamanan',
     portal:      'Login Portal Keamanan',
     description: 'Pantau akses tamu, parkir, dan keamanan lingkungan apartemen.',
-    username:    'agus', // Disesuaikan dengan Agus Wibowo
+    username:    'Sambo', 
     color:       '#0F766E',
     colorLight:  '#F0FDFA',
     icon:        'ShieldCheck',
@@ -79,7 +59,7 @@ const ROLE_CONFIG = {
     label:       'Kebersihan',
     portal:      'Login Portal Kebersihan',
     description: 'Atur jadwal kebersihan, absensi petugas, dan permintaan cleaning.',
-    username:    'siti', // Disesuaikan dengan Siti Rahayu
+    username:    'Widodo', // Disesuaikan dengan Siti Rahayu
     color:       '#7C3AED',
     colorLight:  '#F5F3FF',
     icon:        'Sparkles',
@@ -89,7 +69,7 @@ const ROLE_CONFIG = {
     label:       'Fasilitas',
     portal:      'Login Portal Fasilitas',
     description: 'Kelola reservasi, jadwal, dan tagihan fasilitas apartemen.',
-    username:    'reza', // Disesuaikan dengan Reza Pratama
+    username:    'Erick', // Disesuaikan dengan Reza Pratama
     color:       '#0369A1',
     colorLight:  '#F0F9FF',
     icon:        'Building2',
@@ -99,7 +79,7 @@ const ROLE_CONFIG = {
     label:       'Penghuni',
     portal:      'Login Portal Penghuni',
     description: 'Akses tagihan, laporan kerusakan, dan fasilitas apartemen Anda.',
-    username:    'agus', // Sementara dipetakan ke user valid untuk kebutuhan development
+    username:    'Penghuni', // Sementara dipetakan ke user valid untuk kebutuhan development
     color:       '#15803D',
     colorLight:  '#F0FDF4',
     icon:        'Home',
@@ -217,7 +197,7 @@ export default function LoginPage() {
       }
 
       // D. Evaluasi Logika Wajib Ganti Password
-      if (profile?.must_change_password) {
+      if (profile?.role === 'penghuni' && profile?.must_change_password) {
         setIsLoading(false);
         setSavedProfile(profile);
         setNextRoute(targetRoute);
@@ -260,6 +240,11 @@ export default function LoginPage() {
     if (newPassword.length < 6) {
       setError('Password baru minimal harus 6 karakter.');
       return;
+    }
+
+    if (savedProfile?.role !== 'penghuni') {
+    setError('Akses ditolak. Fitur ganti password paksaan hanya untuk akun Penghuni.');
+    return;
     }
 
     setIsLoading(true);

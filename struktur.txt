@@ -1,174 +1,174 @@
 Folder PATH listing
 Volume serial number is 000000E2 8285:75F5
-C:\USERS\USER\CLOUDCOMPUTING-SIMANTAP\FRONTEND\SRC
-³   App.jsx
-³   index.css
-³   main.jsx
-³   
-ÃÄÄÄassets
-³       .gitkeep
-³       logo-simantap.svg
-³       logo.png
-³       
-ÃÄÄÄcomponents
-³   ÃÄÄÄpenghuni
-³   ³       .gitkeep
-³   ³       
-³   ÃÄÄÄshared
-³   ³       .gitkeep
-³   ³       AttendanceGuard.jsx
-³   ³       LogoutModal.jsx
-³   ³       NotificationBell.jsx
-³   ³       ProtectedRoute.jsx
-³   ³       PusatInformasi.jsx
-³   ³       
-³   ÀÄÄÄsuper_admin
-³           .gitkeep
-³           
-ÃÄÄÄconstants
-³       absensi.js
-³       apiEndpoints.js
-³       roles.js
-³       routes.js
-³       
-ÃÄÄÄcontext
-³       AuthContext.jsx
-³       NotificationContext.jsx
-³       
-ÃÄÄÄhooks
-³       useAnnouncement.js
-³       useApi.js
-³       useAttendance.js
-³       useAuth.js
-³       useBilling.js
-³       useCleaning.js
-³       useFacility.js
-³       useFinance.js
-³       useMaintenance.js
-³       useRole.js
-³       useSecurity.js
-³       useUnit.js
-³       useUser.js
-³       
-ÃÄÄÄlayouts
-³       AuthLayout.jsx
-³       FasilitasLayout.jsx
-³       KeamananLayout.jsx
-³       KebersihanLayout.jsx
-³       KeuanganLayout.jsx
-³       PemeliharaanLayout.jsx
-³       PenghuniLayout.jsx
-³       SuperAdminLayout.jsx
-³       
-ÃÄÄÄlib
-³       supabase.js
-³       
-ÃÄÄÄpages
-³   ³   Login.jsx
-³   ³   Unauthorized.jsx
-³   ³   
-³   ÃÄÄÄauth
-³   ³       ForgotPassword.jsx
-³   ³       LoginPage.jsx
-³   ³       OnboardingPage.jsx
-³   ³       RegisterPage.jsx
-³   ³       RolePickerPage.jsx
-³   ³       
-³   ÃÄÄÄfasilitas
-³   ³       AbsensiCheckIn.jsx
-³   ³       ChatFasilitas.jsx
-³   ³       DashboardFasilitas.jsx
-³   ³       JadwalFasilitas.jsx
-³   ³       KelolaFasilitas.jsx
-³   ³       PusatInformasi.jsx
-³   ³       ReservasiMasuk.jsx
-³   ³       TagihanReservasi.jsx
-³   ³       
-³   ÃÄÄÄkeamanan
-³   ³       AbsensiSatpam.jsx
-³   ³       BroadcastPesan.jsx
-³   ³       DashboardKeamanan.jsx
-³   ³       LogParkir.jsx
-³   ³       LogTamu.jsx
-³   ³       
-³   ÃÄÄÄkebersihan
-³   ³       AbsensiCheckIn.jsx
-³   ³       AbsensiPetugas.jsx
-³   ³       JadwalKebersihan.jsx
-³   ³       PermintaanCleaning.jsx
-³   ³       PusatInformasi.jsx
-³   ³       RiwayatPekerjaan.jsx
-³   ³       
-³   ÃÄÄÄkeuangan
-³   ³       AbsensiCheckIn.jsx
-³   ³       AbsensiKaryawan.jsx
-³   ³       ChatKeuangan.jsx
-³   ³       DashboardKeuangan.jsx
-³   ³       KelolaPenghuniKeuangan.jsx
-³   ³       LaporanPendapatan.jsx
-³   ³       LaporanPengeluaran.jsx
-³   ³       PendapatanFasilitas.jsx
-³   ³       RekonsiliPembayaran.jsx
-³   ³       TagihanEBilling.jsx
-³   ³       
-³   ÃÄÄÄpemeliharaan
-³   ³       AbsensiTeknisi.jsx
-³   ³       CSLiveChat.jsx
-³   ³       DashboardTiket.jsx
-³   ³       RiwayatPerbaikan.jsx
-³   ³       TiketKerusakan.jsx
-³   ³       
-³   ÃÄÄÄpenghuni
-³   ³       Beranda.jsx
-³   ³       CustomerService.jsx
-³   ³       EBilling.jsx
-³   ³       FasilitasApartemen.jsx
-³   ³       LaporanKerusakan.jsx
-³   ³       Pengumuman.jsx
-³   ³       ProfilSaya.jsx
-³   ³       PusatInformasi.jsx
-³   ³       
-³   ÃÄÄÄshared
-³   ³       AbsensiCheckIn.jsx
-³   ³       
-³   ÃÄÄÄsuperadmin
-³   ³       AbsenKaryawan.jsx
-³   ³       AuditLog.jsx
-³   ³       Dashboard.jsx
-³   ³       DataAdminDivisi.jsx
-³   ³       DataPenghuni.jsx
-³   ³       DataTower.jsx
-³   ³       DataUnit.jsx
-³   ³       GrafikMonitoring.jsx
-³   ³       Homepage.jsx
-³   ³       LaporanKeuangan.jsx
-³   ³       ManajemenFasilitas.jsx
-³   ³       PusatInformasi.jsx
-³   ³       VerifikasiAkun.jsx
-³   ³       
-³   ÀÄÄÄsuper_admin
-³           Dashboard.jsx
-³           Settings.jsx
-³           UserManagement.jsx
-³           
-ÃÄÄÄrouter
-³       index.jsx
-³       
-ÃÄÄÄservices
-³       announcementService.js
-³       api.js
-³       attendanceService.js
-³       authService.js
-³       billingService.js
-³       cleaningService.js
-³       facilityService.js
-³       financeService.js
-³       maintenanceService.js
-³       securityService.js
-³       unitService.js
-³       userService.js
-³       
-ÀÄÄÄutils
+C:\USERS\USER\CLOUDCOMPUTING-SIMANTAP\SRC
+ï¿½   App.jsx
+ï¿½   index.css
+ï¿½   main.jsx
+ï¿½   
+ï¿½ï¿½ï¿½ï¿½assets
+ï¿½       .gitkeep
+ï¿½       logo-simantap.svg
+ï¿½       logo.png
+ï¿½       
+ï¿½ï¿½ï¿½ï¿½components
+ï¿½   ï¿½ï¿½ï¿½ï¿½penghuni
+ï¿½   ï¿½       .gitkeep
+ï¿½   ï¿½       
+ï¿½   ï¿½ï¿½ï¿½ï¿½shared
+ï¿½   ï¿½       .gitkeep
+ï¿½   ï¿½       AttendanceGuard.jsx
+ï¿½   ï¿½       LogoutModal.jsx
+ï¿½   ï¿½       NotificationBell.jsx
+ï¿½   ï¿½       ProtectedRoute.jsx
+ï¿½   ï¿½       PusatInformasi.jsx
+ï¿½   ï¿½       
+ï¿½   ï¿½ï¿½ï¿½ï¿½super_admin
+ï¿½           .gitkeep
+ï¿½           
+ï¿½ï¿½ï¿½ï¿½constants
+ï¿½       absensi.js
+ï¿½       apiEndpoints.js
+ï¿½       roles.js
+ï¿½       routes.js
+ï¿½       
+ï¿½ï¿½ï¿½ï¿½context
+ï¿½       AuthContext.jsx
+ï¿½       NotificationContext.jsx
+ï¿½       
+ï¿½ï¿½ï¿½ï¿½hooks
+ï¿½       useAnnouncement.js
+ï¿½       useApi.js
+ï¿½       useAttendance.js
+ï¿½       useAuth.js
+ï¿½       useBilling.js
+ï¿½       useCleaning.js
+ï¿½       useFacility.js
+ï¿½       useFinance.js
+ï¿½       useMaintenance.js
+ï¿½       useRole.js
+ï¿½       useSecurity.js
+ï¿½       useUnit.js
+ï¿½       useUser.js
+ï¿½       
+ï¿½ï¿½ï¿½ï¿½layouts
+ï¿½       AuthLayout.jsx
+ï¿½       FasilitasLayout.jsx
+ï¿½       KeamananLayout.jsx
+ï¿½       KebersihanLayout.jsx
+ï¿½       KeuanganLayout.jsx
+ï¿½       PemeliharaanLayout.jsx
+ï¿½       PenghuniLayout.jsx
+ï¿½       SuperAdminLayout.jsx
+ï¿½       
+ï¿½ï¿½ï¿½ï¿½lib
+ï¿½       supabase.js
+ï¿½       
+ï¿½ï¿½ï¿½ï¿½pages
+ï¿½   ï¿½   Login.jsx
+ï¿½   ï¿½   Unauthorized.jsx
+ï¿½   ï¿½   
+ï¿½   ï¿½ï¿½ï¿½ï¿½auth
+ï¿½   ï¿½       ForgotPassword.jsx
+ï¿½   ï¿½       LoginPage.jsx
+ï¿½   ï¿½       OnboardingPage.jsx
+ï¿½   ï¿½       RegisterPage.jsx
+ï¿½   ï¿½       RolePickerPage.jsx
+ï¿½   ï¿½       
+ï¿½   ï¿½ï¿½ï¿½ï¿½fasilitas
+ï¿½   ï¿½       AbsensiCheckIn.jsx
+ï¿½   ï¿½       ChatFasilitas.jsx
+ï¿½   ï¿½       DashboardFasilitas.jsx
+ï¿½   ï¿½       JadwalFasilitas.jsx
+ï¿½   ï¿½       KelolaFasilitas.jsx
+ï¿½   ï¿½       PusatInformasi.jsx
+ï¿½   ï¿½       ReservasiMasuk.jsx
+ï¿½   ï¿½       TagihanReservasi.jsx
+ï¿½   ï¿½       
+ï¿½   ï¿½ï¿½ï¿½ï¿½keamanan
+ï¿½   ï¿½       AbsensiSatpam.jsx
+ï¿½   ï¿½       BroadcastPesan.jsx
+ï¿½   ï¿½       DashboardKeamanan.jsx
+ï¿½   ï¿½       LogParkir.jsx
+ï¿½   ï¿½       LogTamu.jsx
+ï¿½   ï¿½       
+ï¿½   ï¿½ï¿½ï¿½ï¿½kebersihan
+ï¿½   ï¿½       AbsensiCheckIn.jsx
+ï¿½   ï¿½       AbsensiPetugas.jsx
+ï¿½   ï¿½       JadwalKebersihan.jsx
+ï¿½   ï¿½       PermintaanCleaning.jsx
+ï¿½   ï¿½       PusatInformasi.jsx
+ï¿½   ï¿½       RiwayatPekerjaan.jsx
+ï¿½   ï¿½       
+ï¿½   ï¿½ï¿½ï¿½ï¿½keuangan
+ï¿½   ï¿½       AbsensiCheckIn.jsx
+ï¿½   ï¿½       AbsensiKaryawan.jsx
+ï¿½   ï¿½       ChatKeuangan.jsx
+ï¿½   ï¿½       DashboardKeuangan.jsx
+ï¿½   ï¿½       KelolaPenghuniKeuangan.jsx
+ï¿½   ï¿½       LaporanPendapatan.jsx
+ï¿½   ï¿½       LaporanPengeluaran.jsx
+ï¿½   ï¿½       PendapatanFasilitas.jsx
+ï¿½   ï¿½       RekonsiliPembayaran.jsx
+ï¿½   ï¿½       TagihanEBilling.jsx
+ï¿½   ï¿½       
+ï¿½   ï¿½ï¿½ï¿½ï¿½pemeliharaan
+ï¿½   ï¿½       AbsensiTeknisi.jsx
+ï¿½   ï¿½       CSLiveChat.jsx
+ï¿½   ï¿½       DashboardTiket.jsx
+ï¿½   ï¿½       RiwayatPerbaikan.jsx
+ï¿½   ï¿½       TiketKerusakan.jsx
+ï¿½   ï¿½       
+ï¿½   ï¿½ï¿½ï¿½ï¿½penghuni
+ï¿½   ï¿½       Beranda.jsx
+ï¿½   ï¿½       CustomerService.jsx
+ï¿½   ï¿½       EBilling.jsx
+ï¿½   ï¿½       FasilitasApartemen.jsx
+ï¿½   ï¿½       LaporanKerusakan.jsx
+ï¿½   ï¿½       Pengumuman.jsx
+ï¿½   ï¿½       ProfilSaya.jsx
+ï¿½   ï¿½       PusatInformasi.jsx
+ï¿½   ï¿½       
+ï¿½   ï¿½ï¿½ï¿½ï¿½shared
+ï¿½   ï¿½       AbsensiCheckIn.jsx
+ï¿½   ï¿½       
+ï¿½   ï¿½ï¿½ï¿½ï¿½superadmin
+ï¿½   ï¿½       AbsenKaryawan.jsx
+ï¿½   ï¿½       AuditLog.jsx
+ï¿½   ï¿½       Dashboard.jsx
+ï¿½   ï¿½       DataAdminDivisi.jsx
+ï¿½   ï¿½       DataPenghuni.jsx
+ï¿½   ï¿½       DataTower.jsx
+ï¿½   ï¿½       DataUnit.jsx
+ï¿½   ï¿½       GrafikMonitoring.jsx
+ï¿½   ï¿½       Homepage.jsx
+ï¿½   ï¿½       LaporanKeuangan.jsx
+ï¿½   ï¿½       ManajemenFasilitas.jsx
+ï¿½   ï¿½       PusatInformasi.jsx
+ï¿½   ï¿½       VerifikasiAkun.jsx
+ï¿½   ï¿½       
+ï¿½   ï¿½ï¿½ï¿½ï¿½super_admin
+ï¿½           Dashboard.jsx
+ï¿½           Settings.jsx
+ï¿½           UserManagement.jsx
+ï¿½           
+ï¿½ï¿½ï¿½ï¿½router
+ï¿½       index.jsx
+ï¿½       
+ï¿½ï¿½ï¿½ï¿½services
+ï¿½       announcementService.js
+ï¿½       api.js
+ï¿½       attendanceService.js
+ï¿½       authService.js
+ï¿½       billingService.js
+ï¿½       cleaningService.js
+ï¿½       facilityService.js
+ï¿½       financeService.js
+ï¿½       maintenanceService.js
+ï¿½       securityService.js
+ï¿½       unitService.js
+ï¿½       userService.js
+ï¿½       
+ï¿½ï¿½ï¿½ï¿½utils
         authSession.js
         formatCurrency.js
         formatDate.js
