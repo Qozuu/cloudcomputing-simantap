@@ -23,26 +23,37 @@ import LogoSiManTap from '../assets/logo.png';
 
 export default function KeuanganLayout() {
   const [userProfile, setUserProfile] = useState(null);
+  const [showLogout, setShowLogout] = useState(false);
+  const [isMobileOpen, setIsMobileOpen] = useState(false); // State pengontrol drawer mobile
 
   useEffect(() => {
     async function fetchProfile() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const { data } = await supabase
-        .from('users')
-        .select('nama, role, no_hp')
-        .eq('id', user.id)
-        .single();
-      setUserProfile(data);
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        
+        const { data, error } = await supabase
+          .from('users')
+          .select('nama, role, no_hp')
+          .eq('id', user.id)
+          .single();
+          
+        if (data) {
+          setUserProfile(data);
+        }
+      } catch (error) {
+        console.error("Gagal mengambil data profil keuangan:", error);
+      }
     }
     fetchProfile();
   }, []);
 
-  const getNama = () => userProfile?.nama || 'Pengguna';
+  const getNama = () => userProfile?.nama || 'Admin Keuangan';
   
   const getInitials = () => {
     const nama = userProfile?.nama || '';
-    return nama.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || '??';
+    if (!nama) return 'AK';
+    return nama.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   };
 
   const getRoleLabel = () => {
@@ -62,14 +73,12 @@ export default function KeuanganLayout() {
       div_fasilitas:       'Admin Fasilitas',
       penghuni:            'Penghuni',
     };
-    return map[userProfile?.role] || userProfile?.role || 'Staff';
+    return map[userProfile?.role] || userProfile?.role || 'Admin Keuangan';
   };
 
   const location = useLocation();
   const navigate = useNavigate();
   const currentPath = location.pathname;
-  const [showLogout, setShowLogout] = useState(false);
-  const [isMobileOpen, setIsMobileOpen] = useState(false); // State pengontrol drawer mobile
 
   // Active state checker
   const isActive = (path) => currentPath === path;
@@ -140,7 +149,7 @@ export default function KeuanganLayout() {
             className="absolute left-0 top-0 h-full w-72 max-w-[80vw] bg-white flex flex-col overflow-hidden shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header */}
+            {/* Header Mobile Drawer */}
             <div className="flex items-center justify-between p-4 border-b border-gray-100">
               <div className="flex items-center gap-2">
                 <img src={LogoSiManTap} alt="Logo" className="w-8 h-8 object-contain" />
@@ -151,7 +160,7 @@ export default function KeuanganLayout() {
               </button>
             </div>
 
-            {/* Nav items */}
+            {/* Menu Items Mobile Drawer */}
             <nav className="flex-1 overflow-y-auto p-3 space-y-1">
               {/* Menu bagian atas sebelum CS Chat (index 0 sampai 7) */}
               {menuItems.slice(0, 7).map((item) => {
@@ -231,7 +240,7 @@ export default function KeuanganLayout() {
               })}
             </nav>
 
-            {/* Footer */}
+            {/* Footer Profile Mobile Drawer */}
             <div className="p-4 border-t border-gray-100 space-y-3">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center font-bold text-sm shrink-0">
@@ -246,9 +255,7 @@ export default function KeuanganLayout() {
                 onClick={() => { setIsMobileOpen(false); setShowLogout(true); }}
                 className="w-full flex items-center justify-center gap-2 py-2.5 border border-gray-200 rounded-xl text-xs font-semibold text-red-500 hover:bg-red-50 transition-all"
               >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                </svg>
+                <LogOut size={14} />
                 <span>Keluar dari Aplikasi</span>
               </button>
             </div>
@@ -260,7 +267,7 @@ export default function KeuanganLayout() {
       <div className="hidden md:flex md:shrink-0">
         <aside className="sidebar h-full flex flex-col bg-white">
           
-          {/* AREA BRANDING RAPAT KIRI PIXEL-PERFECT */}
+          {/* Area Branding Desktop */}
           <div className="sidebar-branding flex items-center justify-between md:justify-start gap-1 pl-1 pr-4 md:pr-0 select-none">
             <div className="flex items-center gap-1">
               <img 
@@ -272,17 +279,9 @@ export default function KeuanganLayout() {
                 SiManTap
               </span>
             </div>
-            
-            {/* Tombol Tutup X (Hanya Muncul di Layar HP saat Laci Terbuka) */}
-            <button 
-              onClick={() => setIsMobileOpen(false)} 
-              className="md:hidden p-1 text-muted hover:text-ink focus:outline-none"
-            >
-              <X size={20} />
-            </button>
           </div>
 
-          {/* Navigation Section */}
+          {/* Navigasi Desktop */}
           <nav className="sidebar-nav-list flex-1 overflow-y-auto py-2 px-1">
             <div>
               <span className="sidebar-section">KEUANGAN</span>
@@ -296,7 +295,6 @@ export default function KeuanganLayout() {
                     <Link
                       key={item.path}
                       to={item.path}
-                      onClick={() => setIsMobileOpen(false)}
                       className={`sidebar-item-link ${active ? 'active' : ''}`}
                     >
                       <IconComponent size={16} />
@@ -311,10 +309,7 @@ export default function KeuanganLayout() {
                 {/* CS Live Chat Slot */}
                 <div
                   className={`sidebar-item sidebar-item-link ${isActive('/keuangan/chat') ? 'active' : ''}`}
-                  onClick={() => {
-                    setIsMobileOpen(false);
-                    navigate('/keuangan/chat');
-                  }}
+                  onClick={() => navigate('/keuangan/chat')}
                 >
                   <div className="sidebar-item-bg" />
                   <MessageSquare size={16} />
@@ -330,7 +325,6 @@ export default function KeuanganLayout() {
                     <Link
                       key={item.path}
                       to={item.path}
-                      onClick={() => setIsMobileOpen(false)}
                       className={`sidebar-item-link ${active ? 'active' : ''}`}
                     >
                       <IconComponent size={16} />
@@ -345,8 +339,8 @@ export default function KeuanganLayout() {
             </div>
           </nav>
 
-          {/* Footer Profile Area */}
-          <div className="mt-auto pt-4 border-t border-soft flex flex-col gap-3 p-4 md:p-0">
+          {/* Footer Profile Area Desktop */}
+          <div className="mt-auto pt-4 border-t border-soft flex flex-col gap-3">
             <div className="sidebar-profile-footer">
               <div className="sidebar-user-avatar">{getInitials()}</div>
               <div className="sidebar-profile-info">
@@ -372,7 +366,7 @@ export default function KeuanganLayout() {
         <header className="topbar flex items-center justify-between px-4 md:px-6">
           <div className="flex items-center gap-3">
             
-            {/* 🍔 TOMBOL HAMBURGER MENU MOBILE (Hilang otomatis di desktop) */}
+            {/* Tombol Hamburger Menu Mobile */}
             <button 
               onClick={() => setIsMobileOpen(true)} 
               className="md:hidden p-1 text-ink focus:outline-none"
@@ -387,12 +381,9 @@ export default function KeuanganLayout() {
           </div>
           
           <div className="flex items-center gap-5">
-            {/* Current Date */}
             <div className="text-right hidden sm:block">
               <span className="text-xs font-semibold text-muted">Kamis, 28 Mei 2026</span>
             </div>
-            
-            {/* Notification Bell */}
             <NotificationBell />
           </div>
         </header>
@@ -410,7 +401,6 @@ export default function KeuanganLayout() {
           setShowLogout(false);
           localStorage.removeItem('userRole');
           sessionStorage.clear();
-          // 🛠️ DIALIKKAN KE HALAMAN PILIH ROLE
           navigate('/pilih-role');
         }}
         onCancel={() => setShowLogout(false)}

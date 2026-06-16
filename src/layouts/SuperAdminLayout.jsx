@@ -96,7 +96,6 @@ export default function SuperAdminLayout() {
     },
     {
       title: 'PENGGUNA',
-      // ✨ PERUBAHAN: Menghapus item 'Aktivasi Akun' / 'Verifikasi Akun Baru' karena sudah otomatis aktif di sisi Keuangan
       items: [
         { name: 'Data Penghuni', path: '/super-admin/penghuni', icon: Users },
         { name: 'Data Admin Divisi', path: '/super-admin/admin', icon: UserCog }
@@ -223,7 +222,7 @@ export default function SuperAdminLayout() {
       <div className="hidden md:flex md:shrink-0">
         <aside className="sidebar h-full flex flex-col bg-white">
           
-          {/* AREA BRANDING: Standar pixel-perfect rapat kiri */}
+          {/* AREA BRANDING */}
           <div className="sidebar-branding flex items-center justify-between md:justify-start gap-1 pl-1 pr-4 md:pr-0 select-none">
             <div className="flex items-center gap-1">
               <img 
@@ -331,10 +330,30 @@ export default function SuperAdminLayout() {
         </main>
       </div>
       
-      {/* Logout Confirmation Modal */}
+      {/* ========================================================================= */}
+      {/* 🚪 LOGOUT CONFIRMATION MODAL CONFIGURATION (FIXED: REDIRECT KE PILIH-ROLE)*/}
+      {/* ========================================================================= */}
       <LogoutModal 
         isOpen={showLogout}
-        onConfirm={() => setShowLogout(false)}
+        onConfirm={async () => {
+          try {
+            // 1. Tutup modal secara visual terlebih dahulu
+            setShowLogout(false);
+            
+            // 2. Kirim sinyal sign out ke Supabase auth agar token hancur
+            await supabase.auth.signOut();
+            
+            // 3. Bersihkan data penyimpanan peninggalan login di lokal browser
+            localStorage.removeItem('userRole'); 
+            sessionStorage.clear();
+            
+            // 4. Redirect paksa ke halaman pilih role
+            navigate('/pilih-role'); 
+            
+          } catch (error) {
+            console.error("Error saat mencoba keluar aplikasi:", error);
+          }
+        }}
         onCancel={() => setShowLogout(false)}
         userName={getNama()}
         roleName={getRoleLabel()}

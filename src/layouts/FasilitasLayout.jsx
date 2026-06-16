@@ -3,33 +3,45 @@ import { supabase } from '../lib/supabase';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import LogoutModal from '../components/shared/LogoutModal';
 import NotificationBell from '../components/shared/NotificationBell';
-import { MessageSquare, Menu, X, LogOut } from 'lucide-react'; // <-- FIX: Tambah LogOut import
+import { MessageSquare, Menu, X, LogOut } from 'lucide-react';
 
 // 1. IMPORT LOGO ASSET
 import LogoSiManTap from '../assets/logo.png';
 
 export default function FasilitasLayout() {
   const [userProfile, setUserProfile] = useState(null);
+  const [showLogout, setShowLogout] = useState(false);
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
 
+  // Mengambil data profil user asli dari Supabase secara realtime
   useEffect(() => {
     async function fetchProfile() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const { data } = await supabase
-        .from('users')
-        .select('nama, role, no_hp')
-        .eq('id', user.id)
-        .single();
-      setUserProfile(data);
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        
+        const { data, error } = await supabase
+          .from('users')
+          .select('nama, role, no_hp')
+          .eq('id', user.id)
+          .single();
+          
+        if (data) {
+          setUserProfile(data);
+        }
+      } catch (error) {
+        console.error("Gagal mengambil data profil:", error);
+      }
     }
     fetchProfile();
   }, []);
 
-  const getNama = () => userProfile?.nama || 'Pengguna';
+  const getNama = () => userProfile?.nama || 'Admin Fasilitas';
   
   const getInitials = () => {
     const nama = userProfile?.nama || '';
-    return nama.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || '??';
+    if (!nama) return 'AF';
+    return nama.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   };
 
   const getRoleLabel = () => {
@@ -39,7 +51,7 @@ export default function FasilitasLayout() {
       gm:                  'General Manager',
       admin_keuangan:      'Admin Keuangan',
       div_keuangan:        'Admin Keuangan',
-      admin_pemeliharaan: 'Admin Pemeliharaan',
+      admin_pemeliharaan:  'Admin Pemeliharaan',
       div_pemeliharaan:    'Admin Pemeliharaan',
       admin_kebersihan:    'Admin Kebersihan',
       div_kebersihan:      'Admin Kebersihan',
@@ -49,37 +61,12 @@ export default function FasilitasLayout() {
       div_fasilitas:       'Admin Fasilitas',
       penghuni:            'Penghuni',
     };
-    return map[userProfile?.role] || userProfile?.role || 'Staff';
+    return map[userProfile?.role] || userProfile?.role || 'Admin Fasilitas';
   };
 
   const location = useLocation();
   const navigate = useNavigate();
   const currentPath = location.pathname;
-  const [showLogout, setShowLogout] = useState(false);
-  const [isMobileOpen, setIsMobileOpen] = useState(false); 
-  const [namaUser, setNamaUser] = useState(''); // <-- FIX: Tambah state namaUser
-
-  // <-- FIX: Tambah fungsi getAvatarInitials agar tidak eror crash
-  const getAvatarInitials = (name) => {
-    if (!name) return 'AF';
-    const parts = name.trim().split(' ');
-    if (parts.length > 1) {
-      return (parts[0][0] + parts[1][0]).toUpperCase();
-    }
-    return parts[0].substring(0, 2).toUpperCase();
-  };
-
-  // Mengambil otomatis nama user dari sessionStorage saat load halaman
-  useEffect(() => {
-    for (let i = 0; i < sessionStorage.length; i++) {
-      const key = sessionStorage.key(i);
-      const value = sessionStorage.getItem(key);
-      if (value && !value.includes('@') && value.length < 30) {
-        setNamaUser(value);
-        break;
-      }
-    }
-  }, []);
 
   // Active state checker
   const isActive = (path) => currentPath === path;
@@ -154,18 +141,15 @@ export default function FasilitasLayout() {
   return (
     <div className="flex h-screen bg-app-bg overflow-hidden">
       
-      {/* Mobile drawer */}
+      {/* Mobile Drawer Sidebar */}
       {isMobileOpen && (
-        <div
-          className="fixed inset-0 z-[999] md:hidden"
-          onClick={() => setIsMobileOpen(false)}
-        >
+        <div className="fixed inset-0 z-[999] md:hidden" onClick={() => setIsMobileOpen(false)}>
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
           <div
             className="absolute left-0 top-0 h-full w-72 max-w-[80vw] bg-white flex flex-col overflow-hidden shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header */}
+            {/* Header Mobile Drawer */}
             <div className="flex items-center justify-between p-4 border-b border-gray-100">
               <div className="flex items-center gap-2">
                 <img src={LogoSiManTap} alt="Logo" className="w-8 h-8 object-contain" />
@@ -176,7 +160,7 @@ export default function FasilitasLayout() {
               </button>
             </div>
 
-            {/* Nav items */}
+            {/* Menu Items di Mobile Drawer */}
             <nav className="flex-1 overflow-y-auto p-3 space-y-1">
               {menuItems.slice(0, 5).map((item) => {
                 const active = isActive(item.path);
@@ -252,32 +236,22 @@ export default function FasilitasLayout() {
               })}
             </nav>
 
-            {/* Footer */}
+            {/* Footer Profil Mobile Drawer */}
             <div className="p-4 border-t border-gray-100 space-y-3">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center font-bold text-sm shrink-0">
-<<<<<<< HEAD
                   {getInitials()}
                 </div>
                 <div className="flex flex-col min-w-0">
                   <span className="text-sm font-bold text-[#1E1E1E] truncate">{getNama()}</span>
                   <span className="text-xs text-gray-400 truncate">{getRoleLabel()}</span>
-=======
-                  {getAvatarInitials(namaUser)}
-                </div>
-                <div className="flex flex-col min-w-0">
-                  <span className="text-sm font-bold text-[#1E1E1E] truncate">{namaUser || 'Memuat...'}</span>
-                  <span className="text-xs text-gray-400 truncate">Admin Fasilitas</span>
->>>>>>> e32d36c224751aff27181e88a579f767cedb6182
                 </div>
               </div>
               <button
                 onClick={() => { setIsMobileOpen(false); setShowLogout(true); }}
                 className="w-full flex items-center justify-center gap-2 py-2.5 border border-gray-200 rounded-xl text-xs font-semibold text-red-500 hover:bg-red-50 transition-all"
               >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                </svg>
+                <LogOut size={14} />
                 <span>Keluar dari Aplikasi</span>
               </button>
             </div>
@@ -289,7 +263,7 @@ export default function FasilitasLayout() {
       <div className="hidden md:flex md:shrink-0">
         <aside className="sidebar h-full flex flex-col bg-white">
           
-          {/* Area Branding */}
+          {/* Area Branding Desktop */}
           <div className="sidebar-branding flex items-center justify-between md:justify-start gap-1 pl-1 pr-4 md:pr-0 select-none">
             <div className="flex items-center gap-1">
               <img 
@@ -301,17 +275,9 @@ export default function FasilitasLayout() {
                 SiManTap
               </span>
             </div>
-            
-            {/* Tombol Tutup X (Hanya Muncul di Layar HP) */}
-            <button 
-              onClick={() => setIsMobileOpen(false)} 
-              className="md:hidden p-1 text-muted hover:text-ink focus:outline-none"
-            >
-              <X size={20} />
-            </button>
           </div>
 
-          {/* Navigation Section */}
+          {/* Navigasi Desktop */}
           <nav className="sidebar-nav-list flex-1 overflow-y-auto py-2 px-1">
             <div>
               <span className="sidebar-section">FASILITAS</span>
@@ -322,15 +288,12 @@ export default function FasilitasLayout() {
                     <Link
                       key={item.path}
                       to={item.path}
-                      onClick={() => setIsMobileOpen(false)} 
                       className={`sidebar-item-link ${active ? 'active' : ''}`}
                     >
                       {item.icon}
                       <span>{item.name}</span>
                       {item.badge && (
-                        <span className="sidebar-badge">
-                          {item.badge}
-                        </span>
+                        <span className="sidebar-badge">{item.badge}</span>
                       )}
                     </Link>
                   );
@@ -339,10 +302,7 @@ export default function FasilitasLayout() {
                 {/* CS Live Chat Item */}
                 <div
                   className={`sidebar-item sidebar-item-link ${isActive('/fasilitas/chat') ? 'active' : ''}`}
-                  onClick={() => {
-                    navigate('/fasilitas/chat');
-                    setIsMobileOpen(false);
-                  }}
+                  onClick={() => navigate('/fasilitas/chat')}
                 >
                   <div className="sidebar-item-bg" />
                   <MessageSquare size={16} />
@@ -356,15 +316,12 @@ export default function FasilitasLayout() {
                     <Link
                       key={item.path}
                       to={item.path}
-                      onClick={() => setIsMobileOpen(false)}
                       className={`sidebar-item-link ${active ? 'active' : ''}`}
                     >
                       {item.icon}
                       <span>{item.name}</span>
                       {item.badge && (
-                        <span className="sidebar-badge">
-                          {item.badge}
-                        </span>
+                        <span className="sidebar-badge">{item.badge}</span>
                       )}
                     </Link>
                   );
@@ -373,38 +330,25 @@ export default function FasilitasLayout() {
             </div>
           </nav>
 
-          {/* Footer Profile Area */}
+          {/* Footer Profile Area Desktop */}
           <div className="mt-auto pt-4 border-t border-soft flex flex-col gap-3">
             <div className="sidebar-profile-footer">
-<<<<<<< HEAD
               <div className="sidebar-user-avatar">{getInitials()}</div>
               <div className="sidebar-profile-info">
                 <span className="sidebar-profile-name">{getNama()}</span>
                 <span className="sidebar-profile-role">{getRoleLabel()}</span>
-=======
-              <div className="sidebar-user-avatar">
-                {getAvatarInitials(namaUser)}
-              </div>
-              <div className="sidebar-profile-info">
-                <span className="sidebar-profile-name">
-                  {namaUser || 'Memuat Nama...'}
-                </span>
-                <span className="sidebar-profile-role">Admin Fasilitas</span>
->>>>>>> e32d36c224751aff27181e88a579f767cedb6182
               </div>
             </div>
             <div
               onClick={() => setShowLogout(true)}
-              className="flex items-center justify-center gap-2 py-2 px-3 border border-soft hover:bg-white rounded-xl text-xs font-semibold text-muted hover:text-ink transition-all duration-200 cursor-pointer select-none"
+              className="flex items-center justify-center gap-2 py-2 px-3 border border-soft hover:bg-white rounded-xl text-xs font-semibold text-muted hover:text-ink transition-all duration-200 cursor-pointer select-none mb-2"
             >
-              <svg className="w-4 h-4 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-              </svg>
+              <LogOut size={14} className="text-muted" />
               <span>Keluar</span>
             </div>
           </div>
         </aside>
-      </div> {/* <-- FIX: Tag Penutup div desktop sidebar yang hilang */}
+      </div>
 
       {/* Main Content Area - Scrollable */}
       <div className="flex-1 flex flex-col overflow-y-auto bg-app-bg">
@@ -427,12 +371,9 @@ export default function FasilitasLayout() {
           </div>
           
           <div className="flex items-center gap-5">
-            {/* Current Date */}
             <div className="text-right hidden sm:block">
               <span className="text-xs font-semibold text-muted">Rabu, 10 Juni 2026</span>
             </div>
-            
-            {/* Notification Bell */}
             <NotificationBell />
           </div>
         </header>
@@ -450,17 +391,11 @@ export default function FasilitasLayout() {
           setShowLogout(false);
           localStorage.removeItem('userRole');
           sessionStorage.clear();
-          // 🛠️ ALIKKAN RUTE NAVIGASI KE PILIH ROLE SESUAI KETENTUAN LOGOUT
           navigate('/pilih-role');
         }}
         onCancel={() => setShowLogout(false)}
-<<<<<<< HEAD
         userName={getNama()}
         roleName={getRoleLabel()}
-=======
-        userName={namaUser || "Admin Fasilitas"}
-        roleName="Admin Fasilitas"
->>>>>>> e32d36c224751aff27181e88a579f767cedb6182
       />
     </div>
   );

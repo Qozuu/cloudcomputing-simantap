@@ -182,9 +182,10 @@ export default function LoginPage() {
 
       if (selectedRole && frontRole !== selectedRole) {
         setIsLoading(false);
+        // 💡 FIXED: Mengubah teks pesan eror sesuai instruksi
         setError(
           `Akun ini bukan akun ${selectedRole}. ` +
-          `Silakan kembali dan pilih role yang sesuai.`
+          `Silakan masukkan akun dan password yang tepat.`
         );
         await supabase.auth.signOut(); // clear the session
         return;
@@ -457,16 +458,11 @@ export default function LoginPage() {
                 )}
               </div>
 
+              {/* 💡 FIXED: Container error dimodifikasi, teks duplikat di bawahnya dihapus */}
               {error && (
                 <div className="mb-5">
                   <div className="p-3.5 text-xs font-semibold text-[#C05040] bg-[#FEF0EE] border border-[#F9C3BA] rounded-xl animate-fade-up">
                     {error}
-                  </div>
-                  <div
-                    onClick={() => navigate('/pilih-role')}
-                    className="text-sm font-semibold text-center cursor-pointer text-[#8A857F] hover:text-[#1E1E1E] mt-2 underline"
-                  >
-                    ← Kembali Pilih Role
                   </div>
                 </div>
               )}

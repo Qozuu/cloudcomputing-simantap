@@ -14,16 +14,26 @@ export default function LogoutModal({ isOpen, onConfirm, onCancel, userName, rol
   const handleConfirm = async () => {
     const { role: sessionRole } = getSession();
 
+    // 1. CEK ABSENSI Terlebih Dahulu (Jika staff belum checkout)
     if (needsAttendance(sessionRole) && hasCheckedInToday()) {
       // Staff yang belum checkout → arahkan ke absensi dulu
       navigate('/absensi');
+      onCancel(); // Tutup modal
     } else {
-      // Sign out dari Supabase Auth
-      await supabase.auth.signOut();
-      clearSession();
-      navigate('/login');
+      // 2. JIKA BUKAN STAFF / SUDAH CHECKOUT → JALANKAN FUNGSI ONCONFIRM DARI LAYOUT
+      if (typeof onConfirm === 'function') {
+        await onConfirm();
+      } else {
+        // Fallback jika props onConfirm tidak sengaja terlewat/kosong
+        await supabase.auth.signOut();
+        clearSession();
+        localStorage.removeItem('userRole');
+        localStorage.clear();
+        sessionStorage.clear();
+        navigate('/pilih-role', { replace: true });
+        onCancel();
+      }
     }
-    onCancel(); // close modal
   };
 
   const getInitials = (name) => {

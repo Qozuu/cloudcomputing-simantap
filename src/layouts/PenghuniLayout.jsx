@@ -12,35 +12,59 @@ import {
   Building,
   MessageSquare,
   User,
-  LogOut
+  LogOut,
+  Menu,
+  X
 } from 'lucide-react';
 
-// 1. IMPORT LOGO ASSET BIAR SELARAS TOTAL JIRR
+// 1. IMPORT LOGO ASSET
 import LogoSiManTap from '../assets/logo.png';
-
 
 export default function PenghuniLayout() {
   const [userProfile, setUserProfile] = useState(null);
+  const [showLogout, setShowLogout] = useState(false);
+  
+  // 💡 DEKLARASI STATE UNTUK MOBILE DRAWER (MENGATASI ERROR REFERENCEERROR)
+  const [isMobileOpen, setIsMobileOpen] = useState(false); 
+  const [namaUser, setNamaUser] = useState('');
 
   useEffect(() => {
     async function fetchProfile() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const { data } = await supabase
-        .from('users')
-        .select('nama, role, no_hp')
-        .eq('id', user.id)
-        .single();
-      setUserProfile(data);
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        const { data } = await supabase
+          .from('users')
+          .select('nama, role, no_hp')
+          .eq('id', user.id)
+          .single();
+        setUserProfile(data);
+      } catch (error) {
+        console.error("Gagal mengambil data profil:", error);
+      }
     }
     fetchProfile();
   }, []);
 
-  const getNama = () => userProfile?.nama || 'Pengguna';
+  // Sinkronisasi dengan sessionStorage alternatif pencarian nama otomatis
+  useEffect(() => {
+    for (let i = 0; i < sessionStorage.length; i++) {
+      const key = sessionStorage.key(i);
+      const value = sessionStorage.getItem(key);
+      
+      if (value && !value.includes('@') && value.length < 30 && key.toLowerCase().includes('name')) {
+        setNamaUser(value);
+        break;
+      }
+    }
+  }, []);
+
+  const getNama = () => userProfile?.nama || namaUser || 'Penghuni';
   
   const getInitials = () => {
-    const nama = userProfile?.nama || '';
-    return nama.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || '??';
+    const nama = getNama();
+    if (!nama || nama === 'Penghuni') return 'PH';
+    return nama.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   };
 
   const getRoleLabel = () => {
@@ -60,38 +84,12 @@ export default function PenghuniLayout() {
       div_fasilitas:       'Admin Fasilitas',
       penghuni:            'Penghuni',
     };
-    return map[userProfile?.role] || userProfile?.role || 'Staff';
+    return map[userProfile?.role] || userProfile?.role || 'Penghuni';
   };
+
   const location = useLocation();
   const navigate = useNavigate();
   const currentPath = location.pathname;
-  const [showLogout, setShowLogout] = useState(false);
-
-  // 🛠️ TAMBAHKAN KODE INI DI SINI:
-  const [namaUser, setNamaUser] = useState('');
-
-  React.useEffect(() => {
-    // Cari otomatis nama user di sessionStorage
-    for (let i = 0; i < sessionStorage.length; i++) {
-      const key = sessionStorage.key(i);
-      const value = sessionStorage.getItem(key);
-      
-      if (value && !value.includes('@') && value.length < 30 && key.toLowerCase().includes('name')) {
-        setNamaUser(value);
-        break;
-      }
-    }
-  }, []);
-
-  // Fungsi untuk membuat inisial avatar otomatis (contoh: Qozu -> QO, Hendra Gunawan -> HG)
-  const getAvatarInitials = (name) => {
-    if (!name) return '??';
-    const parts = name.trim().split(' ');
-    if (parts.length > 1) {
-      return (parts[0][0] + parts[1][0]).toUpperCase();
-    }
-    return parts[0].substring(0, 2).toUpperCase();
-  };
 
   // Active state checker
   const isActive = (path) => currentPath === path;
@@ -131,7 +129,6 @@ export default function PenghuniLayout() {
       icon: Building
     },
     {
-      // ✨ PERUBAHAN: Nama menu diubah menjadi 'Kontak Pengelola' agar selaras dengan halaman utama
       name: 'Kontak Pengelola',
       path: '/penghuni/cs',
       icon: MessageSquare,
@@ -153,7 +150,7 @@ export default function PenghuniLayout() {
     <div className="flex h-screen bg-app-bg overflow-hidden">
       
       {/* ========================================================================= */}
-      {/* 📱 MOBILE DRAWER (FIXED: Menggunakan menuItems.map, bukan navigation.map) */}
+      {/* 📱 MOBILE DRAWER */}
       {/* ========================================================================= */}
       {isMobileOpen && (
         <div
@@ -185,7 +182,7 @@ export default function PenghuniLayout() {
                   <Link
                     key={item.path}
                     to={item.path}
-                    onClick={() => setIsMobileOpen(false)} // Menutup drawer saat menu dipilih
+                    onClick={() => setIsMobileOpen(false)}
                     className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
                       active
                         ? 'bg-[#111111] text-white'
@@ -266,9 +263,7 @@ export default function PenghuniLayout() {
                       <IconComponent size={16} />
                       <span>{item.name}</span>
                       {item.badge && (
-                        <span className="sidebar-badge">
-                          {item.badge}
-                        </span>
+                        <span className="sidebar-badge">{item.badge}</span>
                       )}
                     </Link>
                   );
@@ -315,22 +310,15 @@ export default function PenghuniLayout() {
             </button>
 
             <div className="flex flex-col">
-              <span className="topbar-role">
-                {getRoleLabel()}
-              </span>
-              <h2 className="topbar-title">
-                {getPageTitle()}
-              </h2>
+              <span className="topbar-role">{getRoleLabel()}</span>
+              <h2 className="topbar-title">{getPageTitle()}</h2>
             </div>
           </div>
           
           <div className="flex items-center gap-5">
-            {/* Current Date */}
             <div className="text-right hidden sm:block">
-              <span className="text-xs font-semibold text-muted">Sabtu, 23 Mei 2026</span>
+              <span className="text-xs font-semibold text-muted">Selasa, 16 Juni 2026</span>
             </div>
-            
-            {/* Notification Bell */}
             <NotificationBell />
           </div>
         </header>
@@ -346,7 +334,13 @@ export default function PenghuniLayout() {
       {/* ========================================================================= */}
       <LogoutModal 
         isOpen={showLogout}
-        onConfirm={() => setShowLogout(false)}
+        onConfirm={async () => {
+          setShowLogout(false);
+          await supabase.auth.signOut();
+          localStorage.removeItem('userRole');
+          sessionStorage.clear();
+          navigate('/pilih-role');
+        }}
         onCancel={() => setShowLogout(false)}
         userName={getNama()}
         roleName={getRoleLabel()}
@@ -354,4 +348,3 @@ export default function PenghuniLayout() {
     </div>
   );
 }
-

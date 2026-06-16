@@ -8,17 +8,15 @@ import {
   getSession,
   saveCheckIn,
   saveCheckOut,
-  isCheckoutMode,
-  hasCheckedInToday,
-  clearSession,
-  getLocalDateString
+  clearSession
 } from '../../utils/authSession';
 import { supabase } from '../../lib/supabase';
 
 export default function AbsensiCheckIn() {
   const navigate = useNavigate();
-  const [gpsStatus, setGpsStatus] = useState('idle'); // idle | loading | success | error
-  const [gpsDistance, setGpsDistance] = useState(null);
+  // 🚀 MODIFIKASI DEMO: Set default 'success' dan jarak 0m agar saat halaman dibuka langsung SIAP KLIK!
+  const [gpsStatus, setGpsStatus] = useState('success'); 
+  const [gpsDistance, setGpsDistance] = useState(0);
   const [errorMessage, setErrorMessage] = useState('');
   
   const [checkedIn, setCheckedIn] = useState(false);
@@ -31,24 +29,21 @@ export default function AbsensiCheckIn() {
   const [userName, setUserName] = useState('');
   const [userRole, setUserRole] = useState('');
   const [loading, setLoading] = useState(true);
+  const [activeAbsenId, setActiveAbsenId] = useState(null);
 
-  // Determine active profile details based on sessionStorage role
   const [profile, setProfile] = useState({
-    name: 'Rina Kurnia',
-    roleName: 'Divisi Keuangan',
-    initials: 'RK',
-    dashboardPath: '/keuangan/dashboard',
+    name: 'Karyawan',
+    roleName: 'Staff Operasional',
+    initials: 'ST',
     bg: '#FEF7EC',
     color: '#A05820'
   });
 
   useEffect(() => {
     async function init() {
-      // 1. Get current user
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // 2. Get name and role from users table
       const { data: profileData } = await supabase
         .from('users')
         .select('nama, role')
@@ -60,7 +55,6 @@ export default function AbsensiCheckIn() {
       setUserName(name);
       setUserRole(role);
 
-      // Build profile details for UI
       const activeRole = role.toUpperCase();
       const profileMap = {
         'SUPER_ADMIN': { name, roleName: 'General Manager', initials: name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2), bg: '#FEF0EE', color: '#C05040' },
@@ -73,41 +67,40 @@ export default function AbsensiCheckIn() {
         'FASILITAS': { name, roleName: 'Divisi Fasilitas', initials: name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2), bg: '#FEF7EC', color: '#A05820' }
       };
 
-      const resolvedProfile = profileMap[activeRole] || {
+      setProfile(profileMap[activeRole] || {
         name,
         roleName: role,
         initials: name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || '??',
         bg: '#FEF7EC',
         color: '#A05820'
-      };
+      });
 
-      setProfile(resolvedProfile);
-
-      // 3. Check today's absensi from database
-      const today = new Date().toISOString().split('T')[0];
-      const { data: absensiHariIni } = await supabase
+      const { data: lastAbsensi } = await supabase
         .from('absensi')
         .select('*')
         .eq('karyawan_id', user.id)
-        .eq('tanggal', today)
+        .order('created_at', { ascending: false })
+        .limit(1)
         .maybeSingle();
 
-      if (absensiHariIni) {
-        if (absensiHariIni.jam_masuk) {
-          setCheckedIn(true);
-          setJamMasuk(absensiHariIni.jam_masuk);
-          saveCheckIn(absensiHariIni.jam_masuk, absensiHariIni.id);
-        }
-        if (absensiHariIni.jam_keluar) {
-          setCheckedOut(true);
-          setJamKeluar(absensiHariIni.jam_keluar);
-        }
+      if (lastAbsensi && lastAbsensi.jam_masuk && !lastAbsensi.jam_keluar) {
+        setCheckedIn(true);
+        setCheckedOut(false);
+        setJamMasuk(lastAbsensi.jam_masuk);
+        setActiveAbsenId(lastAbsensi.id);
+        saveCheckIn(lastAbsensi.jam_masuk, lastAbsensi.id);
+      } else {
+        setCheckedIn(false);
+        setCheckedOut(false);
+        setJamMasuk('--:--');
+        setJamKeluar('--:--');
+        setActiveAbsenId(null);
       }
+
       setLoading(false);
     }
     init();
 
-    // Dynamic Clock Ticks
     const updateTime = () => {
       const now = new Date();
       setClock(now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
@@ -119,42 +112,19 @@ export default function AbsensiCheckIn() {
     return () => clearInterval(interval);
   }, []);
 
-  const getFormattedTime = () => {
-    const now = new Date();
-    return now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
-  };
-
-  const handleCheckIn = async (simulatedPos = null) => {
+  const handleCheckIn = async () => {
     setGpsStatus('loading');
     setErrorMessage('');
-    setGpsDistance(null);
 
     try {
-      let pos;
-      if (simulatedPos) {
-        pos = { coords: simulatedPos };
-      } else {
-        pos = await getCurrentPosition();
-      }
-
-      const distance = getDistanceMeters(
-        pos.coords.latitude, pos.coords.longitude,
-        APARTMENT_CONFIG.latitude, APARTMENT_CONFIG.longitude
-      );
-      setGpsDistance(Math.round(distance));
-
-      if (distance > APARTMENT_CONFIG.radiusMeters) {
-        setGpsStatus('error');
-        setErrorMessage(`Lokasi di luar area apartemen (${Math.round(distance)}m dari lokasi)`);
-        return;
-      }
-
+      // 🚀 MODIFIKASI DEMO: Bypass penuh geolocation palsu browser untuk kelancaran presentasi kelas
+      setGpsDistance(0);
       setGpsStatus('success');
 
       const { data: { user } } = await supabase.auth.getUser();
-      const today    = new Date().toISOString().split('T')[0];
-      const jamMasukTime = new Date().toTimeString().slice(0, 5);
-      const lokasi   = `${pos.coords.latitude},${pos.coords.longitude}`;
+      const today = new Date().toISOString().split('T')[0];
+      const jamMasukTime = new Date().toTimeString().slice(0, 8);
+      const lokasi = `${APARTMENT_CONFIG.latitude},${APARTMENT_CONFIG.longitude}`;
 
       const { data, error } = await supabase
         .from('absensi')
@@ -170,59 +140,47 @@ export default function AbsensiCheckIn() {
 
       if (error) {
         setGpsStatus('error');
-        setErrorMessage(error.message || 'Gagal menyimpan check-in ke server');
+        setErrorMessage(error.message || 'Gagal menyimpan check-in');
         return;
       }
 
       saveCheckIn(data.jam_masuk, data.id);
       setJamMasuk(data.jam_masuk);
+      setActiveAbsenId(data.id);
       setCheckedIn(true);
+      setCheckedOut(false);
 
     } catch (err) {
       setGpsStatus('error');
-      setErrorMessage(err.message || 'Izin lokasi ditolak');
+      setErrorMessage(err.message || 'Error aplikasi');
     }
   };
 
-  const handleCheckOut = async (simulatedPos = null) => {
+  const handleCheckOut = async () => {
     setGpsStatus('loading');
     setErrorMessage('');
-    setGpsDistance(null);
 
     try {
-      let pos;
-      if (simulatedPos) {
-        pos = { coords: simulatedPos };
-      } else {
-        pos = await getCurrentPosition();
-      }
-
-      const distance = getDistanceMeters(
-        pos.coords.latitude, pos.coords.longitude,
-        APARTMENT_CONFIG.latitude, APARTMENT_CONFIG.longitude
-      );
-
-      if (distance > APARTMENT_CONFIG.radiusMeters) {
-        setGpsStatus('error');
-        setErrorMessage(`Lokasi di luar area apartemen (${Math.round(distance)}m dari lokasi)`);
-        return;
-      }
-
+      // 🚀 MODIFIKASI DEMO: Bypass penuh geolocation palsu browser untuk kelancaran presentasi kelas
+      setGpsDistance(0);
       setGpsStatus('success');
 
-      const { data: { user } } = await supabase.auth.getUser();
-      const today     = new Date().toISOString().split('T')[0];
-      const jamKeluarTime = new Date().toTimeString().slice(0, 5);
+      const jamKeluarTime = new Date().toTimeString().slice(0, 8);
+
+      if (!activeAbsenId) {
+        setGpsStatus('error');
+        setErrorMessage('ID transaksi absensi tidak ditemukan. Silakan refresh.');
+        return;
+      }
 
       const { error } = await supabase
         .from('absensi')
         .update({ jam_keluar: jamKeluarTime })
-        .eq('karyawan_id', user.id)
-        .eq('tanggal', today);
+        .eq('id', activeAbsenId);
 
       if (error) {
         setGpsStatus('error');
-        setErrorMessage(error.message || 'Gagal menyimpan check-out ke server');
+        setErrorMessage(error.message || 'Gagal menyimpan check-out');
         return;
       }
 
@@ -230,30 +188,30 @@ export default function AbsensiCheckIn() {
       setJamKeluar(jamKeluarTime);
       setCheckedOut(true);
 
-      // After 2 seconds: full logout
-      setTimeout(async () => {
-        await supabase.auth.signOut();
+      setTimeout(() => {
         clearSession();
-        navigate('/login');
+        sessionStorage.removeItem(SESSION_KEYS.CURRENT_ROLE);
+        
+        setCheckedIn(false);
+        setCheckedOut(false);
+        setJamMasuk('--:--');
+        setJamKeluar('--:--');
+        setActiveAbsenId(null);
+
+        navigate('/pilih-role'); 
       }, 2000);
 
     } catch (err) {
       setGpsStatus('error');
-      setErrorMessage(err.message || 'Izin lokasi ditolak');
+      setErrorMessage(err.message || 'Error aplikasi');
     }
   };
 
-  // Simulated coordinate triggers to aid manual reviews
-  const triggerSimulatedCheck = (isCheckOutFlow = false) => {
-    const mockPos = {
-      latitude: APARTMENT_CONFIG.latitude,
-      longitude: APARTMENT_CONFIG.longitude
-    };
-    if (isCheckOutFlow) {
-      handleCheckOut(mockPos);
-    } else {
-      handleCheckIn(mockPos);
-    }
+  // Fungsi saklar pemaksa status khusus demo kelas
+  const forceToggleGpsSuccess = () => {
+    setGpsStatus('success');
+    setGpsDistance(0);
+    setErrorMessage('');
   };
 
   const handleEnterApp = () => {
@@ -277,20 +235,22 @@ export default function AbsensiCheckIn() {
     navigate(target);
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen w-full bg-[#FAF6F0] flex items-center justify-center">
+        <Loader2 className="animate-spin text-[#A05820]" size={32} />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen w-full bg-[#FAF6F0] flex items-center justify-center p-4 font-sans select-none relative overflow-hidden">
-      
-      {/* Containment Card */}
       <div className="card-white max-w-sm w-full mx-auto animate-scale-in relative z-10 flex flex-col justify-center">
         
-        {/* User Presentation */}
         <div className="text-center mb-6">
           <div 
             className="w-16 h-16 rounded-2xl mx-auto mb-3 flex items-center justify-center font-black text-xl shadow-soft"
-            style={{
-              backgroundColor: profile.bg,
-              color: profile.color
-            }}
+            style={{ backgroundColor: profile.bg, color: profile.color }}
           >
             <span>{profile.initials}</span>
           </div>
@@ -301,7 +261,6 @@ export default function AbsensiCheckIn() {
           </span>
         </div>
 
-        {/* Check-In / Check-Out Log Summary */}
         <div className="grid grid-cols-2 gap-4 bg-[#FAF6F0] border border-[rgba(30,30,30,0.05)] rounded-2xl p-3.5 text-center my-3">
           <div className="space-y-0.5">
             <p className="text-[9px] font-bold text-[#8A857F] uppercase tracking-widest">Jam Masuk</p>
@@ -313,13 +272,11 @@ export default function AbsensiCheckIn() {
           </div>
         </div>
 
-        {/* Live Digital Clock */}
         <div className="text-center my-4">
           <p className="font-black text-5xl tracking-tighter text-[#1E1E1E]">{clock}</p>
           <p className="text-[10px] text-[#8A857F] font-bold tracking-wider uppercase mt-1">Waktu Kehadiran Aktif</p>
         </div>
 
-        {/* GPS Status Capsules */}
         <div className="flex justify-center my-3">
           {gpsStatus === 'idle' && (
             <span className="bg-[#FAF6F0] text-[#8A857F] rounded-full px-4 py-2 text-xs font-bold">
@@ -344,13 +301,12 @@ export default function AbsensiCheckIn() {
           )}
         </div>
 
-        {/* Action Triggers */}
         <div className="flex items-center gap-3 my-4">
           <button
-            onClick={() => handleCheckIn()}
-            disabled={checkedIn || checkedOut || gpsStatus === 'loading'}
+            onClick={handleCheckIn}
+            disabled={checkedIn || gpsStatus !== 'success'}
             className={`btn-primary flex-1 justify-center py-3 rounded-2xl flex items-center gap-2 select-none transition-all duration-200 ${
-              (checkedIn || checkedOut || gpsStatus === 'loading') ? 'opacity-50 cursor-not-allowed shadow-none' : 'hover:scale-[1.01] active:scale-[0.99]'
+              (checkedIn || gpsStatus !== 'success') ? 'opacity-50 cursor-not-allowed shadow-none' : 'hover:scale-[1.01] active:scale-[0.99]'
             }`}
           >
             <LogIn size={14} />
@@ -358,10 +314,10 @@ export default function AbsensiCheckIn() {
           </button>
 
           <button
-            onClick={() => handleCheckOut()}
-            disabled={!checkedIn || checkedOut || gpsStatus === 'loading'}
+            onClick={handleCheckOut}
+            disabled={!checkedIn || checkedOut || gpsStatus !== 'success'}
             className={`bg-[#FCD6A5] text-[#7A4010] font-bold rounded-2xl py-3 flex-1 justify-center flex items-center gap-2 select-none transition-all duration-200 ${
-              (!checkedIn || checkedOut || gpsStatus === 'loading') ? 'opacity-50 cursor-not-allowed shadow-none' : 'hover:scale-[1.01] active:scale-[0.99]'
+              (!checkedIn || checkedOut || gpsStatus !== 'success') ? 'opacity-50 cursor-not-allowed shadow-none' : 'hover:scale-[1.01] active:scale-[0.99]'
             }`}
           >
             <LogOut size={14} />
@@ -369,53 +325,48 @@ export default function AbsensiCheckIn() {
           </button>
         </div>
 
-        {/* GPS Error details & simulator */}
         {gpsStatus === 'error' && (
           <div className="bg-[#FEF0EE] border border-[#F9C3BA]/50 rounded-2xl p-4 space-y-3 animate-fade-up">
             <div className="flex items-start gap-2.5">
               <AlertTriangle size={16} className="text-[#B84030] mt-0.5 flex-shrink-0" />
               <div className="space-y-1">
                 <p className="text-[11px] text-[#B84030] font-bold leading-normal">
-                  {errorMessage.includes('ditolak') 
-                    ? 'Izin lokasi ditolak. Aktifkan GPS dan izinkan akses lokasi di browser.' 
-                    : `Jarak Anda: ${gpsDistance}m · Radius Maks: ${APARTMENT_CONFIG.radiusMeters}m`}
+                  {errorMessage || `Jarak Anda: ${gpsDistance}m · Radius Maks: ${APARTMENT_CONFIG.radiusMeters}m`}
                 </p>
-              </div>
-            </div>
-
-            <div className="pt-2 border-t border-[rgba(30,30,30,0.05)] flex flex-col space-y-1">
-              <p className="text-[9px] font-black text-[#8A857F] uppercase tracking-widest leading-none mb-1 text-center">
-                Review Geolocation:
-              </p>
-              <div 
-                onClick={() => triggerSimulatedCheck(checkedIn)}
-                className="bg-[#FAF6F0] hover:bg-[#FEF7EC] text-[#8A857F] hover:text-[#A05820] border border-[rgba(30,30,30,0.06)] font-bold text-[10px] px-2.5 py-1.5 rounded-xl transition-all text-center cursor-pointer uppercase tracking-wider"
-              >
-                Simulasikan Area Apartemen
               </div>
             </div>
           </div>
         )}
 
-        {checkedIn && !checkedOut && gpsStatus === 'success' && (
-          <div className="bg-[#E8FAF3] border border-[#B5EAD7]/50 rounded-2xl p-4 flex flex-col gap-3 animate-fade-up">
+        {/* Tombol Force Saklar Reset untuk kelancaran demo kelas */}
+        <div className="pt-2 border-t border-[rgba(30,30,30,0.05)] flex flex-col space-y-1">
+          <p className="text-[9px] font-black text-[#8A857F] uppercase tracking-widest leading-none mb-1 text-center">
+            Review Geolocation:
+          </p>
+          <div 
+            onClick={forceToggleGpsSuccess}
+            className="bg-[#FAF6F0] hover:bg-[#FEF7EC] text-[#8A857F] hover:text-[#A05820] border border-[rgba(30,30,30,0.06)] font-bold text-[10px] px-2.5 py-1.5 rounded-xl transition-all text-center cursor-pointer uppercase tracking-wider"
+          >
+            Simulasikan Area Apartemen
+          </div>
+        </div>
+
+        {checkedIn && !checkedOut && (
+          <div className="bg-[#E8FAF3] border border-[#B5EAD7]/50 rounded-2xl p-4 flex flex-col gap-3 mt-4 anonymity-fade-up">
             <div className="flex items-center gap-3">
               <CheckCircle size={18} className="text-[#187050] flex-shrink-0" />
               <span className="text-[11px] text-[#187050] font-bold leading-normal">
                 Check-in berhasil! Selamat bekerja.
               </span>
             </div>
-            <button
-              onClick={handleEnterApp}
-              className="btn-primary w-full justify-center py-2.5 rounded-xl text-xs"
-            >
+            <button onClick={handleEnterApp} className="btn-primary w-full justify-center py-2.5 rounded-xl text-xs">
               Masuk Aplikasi
             </button>
           </div>
         )}
 
         {checkedOut && (
-          <div className="bg-[#E8FAF3] border border-[#B5EAD7]/50 rounded-2xl p-4 flex items-center gap-3 animate-fade-up">
+          <div className="bg-[#E8FAF3] border border-[#B5EAD7]/50 rounded-2xl p-4 flex items-center gap-3 mt-4 animate-fade-up">
             <CheckCircle size={18} className="text-[#187050] flex-shrink-0" />
             <span className="text-[11px] text-[#187050] font-bold leading-normal">
               Check-out berhasil! Sampai jumpa besok.

@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Crown, Wallet, Wrench, ShieldCheck, Sparkles, Building2, Home } from 'lucide-react';
-// IMPORT FILE ASLI PNG (NAMA FILE SESUAI REQUEST)
+// IMPORT FILE ASLI PNG
 import LogoSiManTap from '../../assets/logo.png';
 
 const ROLES = [
@@ -75,12 +75,16 @@ const ICON_MAP = { Crown, Wallet, Wrench, ShieldCheck, Sparkles, Building2, Home
 export default function RolePickerPage() {
   const navigate = useNavigate();
 
-  // 🧹 SIKLUS PEMBERSIHAN DATA (DELAYED CLEAN UP)
+  // 🧹 SIKLUS PEMBERSIHAN DATA TOTAL (KUNCI UTAMA REDIRECT STABIL)
   useEffect(() => {
+    // Bersihkan semua residu storage aplikasi secara langsung tanpa syarat begitu halaman terbuka
+    localStorage.removeItem('userRole');
+    localStorage.clear();
+    sessionStorage.clear();
+
+    // Jika mendarat menggunakan query param ?action=logout, bersihkan URL-nya agar kembali rapi (/pilih-role)
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('action') === 'logout') {
-      localStorage.clear();
-      sessionStorage.clear();
       window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, []);

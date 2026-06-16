@@ -5,10 +5,12 @@ import { hasCheckedInToday, getSession, needsAttendance } from '../../utils/auth
 export default function AttendanceGuard({ children }) {
   const session = getSession();
 
-  // 🎯 KUNCI ANTI-RESIDU: Jika mau logout atau sesi sudah kosong, langsung loloskan!
+  // 🎯 PERBAIKAN UTAMA: Jika sesi sudah kosong atau sedang proses keluar, arahkan langsung ke halaman pilih-role!
   const isLoggingOut = window.location.pathname === '/pilih-role' || window.location.search.includes('action=logout');
+  
   if (isLoggingOut || !session || !session.role) {
-    return children;
+    // JANGAN GUNAKAN 'return children;', melainkan tendang ke /pilih-role
+    return <Navigate to="/pilih-role" replace />;
   }
 
   const { role } = session;
