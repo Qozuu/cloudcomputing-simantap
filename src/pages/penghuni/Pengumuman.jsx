@@ -15,7 +15,6 @@ export default function Pengumuman() {
       try {
         setLoading(true);
 
-
         // 1. Dapatkan data user penghuni yang sedang login
         const { data: { user }, error: authError } = await supabase.auth.getUser();
         if (authError) throw authError;
@@ -27,7 +26,7 @@ export default function Pengumuman() {
         // 2. Ambil data tower si user dari tabel profiles
         if (user) {
           const { data: profile, error: profError } = await supabase
-            .from('profiles') // ◄ Kalo nama tabel profilmu bukan 'profiles' (misal 'users' atau 'penghuni'), ganti ini
+            .from('profiles') 
             .select('tower')
             .eq('id', user.id)
             .single();
@@ -61,59 +60,53 @@ export default function Pengumuman() {
           console.error("MATA-MATA 5 (Gagal ambil tabel notifications):", notifError.message);
         }
 
-        // 5. Gabungkan kedua data ke dalam satu list
+        // 5. Ambil data tambahan dari tabel 'broadcast_pesan'
+        const { data: broadcastData, error: broadcastError } = await supabase
+          .from('broadcast_pesan')
+          .select('*');
+
+        if (broadcastError) {
+          console.error("MATA-MATA 6 (Gagal ambil tabel broadcast_pesan):", broadcastError.message);
+        }
+
+        // 6. Gabungkan semua data ke dalam satu list terpadu
         const combined = [
           ...(infoData || []).map(item => ({
             id: `info-${item.id}`,
             category: item.kategori || 'Info',
             title: item.judul || 'Pengumuman Resmi',
             description: item.deskripsi || '',
-            timestamp: new Date(item.created_at).getTime(),
-            date: new Date(item.created_at).toLocaleDateString('id-ID', { 
-              day: 'numeric', month: 'short', year: 'numeric' 
-            })
+            timestamp: new Date(item.created_at || Date.now()).getTime(),
+            date: item.created_at 
+              ? new Date(item.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
+              : 'Baru Saja'
           })),
           ...(notifData || []).map(item => ({
             id: `notif-${item.id}`,
             category: item.priority || 'Darurat', 
             title: item.title || 'Pesan Broadcast',
             description: item.message || '',
-            timestamp: new Date(item.created_at).getTime(),
-            date: new Date(item.created_at).toLocaleDateString('id-ID', { 
-              day: 'numeric', month: 'short', year: 'numeric' 
-            })
+            timestamp: new Date(item.created_at || Date.now()).getTime(),
+            date: item.created_at 
+              ? new Date(item.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
+              : 'Baru Saja'
+          })),
+          ...(broadcastData || []).map(item => ({
+            id: `broadcast-${item.id}`,
+            category: item.target || 'Info', 
+            title: item.judul || 'Pengumuman Resmi', 
+            description: item.isi || '', 
+            timestamp: new Date(item.created_at || Date.now()).getTime(),
+            date: item.created_at 
+              ? new Date(item.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
+              : 'Baru Saja'
           }))
         ];
 
-        // Urutkan dari yang paling baru
+        // Urutkan dari yang paling baru berdasarkan timestamp
         combined.sort((a, b) => b.timestamp - a.timestamp);
         setAnnouncements(combined);
 
-=======
-        
-        // 🛠️ MEMPERBAIKI SOURCE: Mengambil langsung dari tabel 'broadcast_pesan'
-        const { data, error } = await supabase
-          .from('broadcast_pesan')
-          .select('*');
-        
-        if (error) throw error;
-        
-        // 🛠️ MENYESUAIKAN KOLOM: id, judul, isi (deskripsi), dan target/kategori
-        const mapped = (data || []).map(item => ({
-          id: item.id,
-          category: item.target || 'Info', // Menggunakan kolom 'target' sebagai pengelompokan kategori
-          title: item.judul || 'Pengumuman Resmi', // Menggunakan kolom 'judul'
-          description: item.isi || '', // Menggunakan kolom 'isi'
-          date: item.created_at 
-            ? new Date(item.created_at).toLocaleDateString('id-ID', { 
-                day: 'numeric', 
-                month: 'short', 
-                year: 'numeric' 
-              })
-            : 'Baru Saja'
-        }));
-        setAnnouncements(mapped);
->>>>>>> bc552b99346d604c2d2e299dd1eace85ba4b18e5
       } catch (err) {
         console.error('Gagal memuat papan informasi:', err.message);
       } finally {
@@ -123,17 +116,13 @@ export default function Pengumuman() {
     loadData();
   }, []);
 
-
-  // Styling badge
-=======
   // Styling badge kategori agar kontras dan mudah dibaca
->>>>>>> bc552b99346d604c2d2e299dd1eace85ba4b18e5
   const getBadgeStyles = (category) => {
     switch (String(category).toLowerCase()) {
       case 'darurat':
         return 'bg-red-100 text-red-800 border-red-200';
       case 'info':
-      case 'semua penghuni': // Menangani jika teks target berisi 'Semua Penghuni'
+      case 'semua penghuni': 
         return 'bg-blue-100 text-blue-800 border-blue-200';
       case 'promo':
         return 'bg-amber-100 text-amber-800 border-amber-200';
@@ -144,10 +133,7 @@ export default function Pengumuman() {
     }
   };
 
-
-=======
   // Filter pencarian & kategori aman (Case-Insensitive)
->>>>>>> bc552b99346d604c2d2e299dd1eace85ba4b18e5
   const filteredAnnouncements = announcements.filter(item => {
     const titleText = item.title ? String(item.title).toLowerCase() : '';
     const descText = item.description ? String(item.description).toLowerCase() : '';
@@ -155,7 +141,6 @@ export default function Pengumuman() {
 
     const matchSearch = titleText.includes(searchLower) || descText.includes(searchLower);
     
-    // Jika filter tab 'Semua' diklik, loloskan semua data. Jika tidak, samakan dengan kolom kategori/target.
     const matchCategory = 
       activeCategory === 'Semua' || 
       String(item.category).toLowerCase().includes(activeCategory.toLowerCase());
@@ -204,40 +189,37 @@ export default function Pengumuman() {
         </h3>
 
         <div className="divide-y divide-zinc-100">
-
-          {filteredAnnouncements.map((ann) => (
-            <div key={ann.id} className="py-4 first:pt-0 last:pb-0 flex flex-col md:flex-row items-start gap-3 md:gap-6">
-=======
           {loading ? (
             <div className="text-center py-12 text-zinc-400 font-semibold text-xs animate-pulse">
               Sedang mengunduh data pengumuman...
             </div>
-          ) : filteredAnnouncements.map((ann) => (
-            <div
-              key={ann.id}
-              className="py-4 first:pt-0 last:pb-0 flex flex-col md:flex-row items-start gap-3 md:gap-6"
-            >
-              {/* Kolom Kategori/Target & Tanggal Rilis */}
->>>>>>> bc552b99346d604c2d2e299dd1eace85ba4b18e5
-              <div className="flex-shrink-0 w-24 flex md:flex-col items-center md:items-start justify-between md:justify-start gap-2">
-                <span className={`inline-block text-[9px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider border ${getBadgeStyles(ann.category)}`}>
-                  {ann.category}
-                </span>
-                <span className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wide md:mt-1">
-                  {ann.date}
-                </span>
-              </div>
+          ) : (
+            filteredAnnouncements.map((ann) => (
+              <div
+                key={ann.id}
+                className="py-4 first:pt-0 last:pb-0 flex flex-col md:flex-row items-start gap-3 md:gap-6"
+              >
+                {/* Kolom Kategori/Target & Tanggal Rilis */}
+                <div className="flex-shrink-0 w-24 flex md:flex-col items-center md:items-start justify-between md:justify-start gap-2">
+                  <span className={`inline-block text-[9px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider border ${getBadgeStyles(ann.category)}`}>
+                    {ann.category}
+                  </span>
+                  <span className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wide md:mt-1">
+                    {ann.date}
+                  </span>
+                </div>
 
-              <div className="space-y-1 flex-1 text-xs">
-                <h4 className="font-bold text-zinc-900 leading-snug tracking-wide">
-                  {ann.title}
-                </h4>
-                <p className="text-zinc-600 font-medium leading-relaxed whitespace-pre-wrap">
-                  {ann.description}
-                </p>
+                <div className="space-y-1 flex-1 text-xs">
+                  <h4 className="font-bold text-zinc-900 leading-snug tracking-wide">
+                    {ann.title}
+                  </h4>
+                  <p className="text-zinc-600 font-medium leading-relaxed whitespace-pre-wrap">
+                    {ann.description}
+                  </p>
+                </div>
               </div>
-            </div>
-          ))}
+            ))
+          )}
 
           {!loading && filteredAnnouncements.length === 0 && (
             <div className="text-center py-12 text-zinc-400 font-semibold text-xs border border-dashed border-zinc-200 rounded-xl bg-zinc-50/50">
