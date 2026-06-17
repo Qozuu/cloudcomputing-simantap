@@ -10,23 +10,24 @@ export default function LaporanPengeluaran() {
   const [modalOpen, setModalOpen] = useState(false);
   const [successToast, setSuccessToast] = useState('');
 
-  // 1. STATE BARU: Untuk mengontrol modal konfirmasi status
+  // State untuk mengontrol modal konfirmasi status
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState(null);
 
-  // Form states
+  // Form states - Diselaraskan dengan nilai lowercase/snake_case di Supabase
   const [newExpense, setNewExpense] = useState({
-    category: 'Operasional',
+    category: 'operasional', 
     desc: '',
-    division: 'Umum',
+    division: 'Pemeliharaan', 
     amount: '',
-    status: 'Selesai'
+    status: 'proses' // Default 'proses' mengikuti DEFAULT skema database
   });
 
   useEffect(() => {
     async function loadExpenses() {
       try {
         setLoading(true);
+        // Menyesuaikan query select dengan struktur foreign key public.users
         const { data, error } = await supabase
           .from('pengeluaran')
           .select('*, created_by:users(nama)')
@@ -38,11 +39,11 @@ export default function LaporanPengeluaran() {
           setExpenses(data.map(item => ({
             id: item.id,
             date: item.tanggal ? new Date(item.tanggal).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }) : new Date(item.created_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }),
-            category: item.kategori || 'Operasional',
+            category: item.kategori || 'operasional', 
             desc: item.keterangan || '',
             division: item.divisi || 'Umum',
-            amount: item.nominal || 0,
-            status: item.status ? (item.status.toLowerCase() === 'proses' ? 'Proses' : 'Selesai') : 'Selesai'
+            amount: parseFloat(item.nominal) || 0, // Mengonversi tipe numeric database
+            status: item.status || 'proses'
           })));
         }
       } catch (err) {
@@ -54,19 +55,29 @@ export default function LaporanPengeluaran() {
     loadExpenses();
   }, []);
 
+  // Helper untuk mengubah nilai database snake_case menjadi tampilan UI yang rapi
+  const getCategoryLabel = (category) => {
+    switch (category) {
+      case 'sdm_gaji': return 'SDM / Gaji';
+      case 'operasional': return 'Operasional';
+      case 'perbaikan': return 'Perbaikan';
+      default: return category;
+    }
+  };
+
   const getCategoryBadgeClass = (category) => {
     switch (category) {
-      case 'SDM/Gaji': return 'badge-base badge-pink';
-      case 'Operasional': return 'badge-base badge-lavender';
-      case 'Perbaikan': return 'badge-base badge-yellow';
+      case 'sdm_gaji': return 'badge-base badge-pink';
+      case 'operasional': return 'badge-base badge-lavender';
+      case 'perbaikan': return 'badge-base badge-yellow';
       default: return 'badge-base badge-gray';
     }
   };
 
   const getStatusBadgeClass = (status) => {
     switch (status) {
-      case 'Selesai': return 'badge-base badge-mint cursor-default select-none';
-      case 'Proses': return 'badge-base badge-yellow cursor-pointer hover:brightness-95 active:scale-95 transition-all duration-150 shadow-sm';
+      case 'selesai': return 'badge-base badge-mint cursor-default select-none';
+      case 'proses': return 'badge-base badge-yellow cursor-pointer hover:brightness-95 active:scale-95 transition-all duration-150 shadow-sm';
       default: return 'badge-base badge-gray';
     }
   };
@@ -90,24 +101,37 @@ export default function LaporanPengeluaran() {
     if (!newExpense.desc || !newExpense.amount) return;
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('User not authenticated');
+      // Step 1: Ambil User ID dari Supabase Auth
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) throw new Error('Autentikasi gagal. Silakan login kembali.');
+
+      // Step 2: Ambil matching ID dari public.users menggunakan ID Auth (Lebih aman & cepat dibanding email)
+      const { data: publicUser, error: userError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', user.id)
+        .single();
+
+      if (userError || !publicUser) {
+        throw new Error('User Anda belum terdaftar atau tidak ditemukan di tabel public.users.');
+      }
 
       const today = new Date();
-      const tanggal = today.toISOString().split('T')[0];
+      const tanggal = today.toISOString().split('T');
       const nominal = parseInt(newExpense.amount);
-      const { category: kategori, desc: keterangan, division: divisi } = newExpense;
+      const { category: kategori, desc: keterangan, division: divisi, status } = newExpense;
 
+      // Step 3: Insert data pengeluaran dengan ID public.users
       const { data, error } = await supabase
         .from('pengeluaran')
         .insert({
           tanggal,
-          kategori,
+          kategori,     // Nilai: 'sdm_gaji', 'operasional', atau 'perbaikan' (Lolos CHECK constraint)
           keterangan,
           divisi,
           nominal,
-          status: 'proses',
-          created_by: user.id
+          status,       // Nilai: 'proses' atau 'selesai' (Lolos CHECK constraint)
+          created_by: publicUser.id // Menggunakan ID dari public.users agar tidak memicu Foreign Key Error
         })
         .select('*, created_by:users(nama)')
         .single();
@@ -121,49 +145,47 @@ export default function LaporanPengeluaran() {
           category: data.kategori || kategori,
           desc: data.keterangan || keterangan,
           division: data.divisi || divisi,
-          amount: data.nominal || nominal,
-          status: 'Proses'
+          amount: parseFloat(data.nominal) || nominal,
+          status: data.status || status
         };
         setExpenses(prev => [added, ...prev]);
         showToast(`Pengeluaran "${keterangan}" berhasil dicatat!`);
       }
     } catch (err) {
-      console.error('Failed to insert in DB:', err.message);
-      showToast(`Gagal mencatat pengeluaran: ${err.message}`);
+      console.error('Error lengkap Supabase:', err);
+      alert(`Gagal menyimpan ke database: ${err.message}`); 
     } finally {
       setModalOpen(false);
-      setNewExpense({ category: 'Operasional', desc: '', division: 'Umum', amount: '', status: 'Selesai' });
+      setNewExpense({ category: 'operasional', desc: '', division: 'Pemeliharaan', amount: '', status: 'proses' });
     }
   };
 
-  // 2. LOGIKA BARU: Klik badge tidak langsung mengubah data, melainkan membuka modal pengaman dulu
   const handleRequestToggleStatus = (item) => {
-    if (item.status !== 'Proses') return; // Kunci jika sudah Selesai
+    if (item.status !== 'proses') return; 
     setSelectedExpense(item);
     setConfirmModalOpen(true);
   };
 
-  // 3. LOGIKA BARU: Eksekusi perubahan status HANYA jika disetujui di dalam modal
   const handleConfirmStatusChange = async () => {
     if (!selectedExpense) return;
 
     try {
       const { error } = await supabase
         .from('pengeluaran')
-        .update({ status: 'selesai' })
+        .update({ status: 'selesai' }) 
         .eq('id', selectedExpense.id);
 
       if (error) throw error;
 
       setExpenses(prevExpenses =>
         prevExpenses.map(item =>
-          item.id === selectedExpense.id ? { ...item, status: 'Selesai' } : item
+          item.id === selectedExpense.id ? { ...item, status: 'selesai' } : item
         )
       );
       showToast(`Status pengeluaran "${selectedExpense.desc}" berhasil diubah menjadi SELESAI!`);
     } catch (err) {
       console.error('Failed to update status in DB:', err.message);
-      showToast(`Gagal memperbarui status: ${err.message}`);
+      alert(`Gagal memperbarui status: ${err.message}`);
     } finally {
       setConfirmModalOpen(false);
       setSelectedExpense(null);
@@ -175,13 +197,14 @@ export default function LaporanPengeluaran() {
     setTimeout(() => setSuccessToast(''), 3000);
   };
 
+  // Kalkulasi total pengeluaran
   const totalPengeluaran = expenses.reduce((sum, item) => sum + item.amount, 0);
-  const sdmTotal = expenses.filter(item => item.category === 'SDM/Gaji').reduce((sum, item) => sum + item.amount, 0);
-  const operasionalTotal = expenses.filter(item => item.category === 'Operasional').reduce((sum, item) => sum + item.amount, 0);
-  const perbaikanTotal = expenses.filter(item => item.category === 'Perbaikan').reduce((sum, item) => sum + item.amount, 0);
+  const sdmTotal = expenses.filter(item => item.category === 'sdm_gaji').reduce((sum, item) => sum + item.amount, 0);
+  const operasionalTotal = expenses.filter(item => item.category === 'operasional').reduce((sum, item) => sum + item.amount, 0);
+  const perbaikanTotal = expenses.filter(item => item.category === 'perbaikan').reduce((sum, item) => sum + item.amount, 0);
 
   if (loading) {
-    return <div className="p-6 text-muted text-sm">Memuat...</div>;
+    return <div className="p-6 text-muted text-sm">Memuat Jurnal Keuangan...</div>;
   }
 
   return (
@@ -266,18 +289,17 @@ export default function LaporanPengeluaran() {
               {expenses.map((row) => (
                 <tr key={row.id}>
                   <td className="text-muted">{row.date}</td>
-                  <td><span className={getCategoryBadgeClass(row.category)}>{row.category}</span></td>
+                  <td><span className={getCategoryBadgeClass(row.category)}>{getCategoryLabel(row.category)}</span></td>
                   <td className="text-ink font-semibold">{row.desc}</td>
                   <td className="text-muted">{row.division}</td>
                   <td className="font-mono text-ink font-bold">{formatRupiah(row.amount)}</td>
                   <td>
-                    {/* Mengarah ke fungsi penanganan request konfirmasi */}
                     <span 
                       onClick={() => handleRequestToggleStatus(row)}
                       className={getStatusBadgeClass(row.status)}
-                      title={row.status === 'Proses' ? 'Klik untuk verifikasi penyelesaian' : undefined}
+                      title={row.status === 'proses' ? 'Klik untuk verifikasi penyelesaian' : undefined}
                     >
-                      {row.status}
+                      {row.status === 'proses' ? 'Proses' : 'Selesai'}
                     </span>
                   </td>
                 </tr>
@@ -302,9 +324,9 @@ export default function LaporanPengeluaran() {
               <div>
                 <label className="label-modern">Kategori</label>
                 <select value={newExpense.category} onChange={(e) => setNewExpense(prev => ({ ...prev, category: e.target.value }))} className="input-modern select-modern">
-                  <option value="SDM/Gaji">SDM / Gaji</option>
-                  <option value="Operasional">Operasional</option>
-                  <option value="Perbaikan">Perbaikan</option>
+                  <option value="sdm_gaji">SDM / Gaji</option>
+                  <option value="operasional">Operasional</option>
+                  <option value="perbaikan">Perbaikan</option>
                 </select>
               </div>
               <div>
@@ -315,11 +337,11 @@ export default function LaporanPengeluaran() {
                 <div>
                   <label className="label-modern">Divisi</label>
                   <select value={newExpense.division} onChange={(e) => setNewExpense(prev => ({ ...prev, division: e.target.value }))} className="input-modern select-modern">
-                    <option value="Umum">Umum / Semua</option>
                     <option value="Pemeliharaan">Pemeliharaan</option>
                     <option value="Keamanan">Keamanan</option>
                     <option value="Kebersihan">Kebersihan</option>
                     <option value="Fasilitas">Fasilitas</option>
+                    <option value="Umum">Umum / Semua</option>
                   </select>
                 </div>
                 <div>
@@ -330,8 +352,8 @@ export default function LaporanPengeluaran() {
               <div>
                 <label className="label-modern">Status Awal</label>
                 <select value={newExpense.status} onChange={(e) => setNewExpense(prev => ({ ...prev, status: e.target.value }))} className="input-modern select-modern">
-                  <option value="Selesai">Selesai</option>
-                  <option value="Proses">Proses</option>
+                  <option value="proses">Proses</option>
+                  <option value="selesai">Selesai</option>
                 </select>
               </div>
               <div className="flex items-center gap-3 pt-3 border-t border-soft">
@@ -343,7 +365,7 @@ export default function LaporanPengeluaran() {
         </div>
       )}
 
-      {/* 4. MODAL BARU: Modal Pengaman Konfirmasi Anti-Salah-Pencet */}
+      {/* Modal Pengaman Konfirmasi */}
       {confirmModalOpen && selectedExpense && (
         <div className="modal-overlay">
           <div className="fixed inset-0 bg-black/30 backdrop-blur-sm" onClick={() => setConfirmModalOpen(false)}></div>
@@ -374,21 +396,6 @@ export default function LaporanPengeluaran() {
                 Batal
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Success Toast */}
-      {successToast && (
-        <div className="toast-modern toast-success">
-          <div className="avatar avatar-sm avatar-mint flex items-center justify-center flex-shrink-0">
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-            </svg>
-          </div>
-          <div>
-            <p className="text-xs font-extrabold tracking-wide">Sukses</p>
-            <p className="text-[10px] opacity-90 font-medium">{successToast}</p>
           </div>
         </div>
       )}
