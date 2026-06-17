@@ -14,25 +14,28 @@ export default function TagihanReservasi() {
       setLoading(true);
       const { data, error } = await supabase
         .from('tagihan_fasilitas')
-        .select('*, reservasi(tanggal, jam_mulai, jam_selesai, fasilitas(nama)), penghuni:users(nama)');
+        .select('*, fasilitas(nama), penghuni(nama, unit_id, unit:unit(nomor_unit))')
+        .order('created_at', { ascending: false });
 
+      console.log('Tagihan data:', data);
+      console.log('Tagihan error:', error);
       if (error) throw error;
 
       if (data) {
         setBills(data.map(item => {
-          const tgl = item.reservasi?.tanggal ? new Date(item.reservasi.tanggal).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }) : '';
-          const start = (item.reservasi?.jam_mulai || '').substring(0, 5);
-          const end = (item.reservasi?.jam_selesai || '').substring(0, 5);
-          const sessionMapped = tgl ? `${tgl} ${start}-${end}` : '—';
-          
+          const rawStatus = (item.status || '').toLowerCase();
+          let statusMapped = 'Belum Bayar';
+          if (rawStatus === 'disetujui') statusMapped = 'Lunas';
+
           return {
             id: item.id,
             resident: item.penghuni?.nama || 'Warga',
-            unit: item.unit_no || item.unit || 'N/A',
-            facility: item.reservasi?.fasilitas?.nama || 'Fasilitas',
-            session: sessionMapped,
-            cost: item.cost || item.nominal || item.total_biaya || 0,
-            status: item.status && item.status.toLowerCase() === 'sudah_bayar' ? 'Lunas' : 'Belum Bayar'
+            unit: item.penghuni?.unit?.nomor_unit || 'N/A',
+            facility: item.fasilitas?.nama || 'Fasilitas',
+            session: `${item.tgl_reservasi || '-'} ${item.sesi_waktu || ''}`.trim(),
+            cost: item.total_tarif || 0,
+            status: statusMapped,
+            statusRaw: item.status || 'Menunggu',
           };
         }));
       }
@@ -63,11 +66,11 @@ export default function TagihanReservasi() {
     try {
       const { error } = await supabase
         .from('tagihan_fasilitas')
-        .update({ status: 'sudah_bayar' })
+        .update({ status: 'Disetujui' })
         .eq('id', id);
 
       if (error) throw error;
-      showToast(`Pembayaran tagihan ${id} telah berhasil dikonfirmasi!`);
+      showToast('Pembayaran berhasil dikonfirmasi!');
       loadBills();
     } catch (err) {
       console.error('Failed to confirm payment:', err.message);
@@ -260,7 +263,43 @@ export default function TagihanReservasi() {
               <div>
                 <button
                   type="button"
-                  onClick={() => setInvoiceModalOpen(false)}
+                  onClick={() => {
+                    const printWindow = window.open('', '_blank');
+                    printWindow.document.write(`
+                      <html>
+                        <head>
+                          <title>Invoice - ${selectedInvoice.id}</title>
+                          <style>
+                            body { font-family: Arial, sans-serif; padding: 40px; max-width: 500px; margin: 0 auto; }
+                            h2 { text-align: center; letter-spacing: 2px; }
+                            .id { text-align: center; color: #888; font-size: 12px; margin-bottom: 24px; }
+                            .icon { text-align: center; font-size: 40px; margin-bottom: 8px; }
+                            hr { border: none; border-top: 1px dashed #ccc; margin: 16px 0; }
+                            .row { display: flex; justify-content: space-between; margin: 8px 0; font-size: 14px; }
+                            .label { color: #888; }
+                            .total { font-weight: bold; font-size: 15px; }
+                            .total-val { font-weight: bold; color: #A05820; font-size: 15px; }
+                            .footer { text-align: center; font-size: 11px; color: #aaa; margin-top: 24px; }
+                          </style>
+                        </head>
+                        <body>
+                          <div class="icon">✅</div>
+                          <h2>KUITANSI PEMBAYARAN DIGITAL</h2>
+                          <p class="id">${selectedInvoice.id}</p>
+                          <hr/>
+                          <div class="row"><span class="label">Penghuni</span><span>${selectedInvoice.resident} (${selectedInvoice.unit})</span></div>
+                          <div class="row"><span class="label">Fasilitas</span><span>${selectedInvoice.facility}</span></div>
+                          <div class="row"><span class="label">Waktu Sesi</span><span>${selectedInvoice.session}</span></div>
+                          <hr/>
+                          <div class="row"><span class="total">Total Bayar</span><span class="total-val">${formatRupiah(selectedInvoice.cost)}</span></div>
+                          <hr/>
+                          <p class="footer">Kuitansi ini diterbitkan secara sah oleh pengelola Apartemen Grand Surabaya sebagai bukti pembayaran resmi.</p>
+                        </body>
+                      </html>
+                    `);
+                    printWindow.document.close();
+                    printWindow.print();
+                  }}
                   className="w-full btn-primary py-3 rounded-xl text-xs font-bold justify-center"
                 >
                   Cetak Invoice

@@ -1,8 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, X, CheckCheck, AlertTriangle, Info, Wrench, CreditCard } from 'lucide-react';
+import { Bell, X, AlertTriangle, Info, Wrench, CreditCard } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { ROLE_MAP } from '../../utils/authSession';
 
 const TYPE_STYLES = {
   urgent:  { bg: 'bg-[#FEF0EE]', color: 'text-[#C05040]' },
@@ -24,24 +23,43 @@ export default function NotificationBell() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Get user's DB role
-      const { data: profile } = await supabase
+      // 1. Ambil data DB role dari tabel 'users'
+      const { data: userProfile } = await supabase
         .from('users')
         .select('role')
         .eq('id', user.id)
         .single();
 
-      const dbRole = profile?.role || 'penghuni';
+      const dbRole = userProfile?.role || 'penghuni';
 
-      // Fetch notifications relevant to this role
-      // Shows: target_role = 'all' OR target_role = dbRole
-      const { data } = await supabase
+      // 2. Ambil data tower dari tabel 'penghuni' (Hanya select kolom 'tower' agar terhindar dari bad request 400 kolom dimensi_luas)
+      const { data: tenantProfile } = await supabase
+        .from('penghuni')
+        .select('tower')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      const towerPenghuni = tenantProfile?.tower || 'Semua';
+
+      // 3. Ambil seluruh data dari tabel 'notifications' (Pakai 's' sesuai dengan skema database asli)
+      const { data, error } = await supabase
         .from('notifications')
         .select('*')
         .eq('is_active', true)
-        .or(`target_role.eq.all,target_role.eq.${dbRole}`)
-        .order('created_at', { ascending: false })
-        .limit(10);
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error("Gagal mengambil tabel notifications:", error.message);
+        return;
+      }
+
+      // 4. Lakukan penyaringan data (Filter) berdasarkan kecocokan target_tower di sisi frontend
+      const filteredData = (data || []).filter(item => {
+        return (
+          item.target_tower === 'Semua Penghuni' || 
+          item.target_tower === towerPenghuni
+        );
+      });
 
       const categoryMap = {
         darurat: 'urgent',
@@ -50,10 +68,10 @@ export default function NotificationBell() {
         peraturan: 'repair'
       };
 
-      // Map to notif display format
-      const mapped = (data || []).map(item => ({
+      // Map data database ke dalam format state tampilan notifikasi
+      const mapped = filteredData.map(item => ({
         id:    item.id,
-        type:  categoryMap[item.category] || 'info',
+        type:  categoryMap[item.category?.toLowerCase()] || 'info',
         title: item.title,
         desc:  item.message,
         time:  formatTimeAgo(item.created_at),
@@ -65,22 +83,31 @@ export default function NotificationBell() {
 
     fetchNotifications();
 
-    // Realtime: auto-update when new notification inserted
+    // Realtime Channel: Mendengarkan perubahan data baru pada tabel 'notifications'
     const channel = supabase
       .channel('notif-realtime')
       .on('postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'notifications' },
+        { event: 'INSERT', schema: 'public', table: 'notifications' }, // ◄ Disamakan menjadi 'notifications'
         async (payload) => {
           const { data: { user } } = await supabase.auth.getUser();
-          const { data: profile } = await supabase
-            .from('users').select('role').eq('id', user.id).single();
-          const dbRole = profile?.role || 'penghuni';
+          if (!user) return;
 
-          // Only add if relevant to this role
-          if (
-            payload.new.target_role === 'all' ||
-            payload.new.target_role === dbRole
-          ) {
+          const { data: userProfile } = await supabase
+            .from('users').select('role').eq('id', user.id).single();
+          const dbRole = userProfile?.role || 'penghuni';
+
+          const { data: tenantProfile } = await supabase
+            .from('penghuni').select('tower').eq('user_id', user.id).maybeSingle();
+          const towerPenghuni = tenantProfile?.tower || 'Semua';
+
+          // Ambil properti dari data payload baru yang masuk
+          const newTargetTower = payload.new.target_tower;
+          const newTargetRole = payload.new.target_role;
+
+          const matchTower = newTargetTower === 'Semua Penghuni' || newTargetTower === towerPenghuni;
+          const matchRole = !newTargetRole || newTargetRole === 'all' || newTargetRole === dbRole;
+
+          if (matchTower && matchRole) {
             const categoryMap = {
               darurat: 'urgent',
               info: 'info',
@@ -89,7 +116,7 @@ export default function NotificationBell() {
             };
             setNotifs(prev => [{
               id:    payload.new.id,
-              type:  categoryMap[payload.new.category] || 'info',
+              type:  categoryMap[payload.new.category?.toLowerCase()] || 'info',
               title: payload.new.title,
               desc:  payload.new.message,
               time:  'Baru saja',
@@ -100,10 +127,19 @@ export default function NotificationBell() {
       )
       .subscribe();
 
-    return () => supabase.removeChannel(channel);
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
   }, []);
 
   function formatTimeAgo(dateString) {
+    if (!dateString) return 'Baru saja';
     const diff = Date.now() - new Date(dateString).getTime();
     const mins  = Math.floor(diff / 60000);
     const hours = Math.floor(diff / 3600000);
@@ -113,12 +149,6 @@ export default function NotificationBell() {
     if (hours < 24) return `${hours} jam lalu`;
     return `${days} hari lalu`;
   }
-
-  useEffect(() => {
-    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
 
   const markAllRead = () => setNotifs(prev => prev.map(n => ({ ...n, read: true })));
   const markRead    = (id) => setNotifs(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
@@ -162,7 +192,7 @@ export default function NotificationBell() {
           zIndex: 999,
           overflow: 'hidden',
         }}>
-          <div style={{ padding: '14px 16px 12px', borderBottom: '1px solid rgba(30,30,30,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ padding: '14px 16px 12px', borderBottom: '1px solid rgba(30,30,30,0.07)', display: 'flex', alignItems: 'center', justifyBetween: 'space-between' }}>
             <span style={{ fontSize: 14, fontWeight: 800, color: '#1E1E1E' }}>Notifikasi</span>
             <button onClick={markAllRead} style={{ fontSize: 11, fontWeight: 700, color: '#8A857F', background: 'none', border: 'none', cursor: 'pointer' }}>
               Tandai semua dibaca
@@ -186,9 +216,15 @@ export default function NotificationBell() {
                 </div>
               );
             })}
+
+            {notifs.length === 0 && (
+              <div style={{ padding: '24px', textAlign: 'center', fontSize: 11, color: '#8A857F', fontWeight: 600 }}>
+                Tidak ada notifikasi baru untuk tower Anda.
+              </div>
+            )}
           </div>
 
-          {/* Tombol Lihat Semua yang sekarang Fungsional */}
+          {/* Tombol Lihat Semua */}
           <div style={{ padding: '10px', borderTop: '1px solid rgba(30,30,30,0.07)' }}>
             <div 
               onClick={() => { setOpen(false); navigate('/notifikasi'); }}

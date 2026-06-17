@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import * as XLSX from 'xlsx';
 import {
   ChevronDown,
   Download,
@@ -22,18 +23,18 @@ export default function AbsensiSatpam() {
   const [selectedAbsensi, setSelectedAbsensi] = useState(null);
 
   // Form states
-  const [formPetugas, setFormPetugas] = useState('');
+  const [formPetugas, setFormPetugas] = useState(''); 
   const [formShift, setFormShift] = useState('Pagi 06-14');
   const [formMasuk, setFormMasuk] = useState('06:00');
   const [formKeluar, setFormKeluar] = useState('14:00');
   const [formStatus, setFormStatus] = useState('Hadir');
 
-  // State untuk mengontrol dropdown kustom (Anti-Bug)
+  // State kontrol dropdown kustom
   const [openDropdownPetugas, setOpenDropdownPetugas] = useState(false);
   const [openDropdownShift, setOpenDropdownShift] = useState(false);
   const [openDropdownStatus, setOpenDropdownStatus] = useState(false);
 
-  // State pencarian nama petugas di dalam dropdown modal
+  // State pencarian di dalam dropdown modal
   const [searchPetugasInput, setSearchPetugasInput] = useState('');
 
   const [petugasList, setPetugasList] = useState([]);
@@ -48,40 +49,45 @@ export default function AbsensiSatpam() {
       const todayStr = new Date().toISOString().split('T')[0];
 
       // 1. Fetch today's attendance
-      const { data: absData } = await supabase
+      const { data: absData, error: absError } = await supabase
         .from('absensi')
         .select('*, karyawan:users(nama,role)')
         .eq('tanggal', todayStr);
 
+      if (absError) throw absError;
+
       if (absData) {
-        setAttendance(absData.map(item => ({
-          id: item.id,
-          nama: item.karyawan?.nama || '—',
-          shift: item.shift || 'Pagi 06-14',
-          masuk: item.jam_masuk || '-',
-          keluar: item.jam_keluar || '-',
-          status: item.status === 'hadir' ? 'Hadir' : 'Izin'
-        })));
+        setAttendance(absData.map(item => {
+          let jamMasukJam = item.jam_masuk ? parseInt(item.jam_masuk.split(':')[0]) : 0;
+          let uiShift = 'Malam 22-06';
+          if (jamMasukJam >= 6 && jamMasukJam < 14) uiShift = 'Pagi 06-14';
+          else if (jamMasukJam >= 14 && jamMasukJam < 22) uiShift = 'Siang 14-22';
+
+          return {
+            id: item.id,
+            nama: item.karyawan?.nama || '—',
+            shift: uiShift, 
+            masuk: item.jam_masuk || '-',
+            keluar: item.jam_keluar || '-',
+            status: item.status === 'hadir' ? 'Hadir' : 'Izin'
+          };
+        }));
       }
 
-      // 2. Fetch security users / karyawan
-      const { data: userData } = await supabase
+      // 2. Fetch data akun karyawan dari tabel users
+      const { data: userData, error: userError } = await supabase
         .from('users')
         .select('id, nama, role')
-        .neq('role', 'penghuni')
-        .neq('role', 'super_admin');
+        .eq('role', 'admin_keamanan');
 
-      if (userData) {
-        const securityStaff = userData.filter(u => u.role === 'div_keamanan');
-        const staffToUse = securityStaff.length > 0 ? securityStaff : userData;
-        setPetugasList(staffToUse.map(u => u.nama));
-        setPetugasMap(staffToUse);
-        if (staffToUse.length > 0 && !formPetugas) {
-          setFormPetugas(staffToUse[0].nama);
-        }
+      if (userError) throw userError;
+
+      if (userData && userData.length > 0) {
+        setPetugasList(userData.map(u => u.nama));
+        setPetugasMap(userData);
       }
     } catch (err) {
-      console.error('Error loading attendance data:', err);
+      console.error('Error loading attendance data:', err.message);
     }
   };
 
@@ -105,8 +111,43 @@ export default function AbsensiSatpam() {
   };
 
   const handleExport = () => {
-    setSuccessToast('Absensi_Satpam.xlsx berhasil diunduh!');
-    setTimeout(() => setSuccessToast(''), 3000);
+    try {
+      // 1. Cek jika data absensi kosong
+      if (attendance.length === 0) {
+        alert("Tidak ada data absensi hari ini yang bisa diekspor!");
+        return;
+      }
+
+      // 2. Format data dari state agar rapi saat jadi kolom Excel
+      const dataUntukExcel = attendance.map((item, index) => ({
+        'No': index + 1,
+        'Nama Petugas': item.nama,
+        'Shift': item.shift,
+        'Jam Masuk': item.masuk,
+        'Jam Keluar': item.keluar,
+        'Status Kehadiran': item.status
+      }));
+
+      // 3. Proses pembuatan berkas Excel
+      const worksheet = XLSX.utils.json_to_sheet(dataUntukExcel);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Absensi Hari Ini");
+
+      // 4. Atur lebar kolom otomatis agar tulisan tidak terpotong (opsional tapi bagus)
+      const maxProps = [{ wch: 5 }, { wch: 25 }, { wch: 15 }, { wch: 12 }, { wch: 12 }, { wch: 15 }];
+      worksheet['!cols'] = maxProps;
+
+      // 5. Unduh file secara fisik ke komputer user
+      const fileName = `Absensi_Satpam_${new Date().toISOString().split('T')[0]}.xlsx`;
+      XLSX.writeFile(workbook, fileName);
+
+      // 6. Tampilkan notifikasi sukses beneran
+      setSuccessToast(`${fileName} berhasil diunduh!`);
+      setTimeout(() => setSuccessToast(''), 3000);
+    } catch (error) {
+      console.error("Gagal mengekspor file Excel:", error);
+      alert("Terjadi kesalahan saat membuat file Excel.");
+    }
   };
 
   const handleOpenEdit = (item) => {
@@ -128,7 +169,6 @@ export default function AbsensiSatpam() {
       const { error } = await supabase
         .from('absensi')
         .update({
-          shift: formShift,
           jam_masuk: formStatus === 'Hadir' ? formMasuk : null,
           jam_keluar: formStatus === 'Hadir' ? formKeluar : null,
           status: formStatus.toLowerCase()
@@ -138,41 +178,52 @@ export default function AbsensiSatpam() {
       if (error) throw error;
 
       setEditModalOpen(false);
-      setSuccessToast('Data diedit');
+      setSuccessToast('Data berhasil diperbarui');
       setTimeout(() => setSuccessToast(''), 3000);
       loadData();
     } catch (err) {
       console.error('Failed to update attendance:', err.message);
+      alert('Gagal mengedit data: ' + err.message);
     }
   };
 
   const handleAddAbsensi = async (e) => {
     e.preventDefault();
-    const matched = petugasMap.find(p => p.nama === formPetugas);
-    if (!matched) return;
+    
+    const matched = petugasMap.find(p => p.nama.toLowerCase().trim() === formPetugas.toLowerCase().trim());
+    
+    if (!matched) {
+      alert("Silakan pilih petugas keamanan yang valid dari daftar dropdown!");
+      return;
+    }
 
     try {
       const todayStr = new Date().toISOString().split('T')[0];
+      
       const { error } = await supabase
         .from('absensi')
-        .insert({
-          karyawan_id: matched.id,
-          tanggal: todayStr,
-          shift: formShift,
-          jam_masuk: formStatus === 'Hadir' ? formMasuk : null,
-          jam_keluar: formStatus === 'Hadir' ? formKeluar : null,
-          status: formStatus.toLowerCase()
-        });
+        .insert([
+          {
+            karyawan_id: matched.id, 
+            tanggal: todayStr,
+            jam_masuk: formStatus === 'Hadir' ? formMasuk : null,
+            jam_keluar: formStatus === 'Hadir' ? formKeluar : null,
+            status: formStatus.toLowerCase(),
+            lokasi: "-7.3329,112.7296"
+          }
+        ]);
 
       if (error) throw error;
 
       setAddModalOpen(false);
       setSearchPetugasInput('');
+      setFormPetugas('');
       setSuccessToast('Absensi petugas berhasil dicatat.');
       setTimeout(() => setSuccessToast(''), 3000);
       loadData();
     } catch (err) {
       console.error('Failed to add attendance:', err.message);
+      alert('Gagal mengirim absensi ke database: ' + err.message);
     }
   };
 
@@ -180,11 +231,10 @@ export default function AbsensiSatpam() {
     item.nama.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const totalPetugas = petugasList.length || 8;
+  const totalPetugas = petugasList.length || 0;
   const hadirHariIni = attendance.filter(a => a.status === 'Hadir').length;
-  const izinHariIni = attendance.filter(a => a.status === 'Izin' || a.status === 'Sakit').length;
-  const hadirPercentage = `${Math.round((hadirHariIni / (attendance.length || 1)) * 100)}%`;
-
+  const izinHariIni = attendance.filter(a => a.status === 'Izin').length;
+  const hadirPercentage = `${attendance.length > 0 ? Math.round((hadirHariIni / attendance.length) * 100) : 0}%`;
 
   return (
     <div className="space-y-6 animate-fade-up relative">
@@ -203,7 +253,7 @@ export default function AbsensiSatpam() {
             </select>
           </div>
 
-          {/* Search Bar - SOLVED OVERLAP BUG */}
+          {/* Search Bar */}
           <div className="relative flex items-center w-full sm:w-64">
             <div className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none text-[#8A857F]">
               <Search size={14} className="stroke-[2.5]" />
@@ -230,7 +280,11 @@ export default function AbsensiSatpam() {
         <div className="flex items-center gap-3">
           <button
             onClick={() => {
-              setFormPetugas('Eko Susanto');
+              if (petugasList.length > 0) {
+                setFormPetugas(petugasList[0]);
+              } else {
+                setFormPetugas('Pilih Petugas...');
+              }
               setFormShift('Pagi 06-14');
               setFormStatus('Hadir');
               setFormMasuk('06:00');
@@ -300,7 +354,7 @@ export default function AbsensiSatpam() {
       {/* Table Section */}
       <div className="card-section p-6 overflow-hidden">
         <h3 className="text-xs font-bold text-ink uppercase tracking-wider mb-5">
-          Absensi Satpam — 22 April 2026
+          Absensi Satpam — Hari Ini
         </h3>
 
         <div className="table-wrap">
@@ -348,7 +402,7 @@ export default function AbsensiSatpam() {
               ) : (
                 <tr>
                   <td colSpan="6" className="text-center py-4 text-xs font-semibold text-muted">
-                    Petugas dengan nama "{searchTerm}" tidak ditemukan.
+                    Tidak ada data absensi untuk hari ini.
                   </td>
                 </tr>
               )}
@@ -357,7 +411,7 @@ export default function AbsensiSatpam() {
         </div>
       </div>
 
-      {/* Rekap Kehadiran Bulan Ini Section */}
+      {/* Rekap Kehadiran Section */}
       <div className="card-section p-6 space-y-6">
         <h3 className="text-xs font-bold text-ink uppercase tracking-wider border-b border-soft pb-4">
           Rekap Kehadiran Bulan Ini
@@ -398,7 +452,7 @@ export default function AbsensiSatpam() {
             </div>
 
             <form onSubmit={handleEditSave} className="modal-body space-y-4">
-              {/* Custom Dropdown: Shift Kerja */}
+              {/* Dropdown Shift */}
               <div className="relative">
                 <label className="label-modern">Shift Kerja</label>
                 <button
@@ -427,7 +481,7 @@ export default function AbsensiSatpam() {
                 )}
               </div>
 
-              {/* Grid Jam Masuk dan Keluar */}
+              {/* Jam Masuk/Keluar */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="label-modern">Jam Masuk</label>
@@ -451,7 +505,7 @@ export default function AbsensiSatpam() {
                 </div>
               </div>
 
-              {/* Custom Dropdown: Status */}
+              {/* Status */}
               <div className="relative">
                 <label className="label-modern">Status</label>
                 <button
@@ -481,18 +535,11 @@ export default function AbsensiSatpam() {
               </div>
 
               <div className="flex gap-3 pt-3 border-t border-soft">
-                <button
-                  type="submit"
-                  className="flex-1 btn-primary justify-center py-2.5 rounded-xl text-xs font-bold"
-                >
+                <button type="submit" className="flex-1 btn-primary justify-center py-2.5 rounded-xl text-xs font-bold">
                   <Save size={13} />
                   <span>Simpan Perubahan</span>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setEditModalOpen(false)}
-                  className="flex-1 btn-ghost justify-center py-2.5 rounded-xl text-xs font-bold"
-                >
+                <button type="button" onClick={() => setEditModalOpen(false)} className="flex-1 btn-ghost justify-center py-2.5 rounded-xl text-xs font-bold">
                   Batal
                 </button>
               </div>
@@ -501,7 +548,7 @@ export default function AbsensiSatpam() {
         </div>
       )}
 
-      {/* ADD MODAL — WITH SEARCH BAR IN DROPDOWN */}
+      {/* ADD MODAL WITH SEARCHABLE DROPDOWN */}
       {addModalOpen && (
         <div className="modal-overlay">
           <div className="modal-box !overflow-visible">
@@ -521,7 +568,8 @@ export default function AbsensiSatpam() {
             </div>
 
             <form onSubmit={handleAddAbsensi} className="modal-body space-y-4">
-              {/* Custom Dropdown: Nama Petugas + Fitur Search */}
+              
+              {/* Dropdown Nama Petugas + Search Filter built-in */}
               <div className="relative">
                 <label className="label-modern">Nama Petugas</label>
                 <button
@@ -540,12 +588,11 @@ export default function AbsensiSatpam() {
                 
                 {openDropdownPetugas && (
                   <div className="absolute left-0 right-0 mt-1 bg-white border border-soft rounded-xl shadow-xl z-[9999] overflow-hidden flex flex-col max-h-56">
-                    {/* Search Bar Input inside dropdown */}
                     <div className="p-2 border-b border-soft bg-[#FAFAFA] sticky top-0 z-10 flex items-center gap-2">
                       <Search size={12} className="text-muted ml-1" />
                       <input
                         type="text"
-                        placeholder="Ketik nama petugas..."
+                        placeholder="Ketik kata kunci nama..."
                         value={searchPetugasInput}
                         onChange={(e) => setSearchPetugasInput(e.target.value)}
                         className="w-full px-2 py-1 bg-white border border-soft rounded-lg text-xs font-semibold outline-none focus:border-ink"
@@ -553,7 +600,6 @@ export default function AbsensiSatpam() {
                       />
                     </div>
 
-                    {/* Filtered list */}
                     <div className="overflow-y-auto flex-1 max-h-40">
                       {petugasList.filter(p => 
                         p.toLowerCase().includes(searchPetugasInput.toLowerCase())
@@ -576,7 +622,7 @@ export default function AbsensiSatpam() {
                           ))
                       ) : (
                         <div className="px-4 py-3 text-center text-[11px] font-medium text-muted">
-                          Nama tidak ditemukan
+                          Akun keamanan tidak ditemukan
                         </div>
                       )}
                     </div>
@@ -584,7 +630,7 @@ export default function AbsensiSatpam() {
                 )}
               </div>
 
-              {/* Custom Dropdown: Shift Kerja */}
+              {/* Dropdown Shift Kerja */}
               <div className="relative">
                 <label className="label-modern">Shift Kerja</label>
                 <button
@@ -638,7 +684,7 @@ export default function AbsensiSatpam() {
                 </div>
               </div>
 
-              {/* Custom Dropdown: Status */}
+              {/* Status */}
               <div className="relative">
                 <label className="label-modern">Status</label>
                 <button
@@ -669,19 +715,16 @@ export default function AbsensiSatpam() {
               </div>
 
               <div className="flex gap-3 pt-3 border-t border-soft">
-                <button
-                  type="submit"
-                  className="flex-1 btn-primary justify-center py-2.5 rounded-xl text-xs font-bold"
-                >
+                <button type="submit" className="flex-1 btn-primary justify-center py-2.5 rounded-xl text-xs font-bold">
                   <CheckCircle2 size={13} />
                   <span>Catat Absensi</span>
                 </button>
-                <button
-                  type="button"
+                <button 
+                  type="button" 
                   onClick={() => {
                     setAddModalOpen(false);
                     setSearchPetugasInput('');
-                  }}
+                  }} 
                   className="flex-1 btn-ghost justify-center py-2.5 rounded-xl text-xs font-bold"
                 >
                   Batal

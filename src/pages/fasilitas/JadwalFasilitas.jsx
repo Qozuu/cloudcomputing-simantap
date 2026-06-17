@@ -5,9 +5,7 @@ export default function JadwalFasilitas() {
   const [facilitySchedules, setFacilitySchedules] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const getTodayDateStr = () => {
-    return new Date().toISOString().split('T')[0];
-  };
+  const getTodayDateStr = () => new Date().toISOString().split('T')[0];
 
   const getTodayFormattedStr = () => {
     const today = new Date();
@@ -21,43 +19,71 @@ export default function JadwalFasilitas() {
       try {
         setLoading(true);
         const todayStr = getTodayDateStr();
-        const { data, error } = await supabase
+
+        // 1. Ambil semua fasilitas dari DB
+        const { data: fasilitasData, error: fasilitasError } = await supabase
+          .from('fasilitas')
+          .select('id, nama, status')
+          .eq('is_active', true)
+          .order('nama');
+
+        if (fasilitasError) throw fasilitasError;
+
+        // 2. Ambil semua reservasi hari ini yang disetujui
+        const { data: rsvData, error: rsvError } = await supabase
           .from('reservasi')
           .select('*, fasilitas(nama), penghuni:users(nama)')
           .eq('status', 'disetujui')
           .eq('tanggal', todayStr)
           .order('jam_mulai');
 
-        if (error) throw error;
+        if (rsvError) throw rsvError;
 
-        const templates = [
-          { name: 'Kolam Renang', price: 'Gratis', isPaid: false, slotTimes: ['06:00-08:00', '08:00-10:00', '10:00-12:00', '13:00-15:00', '15:00-17:00'] },
-          { name: 'Lapangan Tenis', price: 'Rp 75.000', isPaid: true, slotTimes: ['08:00-10:00', '10:00-12:00', '13:00-15:00', '15:00-17:00', '18:00-20:00'] },
-          { name: 'Ruang Serbaguna', price: 'Rp 300.000', isPaid: true, slotTimes: ['08:00-12:00', '13:00-17:00', '18:00-22:00'] }
-        ];
+        // 3. Untuk setiap fasilitas, kumpulkan slot dari reservasi yang ada
+        //    (semua reservasi hari ini untuk fasilitas tsb, bukan hanya yang disetujui)
+        //    Kita juga ambil semua reservasi (termasuk menunggu) untuk tampilkan slot waktu
+        const { data: allRsvToday, error: allRsvError } = await supabase
+          .from('reservasi')
+          .select('id, fasilitas_id, jam_mulai, jam_selesai, status, tanggal, fasilitas(id, nama), penghuni:users(nama)')
+          .eq('tanggal', todayStr)
+          .order('jam_mulai');
+        
+        console.log('Detail reservasi:', JSON.stringify(allRsvToday, null, 2));
+        console.log('Detail fasilitas:', JSON.stringify(fasilitasData, null, 2));
+        
+        if (allRsvError) throw allRsvError;
 
-        const mapped = templates.map(fac => {
-          const slots = fac.slotTimes.map(time => {
-            const [start, end] = time.split('-');
-            const rsv = data?.find(r => {
-              const facName = r.fasilitas?.nama || '';
-              if (!facName.toLowerCase().includes(fac.name.toLowerCase())) return false;
-              
-              const rStart = (r.jam_mulai || '').substring(0, 5);
-              const rEnd = (r.jam_selesai || '').substring(0, 5);
-              return rStart === start && rEnd === end;
-            });
+        // 4. Map setiap fasilitas dengan slot reservasinya
+        const mapped = fasilitasData.map(fac => {
+          // Cari semua reservasi untuk fasilitas ini hari ini
+          const facReservations = (allRsvToday || []).filter(r => r.fasilitas_id === fac.id || r.fasilitas?.id === fac.id);
+
+          // Buat slot dari reservasi yang ada
+          const slots = facReservations.map(r => {
+            const start = (r.jam_mulai || '').substring(0, 5);
+            const end = (r.jam_selesai || '').substring(0, 5);
+            const rawStatus = (r.status || '').toLowerCase();
+
+            let statusLabel = 'Menunggu';
+            let isBooked = false;
+            if (rawStatus === 'disetujui') { statusLabel = r.penghuni?.nama || 'Terisi'; isBooked = true; }
+            else if (rawStatus === 'ditolak') statusLabel = 'Ditolak';
+            else if (rawStatus === 'dibatalkan') statusLabel = 'Dibatalkan';
+
             return {
-              time,
-              booker: rsv ? (rsv.penghuni?.nama || 'Terisi') : 'Kosong'
+              time: `${start}-${end}`,
+              booker: statusLabel,
+              isBooked,
+              status: rawStatus,
             };
           });
 
+          // Hitung tagihan/biaya dari tagihan_fasilitas jika ada
           return {
-            name: fac.name,
-            price: fac.price,
-            isPaid: fac.isPaid,
-            slots
+            id: fac.id,
+            name: fac.nama,
+            dbStatus: fac.status,
+            slots,
           };
         });
 
@@ -91,32 +117,36 @@ export default function JadwalFasilitas() {
         </div>
       </div>
 
-      {/* 3-Column Schedule Card Grid */}
+      {/* Facility Schedule Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {facilitySchedules.map((facility, fIdx) => (
-          <div 
-            key={fIdx} 
+          <div
+            key={facility.id || fIdx}
             className="card-section flex flex-col hover:translate-y-[-2px] transition duration-200"
           >
             {/* Facility Header */}
             <div className="card-section-header bg-[#FAF6F0]/30">
               <h2 className="text-xs font-bold text-ink uppercase tracking-wider">{facility.name}</h2>
               <span className={`badge-base ${
-                facility.isPaid ? 'badge-yellow' : 'badge-lavender'
+                facility.dbStatus === 'Maintenance' ? 'badge-red' :
+                facility.dbStatus === 'Tutup' ? 'badge-gray' : 'badge-mint'
               }`}>
-                {facility.price}
+                {facility.dbStatus}
               </span>
             </div>
 
-            {/* Time Slot List */}
-            <div className="p-5 flex-1 divide-y divide-soft space-y-3">
-              {facility.slots.map((slot, sIdx) => {
-                const isBooked = slot.booker !== 'Kosong';
-                return (
-                  <div 
-                    key={sIdx} 
+            {/* Slot List */}
+            <div className="p-5 flex-1 divide-y divide-soft">
+              {facility.slots.length === 0 ? (
+                <div className="py-8 text-center text-muted text-xs font-medium">
+                  Tidak ada reservasi hari ini
+                </div>
+              ) : (
+                facility.slots.map((slot, sIdx) => (
+                  <div
+                    key={sIdx}
                     className={`flex items-center justify-between py-3.5 px-3 rounded-2xl transition duration-150 ${
-                      isBooked ? 'bg-[#FAF6F0] border border-soft' : 'bg-transparent'
+                      slot.isBooked ? 'bg-[#FAF6F0] border border-soft' : 'bg-transparent'
                     }`}
                   >
                     {/* Time Range */}
@@ -124,37 +154,40 @@ export default function JadwalFasilitas() {
                       <svg className="w-4 h-4 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
-                      <span className="text-xs font-mono font-bold text-ink">
-                        {slot.time}
-                      </span>
+                      <span className="text-xs font-mono font-bold text-ink">{slot.time}</span>
                     </div>
 
-                    {/* Booking badge status */}
+                    {/* Status Badge */}
                     <div>
-                      {isBooked ? (
-                        <span className="badge-base badge-dark">
-                          {slot.booker}
-                        </span>
+                      {slot.isBooked ? (
+                        <span className="badge-base badge-dark">{slot.booker}</span>
+                      ) : slot.status === 'ditolak' ? (
+                        <span className="badge-base badge-red">Ditolak</span>
+                      ) : slot.status === 'dibatalkan' ? (
+                        <span className="badge-base badge-gray">Dibatalkan</span>
                       ) : (
-                        <span className="badge-base badge-gray">
-                          Kosong
-                        </span>
+                        <span className="badge-base badge-yellow">Menunggu</span>
                       )}
                     </div>
                   </div>
-                );
-              })}
+                ))
+              )}
             </div>
 
-            {/* Card Footer detail */}
+            {/* Card Footer */}
             <div className="bg-[#FAF6F0] p-4 border-t border-soft text-center">
               <span className="text-[10px] font-bold text-muted uppercase tracking-widest block">
-                Total {facility.slots.filter(s => s.booker !== 'Kosong').length} Sesi Terisi
+                Total {facility.slots.filter(s => s.isBooked).length} Sesi Terisi
               </span>
             </div>
-
           </div>
         ))}
+
+        {facilitySchedules.length === 0 && (
+          <div className="lg:col-span-3 p-10 text-center text-muted font-medium text-sm">
+            Tidak ada data fasilitas.
+          </div>
+        )}
       </div>
     </div>
   );

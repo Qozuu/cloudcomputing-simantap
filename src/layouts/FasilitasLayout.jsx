@@ -2,8 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import LogoutModal from '../components/shared/LogoutModal';
-import NotificationBell from '../components/shared/NotificationBell';
-import { MessageSquare, Menu, X, LogOut } from 'lucide-react';
+import { Menu, X, LogOut } from 'lucide-react';
 
 // 1. IMPORT LOGO ASSET
 import LogoSiManTap from '../assets/logo.png';
@@ -133,7 +132,6 @@ export default function FasilitasLayout() {
   ];
 
   const getPageTitle = () => {
-    if (isActive('/fasilitas/chat')) return 'CS Live Chat';
     const item = menuItems.find(i => i.path === currentPath);
     return item ? item.name : 'Fasilitas';
   };
@@ -187,27 +185,6 @@ export default function FasilitasLayout() {
                   </Link>
                 );
               })}
-
-              {/* CS Live Chat Slot */}
-              <div
-                onClick={() => {
-                  setIsMobileOpen(false);
-                  navigate('/fasilitas/chat');
-                }}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all cursor-pointer ${
-                  isActive('/fasilitas/chat')
-                    ? 'bg-[#111111] text-white'
-                    : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
-                }`}
-              >
-                <MessageSquare size={16} />
-                <span className="flex-1">CS Live Chat</span>
-                <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${
-                  isActive('/fasilitas/chat') ? 'bg-white/20 text-white' : 'bg-red-100 text-red-600'
-                }`}>
-                  2
-                </span>
-              </div>
 
               {menuItems.slice(5).map((item) => {
                 const active = isActive(item.path);
@@ -299,17 +276,6 @@ export default function FasilitasLayout() {
                   );
                 })}
 
-                {/* CS Live Chat Item */}
-                <div
-                  className={`sidebar-item sidebar-item-link ${isActive('/fasilitas/chat') ? 'active' : ''}`}
-                  onClick={() => navigate('/fasilitas/chat')}
-                >
-                  <div className="sidebar-item-bg" />
-                  <MessageSquare size={16} />
-                  <span>CS Live Chat</span>
-                  <span className="sidebar-badge">2</span>
-                </div>
-
                 {menuItems.slice(5).map((item) => {
                   const active = isActive(item.path);
                   return (
@@ -374,7 +340,6 @@ export default function FasilitasLayout() {
             <div className="text-right hidden sm:block">
               <span className="text-xs font-semibold text-muted">Rabu, 10 Juni 2026</span>
             </div>
-            <NotificationBell />
           </div>
         </header>
 

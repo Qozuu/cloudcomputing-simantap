@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import LogoutModal from '../components/shared/LogoutModal';
-import NotificationBell from '../components/shared/NotificationBell';
 import {
   LayoutDashboard,
   Users,
@@ -97,7 +96,7 @@ export default function KeamananLayout() {
       icon: Car
     },
     {
-      name: 'Broadcast Pesan',
+      name: 'Broadcast',
       path: '/keamanan/broadcast',
       icon: Megaphone
     },
@@ -274,7 +273,6 @@ export default function KeamananLayout() {
             <div className="text-right hidden sm:block">
               <span className="text-xs font-semibold text-muted">Sabtu, 23 Mei 2026</span>
             </div>
-            <NotificationBell />
           </div>
         </header>
 

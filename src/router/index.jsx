@@ -211,10 +211,6 @@ const router = createBrowserRouter([
         element: <TagihanReservasi />,
       },
       {
-        path: 'chat',
-        element: <ChatFasilitas />,
-      },
-      {
         path: 'informasi',
         element: <PusatInformasiFasilitas />,
       },

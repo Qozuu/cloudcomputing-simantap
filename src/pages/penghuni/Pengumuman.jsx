@@ -14,7 +14,7 @@ export default function Pengumuman() {
     async function loadData() {
       try {
         setLoading(true);
-<<<<<<< HEAD
+
 
         // 1. Dapatkan data user penghuni yang sedang login
         const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -123,7 +123,7 @@ export default function Pengumuman() {
     loadData();
   }, []);
 
-<<<<<<< HEAD
+
   // Styling badge
 =======
   // Styling badge kategori agar kontras dan mudah dibaca
@@ -144,7 +144,7 @@ export default function Pengumuman() {
     }
   };
 
-<<<<<<< HEAD
+
 =======
   // Filter pencarian & kategori aman (Case-Insensitive)
 >>>>>>> bc552b99346d604c2d2e299dd1eace85ba4b18e5
@@ -204,7 +204,7 @@ export default function Pengumuman() {
         </h3>
 
         <div className="divide-y divide-zinc-100">
-<<<<<<< HEAD
+
           {filteredAnnouncements.map((ann) => (
             <div key={ann.id} className="py-4 first:pt-0 last:pb-0 flex flex-col md:flex-row items-start gap-3 md:gap-6">
 =======

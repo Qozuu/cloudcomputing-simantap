@@ -28,8 +28,8 @@ export default function KelolaFasilitasAdmin() {
           hours: item.jam_operasional || '',
           capacity: String(item.kapasitas || 0),
           price: item.harga_sewa || 'Gratis',
-          status: item.is_active ? 'Buka' : 'Maintenance',
-          image: item.gambar || 'https://images.unsplash.com/photo-1576013551627-0cc20b96c2a7?auto=format&fit=crop&q=80&w=800'
+          status: item.status ? 'Buka' : 'Maintenance',
+          image: item.foto_url || 'https://images.unsplash.com/photo-1576013551627-0cc20b96c2a7?auto=format&fit=crop&q=80&w=800'
         })));
       }
     } catch (err) {
@@ -93,8 +93,9 @@ export default function KelolaFasilitasAdmin() {
         jam_operasional: selectedFacility.hours,
         kapasitas: parseInt(selectedFacility.capacity) || 0,
         harga_sewa: selectedFacility.price,
+        status: selectedFacility.status,
+        foto_url: selectedFacility.image,
         is_active: selectedFacility.status === 'Buka',
-        gambar: selectedFacility.image
       };
 
       if (selectedFacility.id) {
@@ -118,6 +119,7 @@ export default function KelolaFasilitasAdmin() {
       loadFacilities();
     } catch (err) {
       console.error('Failed to save facility:', err.message);
+      alert(`Gagal menyimpan: ${err.message}`);
     }
   };
 

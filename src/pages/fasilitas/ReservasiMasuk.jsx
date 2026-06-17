@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
+import * as XLSX from 'xlsx';
 
 export default function ReservasiMasuk() {
   const [reservations, setReservations] = useState([]);
@@ -21,27 +22,39 @@ export default function ReservasiMasuk() {
   const loadReservations = async () => {
     try {
       setLoading(true);
+
+      // ✅ Sama persis seperti DashboardFasilitas yang berhasil
       const { data, error } = await supabase
         .from('reservasi')
-        .select('*, fasilitas(nama, harga_sewa), penghuni:users(nama), unit:users!penghuni_id(id)')
+        .select('*, fasilitas(nama), penghuni:users(nama)')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
 
+      console.log('Raw statuses:', data.map(item => item.status));
+
       if (data) {
         setReservations(data.map(item => {
-          const rawCost = item.biaya || item.fasilitas?.harga_sewa || 0;
-          const costMapped = rawCost === 0 || rawCost === '0' || rawCost === 'Gratis' ? 'Gratis' : Number(rawCost);
-          
+          // ✅ Map status dari DB ke label tampilan
+          const rawStatus = (item.status || '').toLowerCase();
+          let statusText = 'Menunggu';
+          if (rawStatus === 'disetujui') statusText = 'Disetujui';
+          else if (rawStatus === 'ditolak') statusText = 'Ditolak';
+          else if (rawStatus === 'dibatalkan') statusText = 'Dibatalkan';
+
           return {
             id: item.id,
             resident: item.penghuni?.nama || 'Warga',
-            unit: item.unit_no || item.unit?.id || item.nomor_unit || 'N/A',
+            unit: item.nomor_unit || item.unit_no || 'N/A',
             facility: item.fasilitas?.nama || 'Fasilitas',
-            date: item.tanggal ? new Date(item.tanggal).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : new Date(item.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }),
+            date: item.tanggal
+              ? new Date(item.tanggal).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
+              : (item.created_at ? new Date(item.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '-'),
             session: `${(item.jam_mulai || '').substring(0, 5)}-${(item.jam_selesai || '').substring(0, 5)}`,
-            cost: costMapped,
-            status: item.status ? (item.status.toLowerCase() === 'disetujui' ? 'Disetujui' : (item.status.toLowerCase() === 'ditolak' ? 'Ditolak' : 'Menunggu')) : 'Menunggu'
+            cost: item.biaya || item.fasilitas?.harga_sewa || 0,
+            // ✅ Simpan status asli dari DB untuk keperluan filter & update
+            statusRaw: item.status || 'menunggu',
+            status: statusText,
           };
         }));
       }
@@ -52,7 +65,6 @@ export default function ReservasiMasuk() {
     }
   };
 
-  // Close dropdowns on outside clicks
   useEffect(() => {
     loadReservations();
 
@@ -70,39 +82,85 @@ export default function ReservasiMasuk() {
 
   const handleSetujui = async (id) => {
     try {
-      const { error } = await supabase
+      setLoading(true);
+
+      // 1. Update status reservasi
+      const { data: rsvData, error: rsvError } = await supabase
         .from('reservasi')
         .update({ status: 'disetujui' })
-        .eq('id', id);
+        .eq('id', id)
+        .select('*, fasilitas(nama, harga_sewa)')
+        .single();
 
-      if (error) throw error;
-      showToast(`Reservasi ${id} berhasil disetujui!`);
-      loadReservations();
+      if (rsvError) throw rsvError;
+
+      // 2. Otomatis buat tagihan
+      const { error: tagihanError } = await supabase
+        .from('tagihan_fasilitas')
+        .insert({
+          fasilitas_id: rsvData.fasilitas_id,
+          penghuni_id: rsvData.penghuni_id,
+          tgl_reservasi: rsvData.tanggal,
+          sesi_waktu: `${(rsvData.jam_mulai || '').substring(0, 5)}-${(rsvData.jam_selesai || '').substring(0, 5)}`,
+          total_tarif: rsvData.fasilitas?.harga_sewa || 0,
+          status: 'Menunggu',
+        });
+
+      if (tagihanError) throw tagihanError;
+
+      showToast('Reservasi berhasil disetujui & tagihan dibuat!');
+      await loadReservations();
     } catch (err) {
-      console.error('Failed to approve reservation:', err.message);
-      showToast(`Gagal menyetujui: ${err.message}`);
+      console.error('Failed:', err.message);
+      showToast(`Gagal: ${err.message}`);
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleTolak = async (id) => {
     try {
+      setLoading(true);
       const { error } = await supabase
         .from('reservasi')
         .update({ status: 'ditolak' })
         .eq('id', id);
 
       if (error) throw error;
-      showToast(`Reservasi ${id} ditolak.`);
-      loadReservations();
+      showToast('Reservasi telah ditolak.');
+      await loadReservations();
     } catch (err) {
       console.error('Failed to reject reservation:', err.message);
       showToast(`Gagal menolak: ${err.message}`);
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleExport = () => {
-    showToast('Data_Reservasi.xlsx berhasil diunduh!');
-  };
+    if (filteredReservations.length === 0) {
+    showToast('Tidak ada data untuk diexport.');
+    return;
+  }
+
+  const exportData = filteredReservations.map((r, index) => ({
+    'No': index + 1,
+    'Nama Penghuni': r.resident,
+    'Unit': r.unit,
+    'Fasilitas': r.facility,
+    'Tanggal': r.date,
+    'Sesi': r.session,
+    'Biaya': formatRupiah(r.cost),
+    'Status': r.status,
+  }));
+
+  const ws = XLSX.utils.json_to_sheet(exportData);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Reservasi');
+  XLSX.writeFile(wb, 'Data_Reservasi.xlsx');
+
+  showToast('Data_Reservasi.xlsx berhasil diunduh!');
+};
 
   const handleOpenDetail = (rsv) => {
     setSelectedRsv(rsv);
@@ -111,11 +169,10 @@ export default function ReservasiMasuk() {
 
   const showToast = (msg) => {
     setToastMessage(msg);
-    setTimeout(() => {
-      setToastMessage('');
-    }, 3000);
+    setTimeout(() => setToastMessage(''), 3000);
   };
 
+  // ✅ Filter menggunakan statusText (label tampilan) agar konsisten dengan dropdown
   const filteredReservations = reservations.filter(r => {
     const matchFac = selectedFacilityFilter === 'Semua Fasilitas' || r.facility === selectedFacilityFilter;
     const matchStat = selectedStatusFilter === 'Semua Status' || r.status === selectedStatusFilter;
@@ -123,19 +180,19 @@ export default function ReservasiMasuk() {
   });
 
   const formatRupiah = (val) => {
-    if (val === 'Gratis') return val;
-    return `Rp ${val.toLocaleString('id-ID')}`;
+    if (!val || val === 0 || val === 'Gratis') return 'Gratis';
+    const num = Number(val);
+    return isNaN(num) || num === 0 ? 'Gratis' : `Rp ${num.toLocaleString('id-ID')}`;
   };
 
   const getCostClass = (cost) => {
-    if (cost === 'Gratis') return 'badge-base badge-mint uppercase';
-    if (cost === 75000) return 'text-[#A05820] font-bold';
-    if (cost === 100000) return 'text-[#B85040] font-bold';
+    if (!cost || cost === 0 || cost === 'Gratis') return 'badge-base badge-mint uppercase';
     return 'text-ink font-bold';
   };
 
-  const facilityOptions = ['Semua Fasilitas', 'Kolam Renang', 'Lapangan Tenis', 'Ruang Serbaguna'];
-  const statusOptions = ['Semua Status', 'Menunggu', 'Disetujui'];
+  // ✅ Opsi fasilitas dinamis dari data yang sudah di-fetch
+  const facilityOptions = ['Semua Fasilitas', ...new Set(reservations.map(r => r.facility).filter(f => f && f !== 'Fasilitas'))];
+  const statusOptions = ['Semua Status', 'Menunggu', 'Disetujui', 'Ditolak', 'Dibatalkan'];
 
   if (loading) {
     return <div className="p-6 text-muted text-sm">Memuat...</div>;
@@ -143,19 +200,22 @@ export default function ReservasiMasuk() {
 
   return (
     <div className="space-y-6 animate-fade-up relative">
+
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 bg-ink text-white text-xs font-bold px-5 py-3 rounded-2xl shadow-xl animate-fade-up">
+          {toastMessage}
+        </div>
+      )}
+
       {/* Filter and Export Action Row */}
-      <div className="card-section p-6 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 z-20">
-        
-        {/* Dropdowns */}
+      <div className="bg-white border border-soft rounded-2xl shadow-sm p-6 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 relative" style={{ zIndex: 50 }}>
         <div className="flex flex-wrap items-center gap-3">
-          
+
           {/* Facility Filter */}
-          <div className="relative" ref={facilityRef}>
+          <div className="relative" ref={facilityRef} style={{ zIndex: 999 }}>
             <button
-              onClick={() => {
-                setFacilityDropdownOpen(!facilityDropdownOpen);
-                setStatusDropdownOpen(false);
-              }}
+              onClick={() => { setFacilityDropdownOpen(!facilityDropdownOpen); setStatusDropdownOpen(false); }}
               className="px-4 py-2 bg-[#FAF6F0] border border-soft hover:bg-[#F0EDE8] rounded-xl text-xs font-bold text-ink flex items-center gap-2 transition"
             >
               <span>{selectedFacilityFilter}</span>
@@ -164,18 +224,10 @@ export default function ReservasiMasuk() {
               </svg>
             </button>
             {facilityDropdownOpen && (
-              <div className="absolute left-0 mt-1.5 w-56 bg-white border border-soft rounded-2xl shadow-xl z-30 py-1 overflow-hidden animate-scaleUp">
+              <div className="absolute left-0 mt-1.5 w-56 bg-white border border-soft rounded-2xl shadow-xl py-1 overflow-hidden animate-scaleUp" style={{ zIndex: 9999 }}>
                 {facilityOptions.map((opt) => (
-                  <button
-                    key={opt}
-                    onClick={() => {
-                      setSelectedFacilityFilter(opt);
-                      setFacilityDropdownOpen(false);
-                    }}
-                    className={`w-full text-left px-4 py-2 text-xs font-semibold hover:bg-[#FAF6F0] transition ${
-                      selectedFacilityFilter === opt ? 'text-[#A05820] bg-[#FAF6F0] font-black' : 'text-ink'
-                    }`}
-                  >
+                  <button key={opt} onClick={() => { setSelectedFacilityFilter(opt); setFacilityDropdownOpen(false); }}
+                    className={`w-full text-left px-4 py-2 text-xs font-semibold hover:bg-[#FAF6F0] transition ${selectedFacilityFilter === opt ? 'text-[#A05820] bg-[#FAF6F0] font-black' : 'text-ink'}`}>
                     {opt}
                   </button>
                 ))}
@@ -184,12 +236,9 @@ export default function ReservasiMasuk() {
           </div>
 
           {/* Status Filter */}
-          <div className="relative" ref={statusRef}>
+          <div className="relative" ref={statusRef} style={{ zIndex: 999 }}>
             <button
-              onClick={() => {
-                setStatusDropdownOpen(!statusDropdownOpen);
-                setFacilityDropdownOpen(false);
-              }}
+              onClick={() => { setStatusDropdownOpen(!statusDropdownOpen); setFacilityDropdownOpen(false); }}
               className="px-4 py-2 bg-[#FAF6F0] border border-soft hover:bg-[#F0EDE8] rounded-xl text-xs font-bold text-ink flex items-center gap-2 transition"
             >
               <span>{selectedStatusFilter}</span>
@@ -200,16 +249,8 @@ export default function ReservasiMasuk() {
             {statusDropdownOpen && (
               <div className="absolute left-0 mt-1.5 w-48 bg-white border border-soft rounded-2xl shadow-xl z-30 py-1 overflow-hidden animate-scaleUp">
                 {statusOptions.map((opt) => (
-                  <button
-                    key={opt}
-                    onClick={() => {
-                      setSelectedStatusFilter(opt);
-                      setStatusDropdownOpen(false);
-                    }}
-                    className={`w-full text-left px-4 py-2 text-xs font-semibold hover:bg-[#FAF6F0] transition ${
-                      selectedStatusFilter === opt ? 'text-[#A05820] bg-[#FAF6F0] font-black' : 'text-ink'
-                    }`}
-                  >
+                  <button key={opt} onClick={() => { setSelectedStatusFilter(opt); setStatusDropdownOpen(false); }}
+                    className={`w-full text-left px-4 py-2 text-xs font-semibold hover:bg-[#FAF6F0] transition ${selectedStatusFilter === opt ? 'text-[#A05820] bg-[#FAF6F0] font-black' : 'text-ink'}`}>
                     {opt}
                   </button>
                 ))}
@@ -219,97 +260,76 @@ export default function ReservasiMasuk() {
 
         </div>
 
-        {/* Export Button */}
-        <div>
-          <button
-            onClick={handleExport}
-            className="w-full sm:w-auto px-5 py-2.5 btn-ghost rounded-xl text-xs font-bold flex items-center justify-center gap-1.5"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
-            <span>Export Data</span>
-          </button>
-        </div>
-
+        <button onClick={handleExport} className="w-full sm:w-auto px-5 py-2.5 btn-ghost rounded-xl text-xs font-bold flex items-center justify-center gap-1.5">
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+          <span>Export Data</span>
+        </button>
       </div>
 
       {/* Table Section */}
-      <div className="card-section p-6 overflow-hidden">
+      <div className="card-section p-6 overflow-visible">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-5 border-b border-soft mb-6 gap-2">
           <div>
             <h2 className="text-base font-bold text-ink">Daftar Reservasi Masuk</h2>
             <p className="text-xs text-muted">Kelola konfirmasi penggunaan area warga</p>
           </div>
-          <div className="text-left sm:text-right">
-            <span className="text-xs text-muted font-semibold italic">
-              Masuk otomatis dari permintaan penghuni
-            </span>
-          </div>
+          <span className="text-xs text-muted font-semibold italic">Masuk otomatis dari permintaan penghuni</span>
         </div>
 
-        {/* Table representation */}
         <div className="table-wrap">
-          <table className="table-modern">
+          <table className="table-modern text-sm">
             <thead>
-              <tr>
-                <th>NO</th>
-                <th>PENGHUNI</th>
-                <th>UNIT</th>
-                <th>FASILITAS</th>
-                <th>TANGGAL</th>
-                <th>SESI</th>
-                <th>BIAYA</th>
-                <th>STATUS</th>
-                <th className="text-right">AKSI</th>
+              <tr className="text-left">
+                <th className="p-3">NO</th>
+                <th className="p-3">PENGHUNI</th>
+                <th className="p-3">UNIT</th>
+                <th className="p-3">FASILITAS</th>
+                <th className="p-3">TANGGAL</th>
+                <th className="p-3">SESI</th>
+                <th className="p-3">BIAYA</th>
+                <th className="p-3">STATUS</th>
+                <th className="p-3 text-right">AKSI</th>
               </tr>
             </thead>
             <tbody>
-              {filteredReservations.map((r) => (
-                <tr key={r.id}>
-                  <td className="font-mono text-muted">{r.id}</td>
-                  <td className="font-bold text-ink">{r.resident}</td>
-                  <td>{r.unit}</td>
-                  <td className="font-bold text-ink">{r.facility}</td>
-                  <td className="text-muted">{r.date}</td>
-                  <td>
+              {filteredReservations.map((r, index) => (
+                <tr key={r.id} className="border-b hover:bg-gray-50/50">
+                  <td className="p-3 font-mono text-muted">{index + 1}</td>
+                  <td className="p-3 font-bold text-ink">{r.resident}</td>
+                  <td className="p-3">{r.unit}</td>
+                  <td className="p-3 font-bold text-ink">{r.facility}</td>
+                  <td className="p-3 text-muted">{r.date}</td>
+                  <td className="p-3">
                     <span className="font-mono text-ink bg-[#FAF6F0] rounded-xl px-2.5 py-1 border border-soft text-[11px]">
                       {r.session}
                     </span>
                   </td>
-                  <td>
-                    <span className={getCostClass(r.cost)}>
-                      {formatRupiah(r.cost)}
-                    </span>
+                  <td className="p-3">
+                    <span className={getCostClass(r.cost)}>{formatRupiah(r.cost)}</span>
                   </td>
-                  <td>
+                  <td className="p-3">
                     <span className={`badge-base ${
-                      r.status === 'Menunggu' ? 'badge-yellow' : 'badge-lavender'
+                      r.status === 'Menunggu' ? 'badge-yellow' :
+                      r.status === 'Ditolak' ? 'badge-red' :
+                      r.status === 'Disetujui' ? 'badge-mint' : 'badge-gray'
                     }`}>
                       {r.status}
                     </span>
                   </td>
-                  <td className="text-right">
-                    {r.status === 'Menunggu' ? (
+                  <td className="p-3 text-right">
+                    {r.statusRaw === 'menunggu' ? (
                       <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => handleSetujui(r.id)}
-                          className="btn-primary py-1.5 px-3 text-[10px] font-bold rounded-xl"
-                        >
+                        <button onClick={() => handleSetujui(r.id)} className="btn-primary py-1.5 px-3 text-[10px] font-bold rounded-xl">
                           Setujui
                         </button>
-                        <button
-                          onClick={() => handleTolak(r.id)}
-                          className="btn-ghost hover:bg-pastel-pink-bg hover:text-[#B85040] hover:border-pastel-pink/30 py-1.5 px-3 text-[10px] font-bold rounded-xl"
-                        >
+                        <button onClick={() => handleTolak(r.id)} className="btn-ghost hover:bg-pastel-pink-bg hover:text-[#B85040] hover:border-pastel-pink/30 py-1.5 px-3 text-[10px] font-bold rounded-xl">
                           Tolak
                         </button>
                       </div>
                     ) : (
-                      <button
-                        onClick={() => handleOpenDetail(r)}
-                        className="text-ink hover:underline font-bold text-xs"
-                      >
+                      <button onClick={() => handleOpenDetail(r)} className="text-ink hover:underline font-bold text-xs">
                         Detail
                       </button>
                     )}
@@ -333,7 +353,6 @@ export default function ReservasiMasuk() {
       {detailModalOpen && selectedRsv && (
         <div className="modal-overlay">
           <div className="modal-box">
-            {/* Header */}
             <div className="modal-header">
               <h3 className="text-xs font-bold text-ink uppercase tracking-wider">Detail Booking Reservasi</h3>
               <button onClick={() => setDetailModalOpen(false)} className="text-muted hover:text-ink transition">
@@ -343,7 +362,6 @@ export default function ReservasiMasuk() {
               </button>
             </div>
 
-            {/* Content Body */}
             <div className="modal-body space-y-4">
               <div>
                 <span className="label-modern mb-0.5">Kode Reservasi</span>
@@ -372,7 +390,6 @@ export default function ReservasiMasuk() {
                     <p className="text-xs font-bold text-ink">{formatRupiah(selectedRsv.cost)}</p>
                   </div>
                 </div>
-
                 <div className="grid grid-cols-2 gap-2 pt-2.5 border-t border-soft">
                   <div>
                     <span className="label-modern mb-0.5">Tanggal Reservasi</span>
@@ -387,35 +404,20 @@ export default function ReservasiMasuk() {
 
               <div>
                 <span className="label-modern mb-0.5">Status Persetujuan</span>
-                <span className="badge-base badge-mint mt-1">
+                <span className={`badge-base mt-1 ${
+                  selectedRsv.status === 'Disetujui' ? 'badge-mint' :
+                  selectedRsv.status === 'Ditolak' ? 'badge-red' : 'badge-yellow'
+                }`}>
                   {selectedRsv.status}
                 </span>
               </div>
 
-              <div className="pt-3 border-t border-soft flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => setDetailModalOpen(false)}
-                  className="btn-primary px-5 py-2.5 text-xs font-bold rounded-xl"
-                >
-                  Selesai
+              <div className="pt-3 border-t border-soft flex justify-end gap-2">
+                <button onClick={() => setDetailModalOpen(false)} className="btn-ghost px-4 py-2 text-xs font-bold rounded-xl">
+                  Tutup
                 </button>
               </div>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Floating Success Toast */}
-      {toastMessage && (
-        <div className="toast-modern toast-success">
-          <div className="w-5 h-5 rounded-full bg-white/20 text-white flex items-center justify-center flex-shrink-0">
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-            </svg>
-          </div>
-          <div>
-            <p className="text-xs font-bold">{toastMessage}</p>
           </div>
         </div>
       )}

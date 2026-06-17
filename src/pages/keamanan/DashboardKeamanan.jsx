@@ -16,14 +16,14 @@ export default function DashboardKeamanan() {
     {
       title: 'Tamu Hari Ini',
       value: '0',
-      subtitle: 'QR Code aktif',
+      subtitle: '',
       icon: Users,
       colorClass: 'stat-pink',
       textClass: 'text-[#B85040]'
     },
     {
       title: 'Kendaraan Parkir',
-      value: '312',
+      value: 'slotTerisi',
       subtitle: 'dari 380 slot tersedia',
       icon: Car,
       colorClass: 'stat-yellow',
@@ -90,6 +90,14 @@ export default function DashboardKeamanan() {
 
         const activeIncidentsCount = incidents?.length ?? 0;
 
+        // Tambahkan setelah fetch incidents (no.2)
+
+        // 5. Fetch slot parkir terisi (kendaraan yang belum keluar)
+        const { count: slotTerisi } = await supabase
+          .from('parking_log')
+          .select('id', { count: 'exact', head: true })
+          .is('waktu_keluar', null);
+
         // 3. Fetch visitor di_dalam count for stats
         const { count: activeVisitorsCount } = await supabase
           .from('visitor')
@@ -122,6 +130,12 @@ export default function DashboardKeamanan() {
         setStats(prev => {
           const updated = [...prev];
           updated[0] = { ...updated[0], value: String(activeVisitorsCount ?? 0) };
+          updated[1] = {
+            ...updated[1],
+            value: `${slotTerisi ?? 0}/380`,
+            subtitle: `${(((slotTerisi ?? 0) / 380) * 100).toFixed(1)}% kapasitas terisi`
+          };
+          
           updated[2] = { 
             ...updated[2], 
             value: String(activeIncidentsCount),
