@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 
 export default function CSLiveChat() {
@@ -17,10 +17,18 @@ export default function CSLiveChat() {
   const [ticketPriority, setTicketPriority] = useState('Normal');
   const [ticketTechnician, setTicketTechnician] = useState('Pak Heri');
 
+  // Ref untuk auto scroll-down ke chat paling baru
+  const chatEndRef = useRef(null);
   const activeChat = conversations.find(c => c.id === activeId);
+
+  // Auto-scroll ke bawah setiap ada pesan baru atau ganti chat room
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [activeChat?.messages, activeId]);
 
   const loadConversations = async (adminId) => {
     try {
+      // 1. Dapatkan daftar kamar percakapan milik admin ini
       const { data: participants, error: pError } = await supabase
         .from('conversation_participants')
         .select('conversation_id')
@@ -34,6 +42,7 @@ export default function CSLiveChat() {
         return;
       }
 
+      // 2. Dapatkan data lawan bicara (Penghuni) di kamar tersebut
       const { data: otherParticipants, error: opError } = await supabase
         .from('conversation_participants')
         .select('conversation_id, user_id, users:users(nama, role)')
@@ -44,16 +53,20 @@ export default function CSLiveChat() {
 
       const residentIds = otherParticipants?.map(p => p.user_id) || [];
 
+      // 3. Tarik data unit tempat tinggal penghuni
       const { data: penghunis, error: pgError } = await supabase
         .from('penghuni')
         .select('user_id, unit(nomor_unit)')
         .in('user_id', residentIds);
 
+      // 4. Ambil seluruh riwayat pesan untuk diletakkan di list awal
       const { data: messages, error: mError } = await supabase
         .from('messages')
-        .select('conversation_id, body, created_at')
+        .select('id, conversation_id, body, sender_id, created_at')
         .in('conversation_id', convIds)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: true }); // Diubah ke ascending untuk struktur bubble chat
+
+      if (mError) throw mError;
 
       const mapped = otherParticipants.map(participant => {
         const userId = participant.user_id;
@@ -61,11 +74,25 @@ export default function CSLiveChat() {
         const unitData = penghunis?.find(p => p.user_id === userId);
         const unitNum = unitData?.unit?.nomor_unit || '—';
         
-        const lastMsgObj = messages?.find(m => m.conversation_id === participant.conversation_id);
+        // Filter pesan khusus kamar ini saja
+        const roomMessages = messages?.filter(m => m.conversation_id === participant.conversation_id) || [];
+        const lastMsgObj = roomMessages[roomMessages.length - 1];
+        
         const lastMessage = lastMsgObj?.body || 'Belum ada pesan';
         const time = lastMsgObj?.created_at
           ? new Date(lastMsgObj.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
           : '—';
+
+        // Format riwayat pesan ke bentuk yang dimengerti UI bubble chat
+        const formattedMessages = roomMessages.map(m => {
+          const isAdmin = m.sender_id === adminId;
+          return {
+            id: m.id,
+            sender: isAdmin ? 'admin' : 'resident',
+            text: m.body,
+            time: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          };
+        });
 
         return {
           id: participant.conversation_id,
@@ -75,7 +102,7 @@ export default function CSLiveChat() {
           lastMessage: lastMessage,
           time: time,
           unread: false,
-          messages: []
+          messages: formattedMessages // 🔥 FIX: Riwayat pesan tidak lagi kosong melompong
         };
       });
 
@@ -105,16 +132,17 @@ export default function CSLiveChat() {
     init();
   }, []);
 
+  // REALTIME STREAMING LISTENER
   useEffect(() => {
     if (!activeId || !currentUser) return;
 
     const channel = supabase.channel(`messages-rt-${activeId}`)
       .on('postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'messages',
-          filter: `conversation_id=eq.${activeId}` },
+        { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${activeId}` },
         async (payload) => {
           const isAdmin = payload.new.sender_id === currentUser.id;
           const formattedMsg = {
+            id: payload.new.id,
             sender: isAdmin ? 'admin' : 'resident',
             text: payload.new.body,
             time: new Date(payload.new.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -123,7 +151,8 @@ export default function CSLiveChat() {
           setConversations(prev =>
             prev.map(c => {
               if (c.id === activeId) {
-                const exists = c.messages.some(m => m.text === formattedMsg.text && m.time === formattedMsg.time);
+                // 🔥 FIX: Pengecekan duplikasi menggunakan id pesan database yang pasti unik
+                const exists = c.messages.some(m => m.id === formattedMsg.id);
                 if (exists) return c;
                 return {
                   ...c,
@@ -144,38 +173,14 @@ export default function CSLiveChat() {
     };
   }, [activeId, currentUser]);
 
-  const handleSelectChat = async (id) => {
+  const handleSelectChat = (id) => {
     setActiveId(id);
-    try {
-      const { data: msgs, error } = await supabase
-        .from('messages')
-        .select('*, sender:users(nama, role)')
-        .eq('conversation_id', id)
-        .order('created_at', { ascending: true });
-
-      if (error) throw error;
-
-      const formatted = msgs.map(m => {
-        const isAdmin = m.sender?.role?.startsWith('div_') || m.sender_id === currentUser?.id;
-        return {
-          sender: isAdmin ? 'admin' : 'resident',
-          text: m.body,
-          time: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        };
-      });
-
-      setConversations(prev =>
-        prev.map(c => c.id === id ? { ...c, messages: formatted, unread: false } : c)
-      );
-
-      // Auto populate ticket form fields
-      const selected = conversations.find(c => c.id === id);
-      if (selected) {
-        setTicketTitle(`${selected.lastMessage} di ${selected.unit}`);
-        setTicketDesc(`Dibuat berdasarkan laporan chat dari penghuni ${selected.name} (${selected.unit}): "${selected.lastMessage}"`);
-      }
-    } catch (err) {
-      console.error('Failed to load messages:', err.message);
+    
+    // Auto populate form pembuatan tiket saat kamar di-klik
+    const selected = conversations.find(c => c.id === id);
+    if (selected) {
+      setTicketTitle(`${selected.lastMessage} di ${selected.unit}`);
+      setTicketDesc(`Laporan chat dari penghuni ${selected.name} (${selected.unit}): "${selected.lastMessage}"`);
     }
   };
 
@@ -204,7 +209,6 @@ export default function CSLiveChat() {
     if (!activeChat) return;
 
     try {
-      // Find technician ID from their name
       const { data: tech } = await supabase
         .from('users')
         .select('id')
@@ -267,12 +271,10 @@ export default function CSLiveChat() {
                     : 'border-transparent bg-surface'
                 }`}
               >
-                {/* Avatar Initials */}
                 <div className="avatar avatar-md avatar-lavender shadow-sm">
                   {initials}
                 </div>
                 
-                {/* Content */}
                 <div className="min-w-0 flex-1 space-y-1">
                   <div className="flex items-center justify-between">
                     <p className="text-xs font-bold text-ink truncate">
@@ -285,7 +287,6 @@ export default function CSLiveChat() {
                   </p>
                 </div>
 
-                {/* Unread Dot */}
                 {chat.unread && (
                   <span className="w-2 h-2 rounded-full bg-[#B85040] mt-1.5 flex-shrink-0"></span>
                 )}
@@ -319,9 +320,7 @@ export default function CSLiveChat() {
                 </div>
               </div>
 
-              {/* Action Buttons */}
               <div className="flex items-center gap-2">
-                {/* Create ticket button */}
                 <button
                   onClick={() => setModalOpen(true)}
                   className="btn-primary btn-sm flex items-center gap-1.5"
@@ -339,7 +338,7 @@ export default function CSLiveChat() {
               {activeChat.messages.map((msg, index) => {
                 const isAdmin = msg.sender === 'admin';
                 return (
-                  <div key={index} className={`flex ${isAdmin ? 'justify-end' : 'justify-start'}`}>
+                  <div key={msg.id || index} className={`flex ${isAdmin ? 'justify-end' : 'justify-start'}`}>
                     <div className={`max-w-[70%] rounded-2xl px-4 py-3 shadow-none ${
                       isAdmin 
                         ? 'bg-ink text-white rounded-tr-none' 
@@ -355,6 +354,8 @@ export default function CSLiveChat() {
                   </div>
                 );
               })}
+              {/* Tempat berlabuh scroll anchor */}
+              <div ref={chatEndRef} />
             </div>
 
             {/* Message Reply Form */}
@@ -367,10 +368,7 @@ export default function CSLiveChat() {
                   onChange={(e) => setReplyText(e.target.value)}
                   className="input-modern flex-1"
                 />
-                <button
-                  type="submit"
-                  className="btn-primary btn-sm flex items-center gap-1"
-                >
+                <button type="submit" className="btn-primary btn-sm flex items-center gap-1">
                   <span>Kirim</span>
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
@@ -401,63 +399,38 @@ export default function CSLiveChat() {
       {modalOpen && activeChat && (
         <div className="modal-overlay">
           <div className="modal-box">
-            
-            {/* Modal Header */}
             <div className="modal-header">
               <h3 className="text-sm font-bold text-ink uppercase tracking-wider">Buat Tiket Kerusakan</h3>
-              <button 
-                onClick={() => setModalOpen(false)}
-                className="text-muted hover:text-ink transition"
-              >
+              <button onClick={() => setModalOpen(false)} className="text-muted hover:text-ink transition">
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
 
-            {/* Info Banner - FIXED ICON SIZE */}
             <div className="px-5 py-3 bg-[#EEEDFB] border-b border-soft text-xs font-bold text-ink flex items-center gap-2">
-              {/* Diubah dari w-4.5 h-4.5 menjadi w-5 h-5 agar ukurannya stabil dan tidak merusak layout */}
               <svg className="w-5 h-5 text-[#4840B0] flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <span>Laporan chat dari penghuni {activeChat.name} ({activeChat.unit})</span>
             </div>
 
-            {/* Form */}
             <form onSubmit={handleCreateTicketSubmit} className="modal-body space-y-4">
               <div className="grid grid-cols-2 gap-4">
-                {/* Resident Name */}
                 <div>
                   <label className="label-modern">Penghuni</label>
-                  <input
-                    type="text"
-                    value={activeChat.name}
-                    readOnly
-                    className="input-modern bg-gray-50 border border-soft text-muted cursor-not-allowed font-semibold"
-                  />
+                  <input type="text" value={activeChat.name} readOnly className="input-modern bg-gray-50 border border-soft text-muted cursor-not-allowed font-semibold" />
                 </div>
-                {/* Unit */}
                 <div>
                   <label className="label-modern">No. Unit</label>
-                  <input
-                    type="text"
-                    value={activeChat.unit}
-                    readOnly
-                    className="input-modern bg-gray-50 border border-soft text-muted cursor-not-allowed font-semibold"
-                  />
+                  <input type="text" value={activeChat.unit} readOnly className="input-modern bg-gray-50 border border-soft text-muted cursor-not-allowed font-semibold" />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                {/* Category */}
                 <div>
                   <label className="label-modern">Kategori Kerusakan</label>
-                  <select
-                    value={ticketCategory}
-                    onChange={(e) => setTicketCategory(e.target.value)}
-                    className="select-modern input-modern font-semibold"
-                  >
+                  <select value={ticketCategory} onChange={(e) => setTicketCategory(e.target.value)} className="select-modern input-modern font-semibold">
                     <option value="AC">AC & Pendingin</option>
                     <option value="Plumbing">Kran & Plumbing</option>
                     <option value="Listrik">Listrik & Saklar</option>
@@ -465,55 +438,28 @@ export default function CSLiveChat() {
                     <option value="Lainnya">Lain-lain</option>
                   </select>
                 </div>
-                
-                {/* Priority */}
                 <div>
                   <label className="label-modern">Prioritas</label>
-                  <select
-                    value={ticketPriority}
-                    onChange={(e) => setTicketPriority(e.target.value)}
-                    className="select-modern input-modern font-semibold"
-                  >
+                  <select value={ticketPriority} onChange={(e) => setTicketPriority(e.target.value)} className="select-modern input-modern font-semibold">
                     <option value="Normal">Normal</option>
                     <option value="Urgent">Urgent</option>
                   </select>
                 </div>
               </div>
 
-              {/* Title */}
               <div>
                 <label className="label-modern">Judul Tiket</label>
-                <input
-                  type="text"
-                  required
-                  value={ticketTitle}
-                  onChange={(e) => setTicketTitle(e.target.value)}
-                  placeholder="Misal: AC Bocor Menetes"
-                  className="input-modern font-semibold"
-                />
+                <input type="text" required value={ticketTitle} onChange={(e) => setTicketTitle(e.target.value)} placeholder="Misal: AC Bocor Menetes" className="input-modern font-semibold" />
               </div>
 
-              {/* Description */}
               <div>
                 <label className="label-modern">Deskripsi Masalah</label>
-                <textarea
-                  rows={3}
-                  required
-                  value={ticketDesc}
-                  onChange={(e) => setTicketDesc(e.target.value)}
-                  placeholder="Deskripsikan kerusakan dan kebutuhan perbaikan..."
-                  className="textarea-modern font-semibold"
-                ></textarea>
+                <textarea rows={3} required value={ticketDesc} onChange={(e) => setTicketDesc(e.target.value)} placeholder="Deskripsikan kerusakan..." className="textarea-modern font-semibold"></textarea>
               </div>
 
-              {/* Assign Technician */}
               <div>
                 <label className="label-modern">Assign Teknisi</label>
-                <select
-                  value={ticketTechnician}
-                  onChange={(e) => setTicketTechnician(e.target.value)}
-                  className="select-modern input-modern font-semibold"
-                >
+                <select value={ticketTechnician} onChange={(e) => setTicketTechnician(e.target.value)} className="select-modern input-modern font-semibold">
                   <option value="Pak Heri">Pak Heri (Plumbing/AC)</option>
                   <option value="Pak Roni">Pak Roni (Listrik)</option>
                   <option value="Pak Agus">Pak Agus (Mekanikal)</option>
@@ -522,19 +468,11 @@ export default function CSLiveChat() {
                 </select>
               </div>
 
-              {/* Buttons */}
               <div className="flex items-center gap-3 pt-3 border-t border-soft">
-                <button
-                  type="submit"
-                  className="flex-1 btn-primary justify-center py-2.5 rounded-xl text-xs font-bold tracking-wide"
-                >
+                <button type="submit" className="flex-1 btn-primary justify-center py-2.5 rounded-xl text-xs font-bold tracking-wide">
                   <span>✓ Buat Tiket Sekarang</span>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setModalOpen(false)}
-                  className="flex-1 btn-ghost justify-center py-2.5 rounded-xl text-xs font-bold"
-                >
+                <button type="button" onClick={() => setModalOpen(false)} className="flex-1 btn-ghost justify-center py-2.5 rounded-xl text-xs font-bold">
                   Batal
                 </button>
               </div>
