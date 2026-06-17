@@ -15,90 +15,158 @@ import { supabase } from '../../lib/supabase';
 export default function Homepage() {
   const navigate = useNavigate();
 
-  const [towerCount, setTowerCount] = useState(3);
-  const [unitCount, setUnitCount] = useState(440);
-  const [userCount, setUserCount] = useState(412);
-  const [tiketCount, setTiketCount] = useState(18);
+  // State untuk Counter Utama
+  const [towerCount, setTowerCount] = useState(0);
+  const [unitCount, setUnitCount] = useState(0);
+  const [userCount, setUserCount] = useState(0);
+  const [karyawanCount, setKaryawanCount] = useState(0);
+
+  // State untuk Kartu Informasi Finansial & Operasional
+  const [pendapatan, setPendapatan] = useState(0);
+  const [pengeluaran, setPengeluaran] = useState(0);
+  const [tiketCount, setTiketCount] = useState(0);
+  const [absenHariIni, setAbsenHariIni] = useState('0/0');
+
+  // State Dinamis untuk Pengumuman
+  const [announcements, setAnnouncements] = useState([]);
 
   useEffect(() => {
-    async function loadCounts() {
+    async function loadDashboardData() {
       try {
+        // 1. Fetch Data Sederhana (Tower & Unit)
         const { count: tc } = await supabase.from('tower').select('id', { count: 'exact', head: true });
         const { count: uc } = await supabase.from('unit').select('id', { count: 'exact', head: true });
-        const { count: usc } = await supabase.from('users').select('id', { count: 'exact', head: true });
-        const { count: tkt } = await supabase.from('laporan').select('id', { count: 'exact', head: true }).neq('status', 'selesai');
-
+        
         if (tc !== null) setTowerCount(tc);
         if (uc !== null) setUnitCount(uc);
+
+        // 2. Fetch Jumlah Penghuni Aktif (Dari tabel penghuni)
+        const { count: usc } = await supabase
+          .from('penghuni')
+          .select('id', { count: 'exact', head: true });
         if (usc !== null) setUserCount(usc);
+
+        // 3. Fetch Jumlah Karyawan (Semua user selain role 'penghuni' dan 'super_admin')
+        const { count: kc } = await supabase
+          .from('users')
+          .select('id', { count: 'exact', head: true })
+          .not('role', 'in', '("penghuni","super_admin")');
+        const totalKaryawan = kc || 0;
+        setKaryawanCount(totalKaryawan);
+
+        // 4. Fetch Pendapatan (Akumulasi total tagihan yang sudah_bayar)
+        const { data: dataTagihan } = await supabase
+          .from('tagihan')
+          .select('jumlah')
+          .eq('status', 'sudah_bayar');
+        const totalPendapatan = dataTagihan?.reduce((sum, item) => sum + Number(item.jumlah), 0) || 0;
+        setPendapatan(totalPendapatan);
+
+        // 5. Fetch Pengeluaran (Akumulasi nominal pengeluaran yang selesai)
+        const { data: dataPengeluaran } = await supabase
+          .from('pengeluaran')
+          .select('nominal')
+          .eq('status', 'selesai');
+        const totalPengeluaran = dataPengeluaran?.reduce((sum, item) => sum + Number(item.nominal), 0) || 0;
+        setPengeluaran(totalPengeluaran);
+
+        // 6. Fetch Tiket Kerusakan Aktif (Tabel laporan yang belum selesai)
+        const { count: tkt } = await supabase
+          .from('laporan')
+          .select('id', { count: 'exact', head: true })
+          .not('status', 'in', '("selesai","ditolak")');
         if (tkt !== null) setTiketCount(tkt);
+
+        // 7. Fetch Absensi Hari Ini (Format Tanggal YYYY-MM-DD)
+        const hariIni = new Date().toISOString().split('T')[0];
+        const { count: totalHadir } = await supabase
+          .from('absensi')
+          .select('id', { count: 'exact', head: true })
+          .eq('tanggal', hariIni)
+          .eq('status', 'hadir');
+        setAbsenHariIni(`${totalHadir || 0}/${totalKaryawan}`);
+
+        // 8. Fetch 3 Pengumuman/Notifikasi Teraktif dari tabel notifications
+        const { data: dataNotif } = await supabase
+          .from('notifications')
+          .select('*')
+          .eq('is_active', true)
+          .order('created_at', { ascending: false })
+          .limit(3);
+
+        if (dataNotif && dataNotif.length > 0) {
+          const mappedNotif = dataNotif.map(item => ({
+            category: item.category.charAt(0).toUpperCase() + item.category.slice(1), // Kapital huruf pertama
+            time: new Date(item.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }),
+            title: item.title,
+            desc: item.message
+          }));
+          setAnnouncements(mappedNotif);
+        } else {
+          // Fallback data bawaan jika tabel notifications di database masih kosong
+          setAnnouncements([
+            {
+              category: 'Info',
+              time: 'Sistem',
+              title: 'Belum Ada Pengumuman Baru',
+              desc: 'Gunakan menu Pusat Informasi untuk membuat broadcast pesan baru kepada seluruh penghuni dan staf.'
+            }
+          ]);
+        }
+
       } catch (err) {
-        console.error('Error fetching dashboard counts:', err);
+        console.error('Error fetching dashboard database aggregates:', err);
       }
     }
-    loadCounts();
+    loadDashboardData();
   }, []);
 
-  // 🛡️ AMANKAN TRANSISE INTERNAL: Mencegah kedipan form login kosong saat navigasi berpindah
+  // Format nominal rupiah ke ringkasan berbasis Juta Rupiah (Contoh: Rp 296.5 Jt)
+  const formatKeJuta = (nominal) => {
+    if (nominal === 0) return 'Rp 0 Jt';
+    return `Rp ${(nominal / 1000000).toFixed(1)} Jt`;
+  };
+
   const handleSafeRedirect = (path) => {
     navigate(path);
   };
 
-  const stats = [
+  // Struktur Data untuk Render Card Stats Atas
+  const statsConfig = [
     {
-      title: 'Pendapatan Bulan Ini',
-      value: 'Rp 296 Jt',
-      badge: '+10% vs bulan lalu',
-      badgeClass: 'badge-pink',
-      colorClass: 'stat-pink',
-      icon: TrendingUp
+      title: 'Pendapatan Terkumpul',
+      value: formatKeJuta(pendapatan),
+      badge: 'Total Transaksi Masuk',
+      icon: TrendingUp,
+      cardColor: 'card-pink',
+      iconColor: 'card-icon-pink',
+      badgeStyle: { backgroundColor: 'rgba(249,195,186,0.6)', color: '#C05040' }
     },
     {
-      title: 'Pengeluaran Bulan Ini',
-      value: 'Rp 142 Jt',
-      subtitle: 'Operasional + Perbaikan',
-      colorClass: 'stat-yellow',
-      icon: CreditCard
+      title: 'Pengeluaran Operasional',
+      value: formatKeJuta(pengeluaran),
+      subtitle: 'Selesai Terbayar',
+      icon: CreditCard,
+      cardColor: 'card-yellow',
+      iconColor: 'card-icon-yellow'
     },
     {
-      title: 'Tiket Aktif',
+      title: 'Tiket Kendala Aktif',
       value: String(tiketCount),
-      badge: '2 urgent ditangani',
-      badgeClass: 'badge-lavender',
-      colorClass: 'stat-lavender',
-      icon: Wrench
+      badge: 'Butuh Penanganan',
+      icon: Wrench,
+      cardColor: 'card-lavender',
+      iconColor: 'card-icon-lavender',
+      badgeStyle: { backgroundColor: 'rgba(198,193,247,0.6)', color: '#4840B0' }
     },
     {
-      title: 'Kehadiran Hari Ini',
-      value: '34/38',
-      badge: '93.5% hadir',
-      badgeClass: 'badge-mint',
-      colorClass: 'stat-mint',
-      icon: CalendarCheck
-    }
-  ];
-
-  const announcements = [
-    {
-      category: 'Darurat',
-      time: 'Hari ini',
-      title: 'Pemadaman Listrik Tower B — Pukul 09:00-12:00',
-      desc: 'Pemeliharaan gardu listrik berkala. Harap matikan perangkat elektronik sensitif sebelum waktu pemadaman.',
-      badgeClass: 'badge-pink'
-    },
-    {
-      category: 'Info',
-      time: 'Kemarin',
-      title: 'Kolam Renang Dibuka Kembali',
-      desc: 'Pekerjaan sanitasi dan pembersihan kolam renang utama selesai. Jam operasional kembali normal (06:00 - 21:00).',
-      badgeClass: 'badge-lavender'
-    },
-    {
-      category: 'Promo',
-      time: '3 hari lalu',
-      title: 'Promo Sewa Ruang Serbaguna',
-      desc: '',
-      badgeClass: 'badge-yellow'
+      title: 'Kehadiran Staf Hari Ini',
+      value: absenHariIni,
+      badge: 'Presensi Kerja',
+      icon: CalendarCheck,
+      cardColor: 'card-mint',
+      iconColor: 'card-icon-mint',
+      badgeStyle: { backgroundColor: 'rgba(181,234,215,0.6)', color: '#187050' }
     }
   ];
 
@@ -111,8 +179,6 @@ export default function Homepage() {
     { label: 'Absen Karyawan', path: '/super-admin/absen', icon: CalendarCheck }
   ];
 
-  const shortcutColors = ['stat-pink', 'stat-yellow', 'stat-lavender', 'stat-mint'];
-
   return (
     <div className="space-y-6 animate-fade-up">
       
@@ -123,7 +189,7 @@ export default function Homepage() {
           <div className="space-y-2">
             <h2 className="text-2xl font-extrabold tracking-tight leading-tight font-serif text-white">Selamat Datang di SiManTap</h2>
             <p className="text-xs text-[#FAF6F0]/80 font-medium leading-relaxed">
-              Sistem Informasi Manajemen Terpadu Apartemen. Kelola gedung, penghuni, keuangan, dan karyawan dalam satu dasbor.
+              Sistem Informasi Manajemen Terpadu Apartemen. Kelola gedung, penghuni, keuangan, dan karyawan dalam satu dasbor eksekutif.
             </p>
           </div>
           <div className="flex flex-wrap gap-3 pt-1">
@@ -163,34 +229,25 @@ export default function Homepage() {
             <p className="text-[10px] text-[#8A857F] font-bold uppercase tracking-wider">Tower Utama</p>
           </div>
           <div className="space-y-0.5">
-            <p className="text-2xl font-black text-white font-serif">38</p>
-            <p className="text-[10px] text-[#8A857F] font-bold uppercase tracking-wider">Karyawan</p>
+            <p className="text-2xl font-black text-white font-serif">{karyawanCount}</p>
+            <p className="text-[10px] text-[#8A857F] font-bold uppercase tracking-wider">Total Staf</p>
           </div>
         </div>
       </div>
 
       {/* Stats Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {stats.map((stat, idx) => {
+        {statsConfig.map((stat, idx) => {
           const Icon = stat.icon;
-          const cardColors = ['card-pink', 'card-yellow', 'card-lavender', 'card-mint'];
-          const iconColors = ['card-icon-pink', 'card-icon-yellow', 'card-icon-lavender', 'card-icon-mint'];
-          const badgeStyles = [
-            { backgroundColor: 'rgba(249,195,186,0.6)', color: '#C05040' },
-            { backgroundColor: 'rgba(252,214,165,0.6)', color: '#A05820' },
-            { backgroundColor: 'rgba(198,193,247,0.6)', color: '#4840B0' },
-            { backgroundColor: 'rgba(181,234,215,0.6)', color: '#187050' }
-          ];
-
           return (
             <div 
               key={idx}
-              className={`${cardColors[idx % 4]} flex flex-col justify-between min-h-[140px] transition hover:scale-[1.01] duration-150`}
+              className={`${stat.cardColor} flex flex-col justify-between min-h-[140px] transition hover:scale-[1.01] duration-150`}
             >
               <div>
                 <div className="flex justify-between items-start">
                   <span className="text-[#8A857F] font-semibold text-xs">{stat.title}</span>
-                  <div className={`${iconColors[idx % 4]} !mb-0`}>
+                  <div className={`${stat.iconColor} !mb-0`}>
                     <Icon size={18} />
                   </div>
                 </div>
@@ -199,7 +256,7 @@ export default function Homepage() {
               
               <div className="mt-3">
                 {stat.badge ? (
-                  <span className="badge-base" style={badgeStyles[idx % 4]}>
+                  <span className="badge-base" style={stat.badgeStyle}>
                     {stat.badge}
                   </span>
                 ) : (

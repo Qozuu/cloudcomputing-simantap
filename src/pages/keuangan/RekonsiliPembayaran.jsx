@@ -10,29 +10,50 @@ export default function RekonsiliPembayaran() {
   const [syncing, setSyncing] = useState(false);
   const [successToast, setSuccessToast] = useState('');
 
+  // Fungsi enkapsulasi untuk load data agar reusable (DRY)
+  const fetchReconciliationData = async () => {
+    // Melakukan multi-level join: dari tagihan -> penghuni -> users(nama)
+    const { data, error } = await supabase
+      .from('tagihan')
+      .select(`
+        id,
+        invoice_number,
+        jumlah,
+        periode,
+        status,
+        created_at,
+        unit ( nomor_unit ),
+        penghuni ( 
+          users ( nama )
+        )
+      `)
+      .eq('status', 'sudah_bayar')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    if (data) {
+      return data.map((row) => ({
+        // Gunakan invoice_number dari skema, jika kosong fallback ke format ID custom
+        id: row.invoice_number || `INV-${row.periode ? row.periode.replace(/-/g, '') : '202604'}-${String(row.id).substring(0, 6).toUpperCase()}`,
+        unit: row.unit?.nomor_unit || '-',
+        // Akses nama user dari hasil nested join tagihan -> penghuni -> users
+        name: row.penghuni?.users?.nama || 'Anonim',
+        amount: parseFloat(row.jumlah) || 0, // Sesuai kolom 'jumlah' tipe numeric
+        gateway: 'Midtrans (Transfer Bank)', // Default gateway penampung karena tidak ada kolom metode_bayar
+        payDate: row.created_at ? new Date(row.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '—',
+        status: 'Sukses'
+      }));
+    }
+    return [];
+  };
+
   useEffect(() => {
     async function loadTransactions() {
       try {
         setLoading(true);
-        const { data, error } = await supabase
-          .from('tagihan')
-          .select('*, unit(nomor_unit), users(nama)')
-          .eq('status', 'sudah_bayar')
-          .order('created_at', { ascending: false });
-
-        if (error) throw error;
-
-        if (data) {
-          setTransactions(data.map((row) => ({
-            id: `TXN-${row.periode ? row.periode.replace(' ', '') : '202604'}-${String(row.id).padStart(4, '0')}`,
-            unit: row.unit?.nomor_unit || '-',
-            name: row.users?.nama || row.penghuni?.nama || 'Anonim',
-            amount: row.total || row.jumlah || 0,
-            gateway: row.metode_bayar || 'Transfer Bank',
-            payDate: row.tgl_bayar ? new Date(row.tgl_bayar).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '—',
-            status: 'Sukses'
-          })));
-        }
+        const mappedData = await fetchReconciliationData();
+        setTransactions(mappedData);
       } catch (err) {
         console.error('Error fetching reconciliation transactions:', err.message);
       } finally {
@@ -45,31 +66,52 @@ export default function RekonsiliPembayaran() {
   const handleSync = async () => {
     setSyncing(true);
     try {
-      const { data, error } = await supabase
-        .from('tagihan')
-        .select('*, unit(nomor_unit), users(nama)')
-        .eq('status', 'sudah_bayar')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-
-      if (data) {
-        setTransactions(data.map((row) => ({
-          id: `TXN-${row.periode ? row.periode.replace(' ', '') : '202604'}-${String(row.id).padStart(4, '0')}`,
-          unit: row.unit?.nomor_unit || '-',
-          name: row.users?.nama || row.penghuni?.nama || 'Anonim',
-          amount: row.total || row.jumlah || 0,
-          gateway: row.metode_bayar || 'Transfer Bank',
-          payDate: row.tgl_bayar ? new Date(row.tgl_bayar).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '—',
-          status: 'Sukses'
-        })));
-        showToast('Sinkronisasi berhasil — data diperbarui dari payment gateway');
-      }
+      const mappedData = await fetchReconciliationData();
+      setTransactions(mappedData);
+      showToast('Sinkronisasi berhasil — data diperbarui dari payment gateway');
     } catch (err) {
       console.error('Error syncing:', err.message);
+      alert(`Gagal sinkronisasi data: ${err.message}`);
     } finally {
       setSyncing(false);
     }
+  };
+
+  // 🔥 FUNGSI EXPORT DATA REKONSILIASI KE EXCEL (CSV)
+  const handleExportReconciliation = () => {
+    if (transactions.length === 0) {
+      showToast('Tidak ada data transaksi untuk diexport!');
+      return;
+    }
+
+    // Header untuk file Excel/CSV
+    const headers = ['No. Invoice / Transaksi', 'Unit', 'Nama Penghuni', 'Jumlah Tagihan', 'Gateway', 'Tgl Rekonsiliasi', 'Status'];
+    
+    // Memetakan isi baris data dari state
+    const rows = transactions.map(t => [
+      `"${t.id}"`, // Dibungkus kutip agar string invoice tidak berantakan di excel
+      `"${t.unit}"`,
+      `"${t.name}"`,
+      t.amount,
+      `"${t.gateway}"`,
+      `"${t.payDate}"`,
+      `"${t.status}"`
+    ]);
+
+    // Membuat konten teks terstruktur CSV
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+    
+    // Memicu trigger download di browser
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `Rekonsiliasi_Pembayaran_${period.replace(' ', '_')}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    showToast('Data rekonsiliasi berhasil diexport ke format CSV!');
   };
 
   const showToast = (msg) => {
@@ -86,22 +128,18 @@ export default function RekonsiliPembayaran() {
   };
 
   const getGatewayBadgeClass = (gateway) => {
-    switch (gateway) {
-      case 'Transfer Bank': return 'badge-base badge-lavender';
-      case 'GoPay': return 'badge-base badge-mint';
-      case 'OVO': return 'badge-base badge-pink';
-      default: return 'badge-base badge-gray';
-    }
+    if (gateway.includes('Midtrans')) return 'badge-base badge-lavender';
+    return 'badge-base badge-gray';
   };
 
   if (loading) {
-    return <div className="p-6 text-muted text-sm">Memuat...</div>;
+    return <div className="p-6 text-muted text-sm">Memuat rekonsiliasi transaksi...</div>;
   }
 
   return (
     <div className="space-y-6 animate-fade-up relative">
       {/* Controls Row */}
-      <div className="card-section p-6 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
+      <div className="card-section p-4 rounded-2xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="relative">
             <select
@@ -114,8 +152,9 @@ export default function RekonsiliPembayaran() {
             </select>
           </div>
 
+          {/* 🔥 Tombol Export yang kini mengeksekusi fungsi download secara aktif */}
           <button
-            onClick={() => showToast('Data rekonsiliasi berhasil diexport ke format CSV!')}
+            onClick={handleExportReconciliation}
             className="btn-ghost btn-sm flex items-center justify-center gap-1.5"
           >
             <FileDown size={14} />
@@ -140,7 +179,7 @@ export default function RekonsiliPembayaran() {
 
       {/* Table Section */}
       <div className="card-section flex flex-col">
-        <div className="card-section-header">
+        <div className="card-section-header p-6 pb-4 border-b border-soft">
           <div>
             <h3 className="text-sm font-bold text-ink uppercase tracking-wider">
               Rekonsiliasi Pembayaran (Payment Gateway)
@@ -153,42 +192,48 @@ export default function RekonsiliPembayaran() {
           <table className="table-modern">
             <thead>
               <tr>
-                <th>ID Transaksi</th>
+                <th>No. Invoice / Transaksi</th>
                 <th>Unit</th>
-                <th>Nama</th>
-                <th>Jumlah</th>
+                <th>Nama Penghuni</th>
+                <th>Jumlah Tagihan</th>
                 <th>Gateway</th>
-                <th>Tgl Bayar</th>
+                <th>Tgl Rekonsiliasi</th>
                 <th>Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 text-xs font-semibold text-gray-800">
-              {transactions.map((t) => (
-                <tr key={t.id}>
-                  <td className="text-muted font-mono font-medium">{t.id}</td>
-                  <td className="text-ink font-bold">{t.unit}</td>
-                  <td className="text-ink font-bold">{t.name}</td>
-                  <td className="font-mono text-ink font-bold">{formatRupiah(t.amount)}</td>
-                  <td>
-                    <span className={getGatewayBadgeClass(t.gateway)}>
-                      {t.gateway}
-                    </span>
-                  </td>
-                  <td className="text-muted font-medium">{t.payDate}</td>
-                  <td>
-                    {t.status === 'Sukses' ? (
-                      <span className="badge-base badge-mint inline-flex items-center gap-0.5">
-                        <Check size={10} className="stroke-[3]" />
-                        <span>Sukses</span>
-                      </span>
-                    ) : (
-                      <span className="badge-base badge-yellow">
-                        Pending
-                      </span>
-                    )}
-                  </td>
+              {transactions.length === 0 ? (
+                <tr>
+                  <td colSpan="7" className="text-center p-6 text-muted font-normal">Belum ada tagihan berkategori "sudah_bayar" untuk direkonsiliasi.</td>
                 </tr>
-              ))}
+              ) : (
+                transactions.map((t) => (
+                  <tr key={t.id}>
+                    <td className="text-muted font-mono font-medium">{t.id}</td>
+                    <td className="text-ink font-bold">{t.unit}</td>
+                    <td className="text-ink font-bold">{t.name}</td>
+                    <td className="font-mono text-ink font-bold">{formatRupiah(t.amount)}</td>
+                    <td>
+                      <span className={getGatewayBadgeClass(t.gateway)}>
+                        {t.gateway}
+                      </span>
+                    </td>
+                    <td className="text-muted font-medium">{t.payDate}</td>
+                    <td>
+                      {t.status === 'Sukses' ? (
+                        <span className="badge-base badge-mint inline-flex items-center gap-0.5">
+                          <Check size={10} className="stroke-" />
+                          <span>Sukses</span>
+                        </span>
+                      ) : (
+                        <span className="badge-base badge-yellow">
+                          Pending
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

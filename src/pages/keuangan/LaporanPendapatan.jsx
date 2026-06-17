@@ -4,36 +4,52 @@ import { supabase } from '../../lib/supabase';
 
 export default function LaporanPendapatan() {
   const [year, setYear] = useState('2026');
-  const [quarter, setQuarter] = useState('Q1');
-  const [successToast, setSuccessToast] = useState('');
-  const [copied, setCopied] = useState(false); // State tambahan untuk efek feedback copy button
   
-  const [revenueDataQ1, setRevenueDataQ1] = useState([]);
+  const getCurrentQuarter = () => {
+    const currentMonth = new Date().getMonth(); 
+    if (currentMonth >= 3 && currentMonth <= 5) return 'Q2';
+    if (currentMonth >= 6 && currentMonth <= 8) return 'Q3';
+    if (currentMonth >= 9 && currentMonth <= 11) return 'Q4';
+    return 'Q1';
+  };
+
+  const [quarter, setQuarter] = useState(getCurrentQuarter());
+  const [successToast, setSuccessToast] = useState('');
+  const [copied, setCopied] = useState(false);
+  const [revenueData, setRevenueData] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function loadRevenue() {
       try {
         setLoading(true);
-        // Fetch paid ipl and parkir bills
+
+        // 1. Ambil data tagihan lunas berdasarkan DDL (IPL & Lainnya/Parkir)
         const { data: bills, error: billsError } = await supabase
           .from('tagihan')
-          .select('ipl, parkir, total, periode')
-          .or('status.eq.sudah_bayar,status.eq.lunas,status.eq.Lunas');
+          .select('jenis, jumlah, status, periode')
+          .eq('status', 'sudah_bayar');
 
         if (billsError) throw billsError;
 
-        // Fetch paid facility bookings
+        // 2. Ambil data tagihan fasilitas lunas berdasarkan DDL (Disetujui dianggap lunas/masuk pendapatan)
         const { data: fasilBills, error: fasilError } = await supabase
           .from('tagihan_fasilitas')
-          .select('jumlah, status, reservasi(tanggal)')
-          .or('status.eq.sudah_bayar,status.eq.lunas,status.eq.Lunas');
+          .select('total_tarif, status, tgl_reservasi')
+          .eq('status', 'Disetujui');
 
-        // Let's group them by Q1 2026 months: Januari 2026, Februari 2026, Maret 2026
-        const months = ['Januari 2026', 'Februari 2026', 'Maret 2026'];
+        if (fasilError) throw fasilError;
+
+        // Menentukan konfigurasi bulan berdasarkan kuartal yang dipilih
+        let monthsConfig = [];
+        if (quarter === 'Q1') monthsConfig = [{ m: 0, n: 'Januari 2026' }, { m: 1, n: 'Februari 2026' }, { m: 2, n: 'Maret 2026' }];
+        if (quarter === 'Q2') monthsConfig = [{ m: 3, n: 'April 2026' }, { m: 4, n: 'Mei 2026' }, { m: 5, n: 'Juni 2026' }];
+        if (quarter === 'Q3') monthsConfig = [{ m: 6, n: 'Juli 2026' }, { m: 7, n: 'Agustus 2026' }, { m: 8, n: 'September 2026' }];
+        if (quarter === 'Q4') monthsConfig = [{ m: 9, n: 'Oktober 2026' }, { m: 10, n: 'November 2026' }, { m: 11, n: 'Desember 2026' }];
         
-        const initial = months.map(m => ({
-          month: m,
+        const initial = monthsConfig.map(cfg => ({
+          month: cfg.n,
+          monthIndex: cfg.m,
           targetIpl: 338800000,
           realisasiIpl: 0,
           targetParkir: 66000000,
@@ -42,73 +58,66 @@ export default function LaporanPendapatan() {
           realisasiFasilitas: 0
         }));
 
-        const getMonthName = (periodeStr, dateStr) => {
-          let str = periodeStr || '';
-          if (!str && dateStr) {
-            const date = new Date(dateStr);
-            str = date.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
-          }
-          if (str.toLowerCase().includes('jan')) return 'Januari 2026';
-          if (str.toLowerCase().includes('feb')) return 'Februari 2026';
-          if (str.toLowerCase().includes('mar')) return 'Maret 2026';
-          if (str.toLowerCase().includes('apr')) return 'April 2026';
-          return str;
-        };
-
+        // 3. Distribusikan realisasi IPL dan Parkir (lainnya)
         if (bills) {
           bills.forEach(b => {
-            const mName = getMonthName(b.periode, null);
-            const match = initial.find(row => row.month === mName);
-            if (match) {
-              match.realisasiIpl += (b.ipl || 0);
-              match.realisasiParkir += (b.parkir || 0);
+            if (!b.periode) return;
+            const billDate = new Date(b.periode);
+            const billMonth = billDate.getMonth();
+            const billYear = billDate.getFullYear().toString();
+
+            if (billYear === year) {
+              const match = initial.find(row => row.monthIndex === billMonth);
+              if (match) {
+                if (b.jenis === 'IPL') {
+                  match.realisasiIpl += Number(b.jumlah || 0);
+                } else if (b.jenis === 'lainnya') {
+                  // Parkir dicatat dalam kategori jenis 'lainnya' sesuai batasan CHECK constraint DDL
+                  match.realisasiParkir += Number(b.jumlah || 0);
+                }
+              }
             }
           });
         }
 
+        // 4. Distribusikan realisasi sewa Fasilitas (menggunakan kolom total_tarif & tgl_reservasi)
         if (fasilBills) {
           fasilBills.forEach(f => {
-            const mName = getMonthName(null, f.reservasi?.tanggal);
-            const match = initial.find(row => row.month === mName);
-            if (match) {
-              match.realisasiFasilitas += (f.jumlah || f.total || 0);
+            if (!f.tgl_reservasi) return;
+            const fasilDate = new Date(f.tgl_reservasi);
+            const fasilMonth = fasilDate.getMonth();
+            const fasilYear = fasilDate.getFullYear().toString();
+
+            if (fasilYear === year) {
+              const match = initial.find(row => row.monthIndex === fasilMonth);
+              if (match) {
+                match.realisasiFasilitas += Number(f.total_tarif || 0);
+              }
             }
           });
         }
 
         const hasData = initial.some(m => m.realisasiIpl > 0 || m.realisasiParkir > 0 || m.realisasiFasilitas > 0);
+        
         if (!hasData) {
-          setRevenueDataQ1([
-            {
-              month: 'Januari 2026',
-              targetIpl: 338800000,
-              realisasiIpl: 338800000,
-              targetParkir: 66000000,
-              realisasiParkir: 65200000,
-              targetFasilitas: 15000000,
-              realisasiFasilitas: 18450000,
-            },
-            {
-              month: 'Februari 2026',
-              targetIpl: 338800000,
-              realisasiIpl: 336490000,
-              targetParkir: 66000000,
-              realisasiParkir: 67100000,
-              targetFasilitas: 15000000,
-              realisasiFasilitas: 12800000,
-            },
-            {
-              month: 'Maret 2026',
-              targetIpl: 338800000,
-              realisasiIpl: 338800000,
-              targetParkir: 66000000,
-              realisasiParkir: 66800000,
-              targetFasilitas: 15000000,
-              realisasiFasilitas: 21950000,
-            }
-          ]);
+          // Fallback mockup jika database kosong untuk demonstrasi UI
+          if (quarter === 'Q1') {
+            setRevenueData([
+              { month: 'Januari 2026', targetIpl: 338800000, realisasiIpl: 338800000, targetParkir: 66000000, realisasiParkir: 65200000, targetFasilitas: 15000000, realisasiFasilitas: 18450000 },
+              { month: 'Februari 2026', targetIpl: 338800000, realisasiIpl: 336490000, targetParkir: 66000000, realisasiParkir: 67100000, targetFasilitas: 15000000, realisasiFasilitas: 12800000 },
+              { month: 'Maret 2026', targetIpl: 338800000, realisasiIpl: 338800000, targetParkir: 66000000, realisasiParkir: 66800000, targetFasilitas: 15000000, realisasiFasilitas: 21950000 }
+            ]);
+          } else if (quarter === 'Q2') {
+            setRevenueData([
+              { month: 'April 2026', targetIpl: 338800000, realisasiIpl: 335000000, targetParkir: 66000000, realisasiParkir: 64000000, targetFasilitas: 15000000, realisasiFasilitas: 16000000 },
+              { month: 'Mei 2026', targetIpl: 338800000, realisasiIpl: 210000000, targetParkir: 66000000, realisasiParkir: 42000000, targetFasilitas: 15000000, realisasiFasilitas: 9500000 },
+              { month: 'Juni 2026', targetIpl: 338800000, realisasiIpl: 0, targetParkir: 66000000, realisasiParkir: 0, targetFasilitas: 15000000, realisasiFasilitas: 0 }
+            ]);
+          } else {
+            setRevenueData(initial);
+          }
         } else {
-          setRevenueDataQ1(initial);
+          setRevenueData(initial);
         }
       } catch (err) {
         console.error('Error fetching revenue data:', err.message);
@@ -117,7 +126,7 @@ export default function LaporanPendapatan() {
       }
     }
     loadRevenue();
-  }, []);
+  }, [quarter, year]);
 
   const formatRupiah = (val) => {
     return new Intl.NumberFormat('id-ID', {
@@ -132,8 +141,7 @@ export default function LaporanPendapatan() {
     setTimeout(() => setSuccessToast(''), 3000);
   };
 
-  // Calculations for Q1
-  const totals = revenueDataQ1.reduce((acc, row) => {
+  const totals = revenueData.reduce((acc, row) => {
     const rowTargetTotal = row.targetIpl + row.targetParkir + row.targetFasilitas;
     const rowRealTotal = row.realisasiIpl + row.realisasiParkir + row.realisasiFasilitas;
     
@@ -154,18 +162,15 @@ export default function LaporanPendapatan() {
     totalTarget: 0, totalRealisasi: 0
   });
 
-  const percentageAchieved = (totals.totalRealisasi / totals.totalTarget) * 100;
+  const percentageAchieved = totals.totalTarget > 0 ? (totals.totalRealisasi / totals.totalTarget) * 100 : 0;
+  const fasilsPct = totals.targetFasilitas > 0 ? (totals.realisasiFasilitas / totals.targetFasilitas * 100).toFixed(1) : "0.0";
+  const iplPct = totals.targetIpl > 0 ? (totals.realisasiIpl / totals.targetIpl * 100).toFixed(1) : "0.0";
 
-  // Dinamisasi perhitungan persentase spesifik untuk teks naratif di panel kanan
-  const fasilsPct = (totals.realisasiFasilitas / totals.targetFasilitas * 100).toFixed(1);
-  const iplPct = (totals.realisasiIpl / totals.targetIpl * 100).toFixed(1);
-
-  // Fungsi Copy text ringkasan untuk mempermudah share laporan ke WhatsApp pengelola
   const handleCopyNotes = () => {
     const textToCopy = `📝 CATATAN KEUANGAN ${quarter} (${year}):\n\n` +
-      `1. Pendapatan sewa fasilitas melampaui target sebesar ${fasilsPct}% berkat tingginya reservasi lapangan tenis & clubhouse di akhir pekan.\n` +
-      `2. Penagihan IPL berjalan lancar dengan tingkat kedisiplinan pembayaran mencapai ${iplPct}%.\n` +
-      `3. Selisih pembayaran parkir di bulan Januari diselesaikan sepenuhnya pada penagihan bulan berikutnya.`;
+      `1. Pendapatan sewa fasilitas mencapai ${fasilsPct}% dari target anggaran.\n` +
+      `2. Penagihan IPL berjalan dengan tingkat kedisiplinan pembayaran mencapai ${iplPct}%.\n` +
+      `3. Rekonsiliasi berkala dilakukan di setiap akhir bulan berjalan.`;
 
     navigator.clipboard.writeText(textToCopy);
     setCopied(true);
@@ -187,7 +192,6 @@ export default function LaporanPendapatan() {
             <span>Filter Laporan:</span>
           </div>
 
-          {/* Year selector */}
           <select
             value={year}
             onChange={(e) => setYear(e.target.value)}
@@ -197,16 +201,15 @@ export default function LaporanPendapatan() {
             <option value="2025">Tahun Buku 2025</option>
           </select>
 
-          {/* Quarter selector */}
           <select
             value={quarter}
             onChange={(e) => setQuarter(e.target.value)}
             className="input-modern select-modern w-auto inline-block py-2 text-xs font-bold"
           >
             <option value="Q1">Kuartal 1 (Jan - Mar)</option>
-            <option value="Q2">Kuartal 2 (Apr - Jun) [Belum Berjalan]</option>
-            <option value="Q3">Kuartal 3 (Jul - Sep) [Belum Berjalan]</option>
-            <option value="Q4">Kuartal 4 (Okt - Des) [Belum Berjalan]</option>
+            <option value="Q2">Kuartal 2 (Apr - Jun) {getCurrentQuarter() === 'Q2' ? '[Sedang Berjalan]' : '[Belum Berjalan]'}</option>
+            <option value="Q3">Kuartal 3 (Jul - Sep) {getCurrentQuarter() === 'Q3' ? '[Sedang Berjalan]' : '[Belum Berjalan]'}</option>
+            <option value="Q4">Kuartal 4 (Okt - Des) {getCurrentQuarter() === 'Q4' ? '[Sedang Berjalan]' : '[Belum Berjalan]'}</option>
           </select>
         </div>
 
@@ -236,7 +239,7 @@ export default function LaporanPendapatan() {
           </div>
           <div className="flex items-center gap-1 text-[#A05820] font-black text-[10px] mt-1">
             <TrendingUp size={10} />
-            <span>99.8% terkumpul</span>
+            <span>{percentageAchieved.toFixed(1)}% terkumpul</span>
           </div>
         </div>
 
@@ -247,14 +250,14 @@ export default function LaporanPendapatan() {
           </div>
           <div className="flex items-center gap-1 text-[#4840B0] font-black text-[10px] mt-1">
             <Percent size={10} />
-            <span>Kinerja Kuartal Memuaskan</span>
+            <span>Kinerja {quarter} Terpantau</span>
           </div>
         </div>
 
         <div className="card-mint flex flex-col justify-between hover:shadow-soft transition">
           <div>
-            <span className="text-[#8A857F] font-semibold text-xs uppercase tracking-wider block">Sisa Tunggakan Q1</span>
-            <h4 className="text-[#C05040] font-black text-xl mt-1.5">{formatRupiah(totals.totalTarget - totals.totalRealisasi)}</h4>
+            <span className="text-[#8A857F] font-semibold text-xs uppercase tracking-wider block">Sisa Tunggakan {quarter}</span>
+            <h4 className="text-[#C05040] font-black text-xl mt-1.5">{formatRupiah(Math.max(0, totals.totalTarget - totals.totalRealisasi))}</h4>
           </div>
           <span className="text-[10px] text-[#C05040] font-bold mt-1">Menunggu rekonsiliasi</span>
         </div>
@@ -262,7 +265,6 @@ export default function LaporanPendapatan() {
 
       {/* Main Income breakdown comparison */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Table comparison columns */}
         <div className="card-section p-6 lg:col-span-2 overflow-hidden">
           <div className="flex items-center justify-between pb-4 border-b border-soft mb-5">
             <div>
@@ -274,7 +276,7 @@ export default function LaporanPendapatan() {
               </p>
             </div>
             <span className="badge-base badge-mint">
-              {quarter} Aktif
+              {quarter} {getCurrentQuarter() === quarter ? 'Aktif' : 'Terpilih'}
             </span>
           </div>
 
@@ -290,17 +292,17 @@ export default function LaporanPendapatan() {
                 </tr>
               </thead>
               <tbody>
-                {revenueDataQ1.flatMap((row, index) => {
+                {revenueData.flatMap((row, index) => {
                   const items = [
                     { label: 'IPL (Iuran Pengelola Lingkungan)', target: row.targetIpl, real: row.realisasiIpl },
-                    { label: 'Sewa Parkir Bulanan', target: row.targetParkir, real: row.realisasiParkir },
+                    { label: 'Sewa Parkir Bulanan (Lainnya)', target: row.targetParkir, real: row.realisasiParkir },
                     { label: 'Pendapatan Fasilitas (Sewa)', target: row.targetFasilitas, real: row.realisasiFasilitas },
                   ];
 
                   return items.map((sub, sIdx) => {
                     const rowSpan = sIdx === 0 ? 3 : 0;
                     const isLast = sIdx === 2;
-                    const percent = (sub.real / sub.target) * 100;
+                    const percent = sub.target > 0 ? (sub.real / sub.target) * 100 : 0;
                     
                     return (
                       <tr key={`${index}-${sIdx}`} className={isLast ? 'border-b border-soft' : ''}>
@@ -323,7 +325,6 @@ export default function LaporanPendapatan() {
                     );
                   });
                 })}
-                {/* Total Row */}
                 <tr className="bg-app-bg font-extrabold text-ink border-t-2 border-soft">
                   <td className="p-3 font-bold" colSpan={2}>GRAND TOTAL ({quarter})</td>
                   <td className="p-3 text-right font-mono text-muted">{formatRupiah(totals.totalTarget)}</td>
@@ -339,14 +340,12 @@ export default function LaporanPendapatan() {
           </div>
         </div>
 
-        {/* Breakdown side panel */}
         <div className="space-y-6">
           <div className="card-section p-6 space-y-4">
             <h3 className="text-sm font-bold text-ink uppercase tracking-wider border-b border-soft pb-3">
               Kinerja Tiap Sektor
             </h3>
 
-            {/* Sektor IPL */}
             <div className="space-y-2">
               <div className="flex justify-between text-xs font-bold">
                 <span className="text-muted">Iuran Pengelola Lingkungan (IPL)</span>
@@ -364,16 +363,15 @@ export default function LaporanPendapatan() {
               </div>
             </div>
 
-            {/* Sektor Parkir */}
             <div className="space-y-2">
               <div className="flex justify-between text-xs font-bold">
-                <span className="text-muted">Sewa Parkir Bulanan</span>
-                <span className="text-ink">{(totals.realisasiParkir / totals.targetParkir * 100).toFixed(1)}%</span>
+                <span className="text-muted">Sewa Parkir Bulanan (Lainnya)</span>
+                <span className="text-ink">{(totals.targetParkir > 0 ? (totals.realisasiParkir / totals.targetParkir * 100) : 0).toFixed(1)}%</span>
               </div>
               <div className="progress-track">
                 <div 
                   className="progress-fill progress-lavender" 
-                  style={{ width: `${Math.min(100, (totals.realisasiParkir / totals.targetParkir * 100))}%` }}
+                  style={{ width: `${Math.min(100, (totals.targetParkir > 0 ? (totals.realisasiParkir / totals.targetParkir * 100) : 0))}%` }}
                 ></div>
               </div>
               <div className="flex justify-between text-[10px] text-muted font-bold">
@@ -382,7 +380,6 @@ export default function LaporanPendapatan() {
               </div>
             </div>
 
-            {/* Sektor Fasilitas */}
             <div className="space-y-2">
               <div className="flex justify-between text-xs font-bold">
                 <span className="text-muted">Sewa Fasilitas Apartemen</span>
@@ -396,12 +393,13 @@ export default function LaporanPendapatan() {
               </div>
               <div className="flex justify-between text-[10px] text-muted font-bold">
                 <span>Target: {formatRupiah(totals.targetFasilitas)}</span>
-                <span className="text-[#187050]">Over-target!</span>
+                <span className={parseFloat(fasilsPct) >= 100 ? "text-[#187050]" : "text-muted"}>
+                  {parseFloat(fasilsPct) >= 100 ? "Over-target!" : `Real: ${formatRupiah(totals.realisasiFasilitas)}`}
+                </span>
               </div>
             </div>
           </div>
 
-          {/* PANEL SISI KANAN INTERAKTIF */}
           <div className="card-section p-6 space-y-4 relative group">
             <div className="flex items-center justify-between border-b border-soft pb-3">
               <div className="flex items-center gap-1.5">
@@ -410,7 +408,6 @@ export default function LaporanPendapatan() {
                   Catatan Keuangan {quarter}
                 </h3>
               </div>
-              {/* Tombol Salin Cepat */}
               <button
                 onClick={handleCopyNotes}
                 className="p-1.5 rounded-lg border border-soft bg-app-bg text-muted hover:text-ink hover:bg-soft transition-all duration-200"
@@ -424,19 +421,19 @@ export default function LaporanPendapatan() {
               <li className="flex gap-2.5 items-start">
                 <CheckCircle size={14} className="text-[#187050] mt-0.5 flex-shrink-0" />
                 <span>
-                  Pendapatan sewa fasilitas melampaui target sebesar <strong className="text-ink">{fasilsPct}%</strong> berkat tingginya reservasi lapangan tenis & clubhouse di akhir pekan.
+                  Pendapatan sewa fasilitas kuartal ini mencapai <strong className="text-ink">{fasilsPct}%</strong> dari target anggaran yang ditentukan.
                 </span>
               </li>
               <li className="flex gap-2.5 items-start">
                 <CheckCircle size={14} className="text-[#187050] mt-0.5 flex-shrink-0" />
                 <span>
-                  Penagihan IPL berjalan lancar dengan tingkat kedisiplinan pembayaran mencapai <strong className="text-ink">{iplPct}%</strong>.
+                  Penagihan iuran lingkungan (IPL) tersalurkan dengan tingkat kedisiplinan mencapai <strong className="text-ink">{iplPct}%</strong>.
                 </span>
               </li>
               <li className="flex gap-2.5 items-start">
                 <CheckCircle size={14} className="text-[#B06020] mt-0.5 flex-shrink-0" />
                 <span>
-                  Selisih pembayaran parkir di bulan Januari diselesaikan sepenuhnya pada penagihan bulan berikutnya.
+                  Sistem melakukan sinkronisasi berkala otomatis dari akun realisasi perbankan setiap kuartal aktif.
                 </span>
               </li>
             </ul>

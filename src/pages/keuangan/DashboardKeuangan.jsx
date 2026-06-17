@@ -16,7 +16,7 @@ export default function DashboardKeuangan() {
 
   const [stats, setStats] = useState([
     {
-      title: 'Tagihan Bulan Ini',
+      title: 'Total Tagihan',
       value: 'Rp 0 Jt',
       subtitle: '0 unit · Rp 0/unit avg',
       borderColor: 'border-l-[4px] border-l-[#F9C3BA]'
@@ -29,13 +29,13 @@ export default function DashboardKeuangan() {
       borderColor: 'border-l-[4px] border-l-[#FCD6A5]'
     },
     {
-      title: 'Menunggu',
+      title: 'Belum Bayar',
       value: 'Rp 0 Jt',
       subtitle: '0 unit belum bayar',
       borderColor: 'border-l-[4px] border-l-[#C6C1F7]'
     },
     {
-      title: 'Tunggakan',
+      title: 'Keterlambatan',
       value: 'Rp 0 Jt',
       subtitle: '0 unit terlambat',
       borderColor: 'border-l-[4px] border-l-[#B5EAD7]'
@@ -55,31 +55,33 @@ export default function DashboardKeuangan() {
     async function loadDashboardData() {
       try {
         setLoading(true);
-        // Fetch all bills
+
+        // 1. Ambil data dari tabel 'tagihan' sesuai skema
         const { data: bills, error: billsError } = await supabase
           .from('tagihan')
-          .select('*');
+          .select('id, jumlah, status, periode');
 
         if (billsError) throw billsError;
 
         if (bills) {
-          // Process stats
           const totalBills = bills.length;
           
-          const sumTotal = (arr) => arr.reduce((acc, b) => acc + (b.total || b.jumlah || 0), 0);
+          // Helper sum menggunakan 'jumlah' sesuai skema postgres
+          const sumTotal = (arr) => arr.reduce((acc, b) => acc + (Number(b.jumlah) || 0), 0);
           
           const totalAmount = sumTotal(bills);
           const avgAmount = totalBills > 0 ? Math.round(totalAmount / totalBills) : 0;
           
-          const paidBills = bills.filter(b => b.status?.toLowerCase() === 'sudah_bayar' || b.status?.toLowerCase() === 'lunas');
+          // Menyesuaikan status check constraint database: 'sudah_bayar', 'belum_bayar', 'terlambat'
+          const paidBills = bills.filter(b => b.status === 'sudah_bayar');
           const paidAmount = sumTotal(paidBills);
           const paidPct = totalAmount > 0 ? ((paidAmount / totalAmount) * 100).toFixed(1) : '0';
 
-          const pendingBills = bills.filter(b => b.status?.toLowerCase() === 'menunggu');
+          const pendingBills = bills.filter(b => b.status === 'belum_bayar');
           const pendingAmount = sumTotal(pendingBills);
           const pendingCount = pendingBills.length;
 
-          const overdueBills = bills.filter(b => b.status?.toLowerCase() === 'terlambat' || b.status?.toLowerCase() === 'tunggakan');
+          const overdueBills = bills.filter(b => b.status === 'terlambat');
           const overdueAmount = sumTotal(overdueBills);
           const overdueCount = overdueBills.length;
 
@@ -95,9 +97,9 @@ export default function DashboardKeuangan() {
 
           setStats([
             {
-              title: 'Tagihan Bulan Ini',
+              title: 'Total Tagihan',
               value: formatJuta(totalAmount),
-              subtitle: `${totalBills} unit · Rp ${formatRibu(avgAmount)}/unit avg`,
+              subtitle: `${totalBills} tagihan · Rp ${formatRibu(avgAmount)}/avg`,
               borderColor: 'border-l-[4px] border-l-[#F9C3BA]'
             },
             {
@@ -108,20 +110,20 @@ export default function DashboardKeuangan() {
               borderColor: 'border-l-[4px] border-l-[#FCD6A5]'
             },
             {
-              title: 'Menunggu',
+              title: 'Belum Bayar',
               value: formatJuta(pendingAmount),
               subtitle: `${pendingCount} unit belum bayar`,
               borderColor: 'border-l-[4px] border-l-[#C6C1F7]'
             },
             {
-              title: 'Tunggakan',
+              title: 'Keterlambatan',
               value: formatJuta(overdueAmount),
               subtitle: `${overdueCount} unit terlambat`,
               borderColor: 'border-l-[4px] border-l-[#B5EAD7]'
             }
           ]);
 
-          // Process chartData (6 months income trend)
+          // Memproses chart tren 6 bulan ke belakang berbasis struktur data tanggal (DATE)
           const monthsMap = {
             '01': 'Jan', '02': 'Feb', '03': 'Mar', '04': 'Apr', '05': 'Mei', '06': 'Jun',
             '07': 'Jul', '08': 'Ags', '09': 'Sep', '10': 'Okt', '11': 'Nov', '12': 'Des'
@@ -136,34 +138,18 @@ export default function DashboardKeuangan() {
             last6Months.push({
               key: `${y}-${m}`,
               name: monthsMap[m],
-              fullName: d.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }),
               amount: 0
             });
           }
 
           paidBills.forEach(b => {
-            let targetKey = '';
-            if (b.periode && b.periode.includes('-')) {
-              targetKey = b.periode.substring(0, 7);
-            } else if (b.periode) {
-              const parts = b.periode.split(' ');
-              if (parts.length === 2) {
-                const monthNames = {
-                  'januari': '01', 'februari': '02', 'maret': '03', 'april': '04', 'mei': '05', 'juni': '06',
-                  'juli': '07', 'agustus': '08', 'september': '09', 'oktober': '10', 'november': '11', 'desember': '12',
-                  'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04', 'may': '05', 'jun': '06', 'jul': '07', 'aug': '08',
-                  'sep': '09', 'oct': '10', 'nov': '11', 'dec': '12'
-                };
-                const mKey = monthNames[parts[0].toLowerCase()];
-                if (mKey) {
-                  targetKey = `${parts[1]}-${mKey}`;
-                }
+            if (b.periode) {
+              // format DATE postgres adalah YYYY-MM-DD, kita ambil YYYY-MM saja
+              const targetKey = b.periode.substring(0, 7); 
+              const match = last6Months.find(item => item.key === targetKey);
+              if (match) {
+                match.amount += (Number(b.jumlah) || 0);
               }
-            }
-
-            const match = last6Months.find(item => item.key === targetKey || b.periode?.toLowerCase().includes(item.fullName.toLowerCase()) || b.periode?.toLowerCase().includes(item.name.toLowerCase()));
-            if (match) {
-              match.amount += (b.total || b.jumlah || 0);
             }
           });
 
@@ -173,18 +159,20 @@ export default function DashboardKeuangan() {
           })));
         }
 
-        // Fetch expenses
+        // 2. Ambil data dari tabel 'pengeluaran' sesuai skema
         try {
           const { data: expData, error: expError } = await supabase
             .from('pengeluaran')
-            .select('*');
+            .select('nominal, kategori');
 
           if (!expError && expData && expData.length > 0) {
-            const totalExp = expData.reduce((acc, row) => acc + (row.nominal || row.amount || 0), 0);
+            // Menggunakan properti 'nominal' sesuai skema table
+            const totalExp = expData.reduce((acc, row) => acc + (Number(row.nominal) || 0), 0);
             
-            const getCatTotal = (cat) => expData.filter(row => row.kategori?.toLowerCase().includes(cat.toLowerCase())).reduce((acc, row) => acc + (row.nominal || row.amount || 0), 0);
+            // Filter kategori berdasarkan enum database: 'sdm_gaji', 'operasional', 'perbaikan'
+            const getCatTotal = (cat) => expData.filter(row => row.kategori === cat).reduce((acc, row) => acc + (Number(row.nominal) || 0), 0);
             
-            const sdmTotal = getCatTotal('sdm') || getCatTotal('gaji');
+            const sdmTotal = getCatTotal('sdm_gaji');
             const operasionalTotal = getCatTotal('operasional');
             const perbaikanTotal = getCatTotal('perbaikan');
             
@@ -193,7 +181,7 @@ export default function DashboardKeuangan() {
             const perbaikanPct = totalExp > 0 ? Math.round((perbaikanTotal / totalExp) * 100) : 0;
 
             const formatJutaExp = (val) => {
-              if (val >= 1000000) return `Rp ${(val / 1000000).toFixed(0)} Jt`;
+              if (val >= 1000000) return `Rp ${(val / 1000000).toFixed(1)} Jt`;
               return `Rp ${val.toLocaleString('id-ID')}`;
             };
 
@@ -203,18 +191,15 @@ export default function DashboardKeuangan() {
               { label: 'Perbaikan', pct: perbaikanPct, amount: formatJutaExp(perbaikanTotal), color: 'progress-mint' }
             ]);
           } else {
+            // Default Fallback state jika data kosong
             setExpenses([
-              { label: 'SDM / Gaji', pct: 48, amount: 'Rp 68 Jt', color: 'progress-pink' },
-              { label: 'Operasional', pct: 30, amount: 'Rp 42 Jt', color: 'progress-lavender' },
-              { label: 'Perbaikan', pct: 22, amount: 'Rp 32 Jt', color: 'progress-mint' }
+              { label: 'SDM / Gaji', pct: 0, amount: 'Rp 0 Jt', color: 'progress-pink' },
+              { label: 'Operasional', pct: 0, amount: 'Rp 0 Jt', color: 'progress-lavender' },
+              { label: 'Perbaikan', pct: 0, amount: 'Rp 0 Jt', color: 'progress-mint' }
             ]);
           }
         } catch (e) {
-          setExpenses([
-            { label: 'SDM / Gaji', pct: 48, amount: 'Rp 68 Jt', color: 'progress-pink' },
-            { label: 'Operasional', pct: 30, amount: 'Rp 42 Jt', color: 'progress-lavender' },
-            { label: 'Perbaikan', pct: 22, amount: 'Rp 32 Jt', color: 'progress-mint' }
-          ]);
+          console.error(e);
         }
       } catch (err) {
         console.error('Error loading dashboard keuangan:', err.message);
@@ -230,7 +215,7 @@ export default function DashboardKeuangan() {
   };
 
   if (loading) {
-    return <div className="p-6 text-muted text-sm">Memuat...</div>;
+    return <div className="p-6 text-muted text-sm">Memuat data dashboard...</div>;
   }
 
   return (
@@ -288,7 +273,7 @@ export default function DashboardKeuangan() {
             <h3 className="text-sm font-bold text-ink uppercase tracking-wider">
               Tren Pendapatan 6 Bulan
             </h3>
-            <p className="text-[10px] text-muted font-bold mt-0.5">Akumulasi pendapatan IPL, parkir, dan fasilitas</p>
+            <p className="text-[10px] text-muted font-bold mt-0.5">Akumulasi realisasi dari tagihan lunas/sudah bayar</p>
           </div>
 
           <div className="h-60 w-full">
@@ -309,13 +294,11 @@ export default function DashboardKeuangan() {
                   tickLine={false} 
                   axisLine={false}
                   tick={{ fontSize: 9, fontWeight: 700, fill: '#8A857F' }}
-                  domain={[0, 400]}
                 />
                 <Tooltip 
                   formatter={(value) => [`Rp ${value} Jt`]}
                   contentStyle={{ borderRadius: '16px', border: '1px solid rgba(30,30,30,0.07)', background: '#FFFFFF', fontSize: '11px', fontWeight: 'bold' }}
                 />
-                {/* Single bar lavender color */}
                 <Bar dataKey="Pendapatan" fill="#C6C1F7" radius={[4, 4, 0, 0]} barSize={20} />
               </BarChart>
             </ResponsiveContainer>

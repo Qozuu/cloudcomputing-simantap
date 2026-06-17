@@ -4,24 +4,46 @@ import { supabase } from '../../lib/supabase';
 
 export default function AbsenKaryawan() {
   const [employees, setEmployees] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [period, setPeriod] = useState('Mei 2026'); // Disesuaikan dengan tahun target 2026
+  const [divisionFilter, setDivisionFilter] = useState('Semua');
+  const [successToast, setSuccessToast] = useState('');
+  const [selectedEmployee, setSelectedEmployee] = useState(null);
+
+  // Mengambil tanggal hari ini dalam format lokal untuk Judul Tabel
+  const formattedToday = new Date().toLocaleDateString('id-ID', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  });
 
   useEffect(() => {
     async function loadAttendance() {
       try {
+        setLoading(true);
         const todayStr = new Date().toISOString().split('T')[0];
-        const { data } = await supabase
+        
+        // Fetch data absensi hari ini dengan join tabel users
+        const { data, error } = await supabase
           .from('absensi')
-          .select('*, karyawan:users(nama,role)')
+          .select('*, karyawan:users(nama, role)')
           .eq('tanggal', todayStr);
+
+        if (error) throw error;
 
         if (data) {
           setEmployees(data.map(item => {
+            // Pemetaan role database ke nama divisi UI
             let divName = 'Fasilitas';
-            if (item.karyawan?.role === 'div_keuangan') divName = 'Keuangan';
-            else if (item.karyawan?.role === 'div_pemeliharaan') divName = 'Pemeliharaan';
-            else if (item.karyawan?.role === 'div_keamanan') divName = 'Keamanan';
-            else if (item.karyawan?.role === 'div_kebersihan') divName = 'Kebersihan';
-            else if (item.karyawan?.role === 'div_fasilitas') divName = 'Fasilitas';
+            const role = item.karyawan?.role || '';
+            
+            if (role.includes('keuangan')) divName = 'Keuangan';
+            else if (role.includes('pemeliharaan')) divName = 'Pemeliharaan';
+            else if (role.includes('keamanan')) divName = 'Keamanan';
+            else if (role.includes('kebersihan')) divName = 'Kebersihan';
+            else if (role.includes('fasilitas')) divName = 'Fasilitas';
+            else if (role.includes('sdm')) divName = 'SDM';
 
             const dateObj = new Date(item.tanggal);
             const formattedDate = dateObj.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -30,29 +52,28 @@ export default function AbsenKaryawan() {
               id: item.id,
               name: item.karyawan?.nama || '—',
               division: divName,
-              checkIn: item.jam_masuk || '—',
-              checkOut: item.jam_keluar || '—',
+              checkIn: item.jam_masuk ? item.jam_masuk.substring(0, 5) : '—', // Potong format detik (HH:MM)
+              checkOut: item.jam_keluar ? item.jam_keluar.substring(0, 5) : '—',
               status: item.status === 'hadir' ? 'Hadir' : 'Tidak Hadir',
               date: formattedDate,
-              device: item.device || 'Android Device',
+              device: 'Android Device', // Fallback karena tidak ada di skema
               location: item.lokasi || 'Area Apartemen',
-              notes: item.keterangan || (item.status === 'hadir' ? 'Tercatat di sistem' : 'Izin')
+              notes: item.status === 'hadir' ? 'Tercatat di sistem' : (item.status || 'Izin')
             };
           }));
         }
       } catch (err) {
         console.error('Error fetching employee attendance:', err);
+      } finally {
+        setLoading(false);
       }
     }
     loadAttendance();
   }, []);
 
-  const [period, setPeriod] = useState('April 2026');
-  const [divisionFilter, setDivisionFilter] = useState('Semua');
-  const [successToast, setSuccessToast] = useState('');
-  
-  // State baru untuk mengatur modal detail simulasi
-  const [selectedEmployee, setSelectedEmployee] = useState(null);
+  // Menghitung statistik KPI secara dinamis berdasarkan data yang di-fetch
+  const totalHadir = employees.filter(emp => emp.status === 'Hadir').length;
+  const totalTidakHadir = employees.filter(emp => emp.status === 'Tidak Hadir').length;
 
   const getDivisionBadgeClass = (division) => {
     switch (division) {
@@ -99,6 +120,7 @@ export default function AbsenKaryawan() {
               onChange={(e) => setPeriod(e.target.value)}
               className="px-3 py-1.5 border border-[#EAE6E1] rounded-xl text-xs bg-[#FAF6F0] text-[#1E1E1E] font-bold focus:outline-none focus:border-[#1E1E1E]"
             >
+              <option value="Mei 2026">Mei 2026</option>
               <option value="April 2026">April 2026</option>
               <option value="Maret 2026">Maret 2026</option>
             </select>
@@ -122,7 +144,7 @@ export default function AbsenKaryawan() {
         </div>
       </div>
 
-      {/* KPI Stats Row — Cleaned Up for GM */}
+      {/* KPI Stats Row — Dinamis dari Supabase */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="card-pink flex flex-col justify-between min-h-[120px] hover:scale-[1.01] transition">
           <div className="flex justify-between items-start">
@@ -131,17 +153,17 @@ export default function AbsenKaryawan() {
               <Users size={16} />
             </div>
           </div>
-          <h4 className="text-[#1E1E1E] font-black text-2xl mt-2">34 Staff</h4>
+          <h4 className="text-[#1E1E1E] font-black text-2xl mt-2">{loading ? '...' : `${totalHadir} Staf`}</h4>
         </div>
 
         <div className="card-lavender flex flex-col justify-between min-h-[120px] hover:scale-[1.01] transition">
           <div className="flex justify-between items-start">
-            <span className="text-[#8A857F] font-semibold text-xs">Tidak Hadir</span>
+            <span className="text-[#8A857F] font-semibold text-xs">Tidak Hadir / Izin</span>
             <div className="card-icon-lavender !mb-0">
               <AlertCircle size={16} />
             </div>
           </div>
-          <h4 className="text-[#1E1E1E] font-black text-2xl mt-2">4 Orang</h4>
+          <h4 className="text-[#1E1E1E] font-black text-2xl mt-2">{loading ? '...' : `${totalTidakHadir} Orang`}</h4>
         </div>
       </div>
 
@@ -150,9 +172,9 @@ export default function AbsenKaryawan() {
         <div className="flex flex-col md:flex-row md:items-center justify-between pb-5 border-b border-[#EAE6E1] mb-5 gap-4">
           <div>
             <h3 className="text-sm font-bold text-[#1E1E1E] uppercase tracking-wider font-serif">
-              Daftar Absensi — Rabu, 20 Mei 2026
+              Daftar Absensi — {formattedToday}
             </h3>
-            <p className="text-xs text-[#8A857F] font-medium">Data check-in harian yang tercatat di sistem apartemen</p>
+            <p className="text-xs text-[#8A857F] font-medium">Data presensi harian karyawan terintegrasi basis data Supabase</p>
           </div>
         </div>
 
@@ -170,43 +192,52 @@ export default function AbsenKaryawan() {
               </tr>
             </thead>
             <tbody>
-              {filteredEmployees.map((emp, idx) => (
-                <tr key={emp.id}>
-                  <td className="text-[#8A857F] font-bold">{idx + 1}</td>
-                  <td className="font-bold text-[#1E1E1E]">{emp.name}</td>
-                  <td>
-                    <span className={`badge-base ${getDivisionBadgeClass(emp.division)}`}>
-                      {emp.division}
-                    </span>
-                  </td>
-                  <td className="font-mono text-[#8A857F]">{emp.checkIn}</td>
-                  <td className="font-mono text-[#8A857F]">{emp.checkOut}</td>
-                  <td>
-                    <span className={`badge-base ${getStatusClass(emp.status)}`}>
-                      {emp.status}
-                    </span>
-                  </td>
-                  <td className="text-right">
-                    <button
-                      onClick={() => handleOpenDetail(emp)}
-                      className="text-xs font-bold text-[#1E1E1E] hover:underline"
-                    >
-                      Detail
-                    </button>
-                  </td>
+              {loading ? (
+                <tr>
+                  <td colSpan="7" className="text-center py-4 text-xs text-[#8A857F]">Memuat log presensi staf...</td>
                 </tr>
-              ))}
+              ) : filteredEmployees.length === 0 ? (
+                <tr>
+                  <td colSpan="7" className="text-center py-4 text-xs text-[#8A857F]">Tidak ada data absensi untuk divisi ini hari ini.</td>
+                </tr>
+              ) : (
+                filteredEmployees.map((emp, idx) => (
+                  <tr key={emp.id}>
+                    <td className="text-[#8A857F] font-bold">{idx + 1}</td>
+                    <td className="font-bold text-[#1E1E1E]">{emp.name}</td>
+                    <td>
+                      <span className={`badge-base ${getDivisionBadgeClass(emp.division)}`}>
+                        {emp.division}
+                      </span>
+                    </td>
+                    <td className="font-mono text-[#8A857F]">{emp.checkIn}</td>
+                    <td className="font-mono text-[#8A857F]">{emp.checkOut}</td>
+                    <td>
+                      <span className={`badge-base ${getStatusClass(emp.status)}`}>
+                        {emp.status}
+                      </span>
+                    </td>
+                    <td className="text-right">
+                      <button
+                        onClick={() => handleOpenDetail(emp)}
+                        className="text-xs font-bold text-[#1E1E1E] hover:underline"
+                      >
+                        Detail
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* POPUP MODAL SIMULASI DETAIL KEHADIRAN (HANYA VIEW UNTUK GM) */}
+      {/* POPUP MODAL MONITORING KEHADIRAN */}
       {selectedEmployee && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 animate-fade-in p-4">
           <div className="bg-[#FAF6F0] border border-[#EAE6E1] rounded-2xl max-w-md w-full shadow-2xl p-6 relative animate-scale-up space-y-4">
             
-            {/* Header Modal */}
             <div className="flex items-center justify-between border-b border-[#EAE6E1] pb-3">
               <div>
                 <h3 className="text-sm font-extrabold text-[#1E1E1E] tracking-tight">Detail Log Keaktifan Karyawan</h3>
@@ -220,7 +251,6 @@ export default function AbsenKaryawan() {
               </button>
             </div>
 
-            {/* Profile Singkat */}
             <div className="bg-white p-4 rounded-xl border border-[#EAE6E1] flex items-center justify-between">
               <div>
                 <h4 className="text-sm font-bold text-[#1E1E1E]">{selectedEmployee.name}</h4>
@@ -231,7 +261,6 @@ export default function AbsenKaryawan() {
               </span>
             </div>
 
-            {/* Data Log Kehadiran Teknis */}
             <div className="space-y-2.5 text-xs">
               <div className="flex items-center gap-3 text-[#1E1E1E]">
                 <Clock size={14} className="text-[#8A857F] shrink-0" />
@@ -256,13 +285,11 @@ export default function AbsenKaryawan() {
               </div>
             </div>
 
-            {/* Keterangan Tambahan / Catatan Lapangan */}
             <div className="bg-white p-3 rounded-xl border border-[#EAE6E1] space-y-1">
               <span className="text-[10px] font-bold text-[#8A857F] uppercase tracking-wider">Catatan Sistem / HRD:</span>
               <p className="text-xs text-[#1E1E1E] font-medium italic">"{selectedEmployee.notes}"</p>
             </div>
 
-            {/* Footer Modal */}
             <div className="pt-2">
               <button
                 onClick={() => setSelectedEmployee(null)}
