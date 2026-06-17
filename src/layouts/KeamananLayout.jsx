@@ -5,7 +5,7 @@ import LogoutModal from '../components/shared/LogoutModal';
 import NotificationBell from '../components/shared/NotificationBell';
 import {
   LayoutDashboard,
-  QrCode,
+  Users,
   Car,
   Megaphone,
   ClipboardList,
@@ -87,9 +87,9 @@ export default function KeamananLayout() {
       icon: LayoutDashboard
     },
     {
-      name: 'Log Tamu (QR Code)',
+      name: 'Log Tamu',
       path: '/keamanan/tamu',
-      icon: QrCode
+      icon: Users
     },
     {
       name: 'Log Parkir',

@@ -1,17 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import {
-  QrCode,
   Plus,
   X,
-  Printer,
+  UserPlus,
   CheckCircle2,
-  Info,
-  LogOut
+  LogOut,
+  Search
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
 export default function LogTamu() {
-  const [showToast, setShowToast] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [successToast, setSuccessToast] = useState('');
 
@@ -21,18 +19,22 @@ export default function LogTamu() {
   const [keperluan, setKeperluan] = useState('Tamu pribadi');
   const [noKendaraan, setNoKendaraan] = useState('');
 
-  // Table data & units lookup
+  // Table data, search, & units lookup
   const [tamuList, setTamuList] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
   const [units, setUnits] = useState([]);
 
   // Fetch visitors and subscribe to real-time updates
   useEffect(() => {
     async function init() {
       try {
-        const { data: visitors } = await supabase
+        // 1. Fetch visitors dengan relasi unit_tujuan
+        const { data: visitors, error: fetchError } = await supabase
           .from('visitor')
           .select('*, unit_tujuan:unit(nomor_unit)')
           .order('waktu_masuk', { ascending: false });
+
+        if (fetchError) throw fetchError;
 
         if (visitors) {
           const tamuFormatted = visitors.map(v => {
@@ -41,10 +43,11 @@ export default function LogTamu() {
             const keluarStr = v.waktu_keluar 
               ? new Date(v.waktu_keluar).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
               : '-';
+
             return {
               id: v.id,
               nama: v.nama_tamu,
-              unit: v.unit_tujuan?.nomor_unit || '—',
+              unit: v.unit_tujuan?.nomor_unit || '—', 
               masuk: masukStr,
               keluar: keluarStr,
               keperluan: v.keperluan || '—',
@@ -54,6 +57,7 @@ export default function LogTamu() {
           setTamuList(tamuFormatted);
         }
 
+        // 2. Fetch data unit untuk keperluan validasi input modal
         const { data: unitData } = await supabase
           .from('unit')
           .select('id, nomor_unit');
@@ -67,7 +71,7 @@ export default function LogTamu() {
 
     init();
 
-    // Subscribe to visitor postgres changes
+    // Subscribe to visitor realtime updates
     const channel = supabase.channel('visitor-rt')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'visitor' }, async (payload) => {
         const { data: newVisitor } = await supabase
@@ -115,31 +119,20 @@ export default function LogTamu() {
     };
   }, []);
 
-  useEffect(() => {
-    setShowToast(true);
-    const timer = setTimeout(() => {
-      setShowToast(false);
-    }, 4000);
-    return () => clearTimeout(timer);
-  }, []);
-
-  const handleScanClick = () => {
-    setShowToast(true);
-    setTimeout(() => {
-      setShowToast(false);
-    }, 4000);
-  };
-
   const handleCreateTamu = async (e) => {
     e.preventDefault();
     if (!namaTamu.trim() || !tujuanUnit.trim()) return;
 
-    const cleanUnitInput = tujuanUnit.trim().toLowerCase();
+    const cleanUnitInput = tujuanUnit.split('—')[0].trim().toLowerCase();
     const matchedUnit = units.find(u => 
-      cleanUnitInput.includes(u.nomor_unit.toLowerCase()) || 
-      u.nomor_unit.toLowerCase().includes(cleanUnitInput)
+      u.nomor_unit.toLowerCase() === cleanUnitInput
     );
     const unit_tujuan_id = matchedUnit ? matchedUnit.id : null;
+
+    if (!unit_tujuan_id) {
+      alert(`Unit "${cleanUnitInput.toUpperCase()}" tidak terdaftar di database. Mohon periksa kembali.`);
+      return;
+    }
 
     try {
       const { data: inserted, error } = await supabase
@@ -161,7 +154,7 @@ export default function LogTamu() {
       setKeperluan('Tamu pribadi');
       setNoKendaraan('');
 
-      setSuccessToast(`Tamu ${inserted.nama_tamu} berhasil didaftarkan! QR Code tercetak.`);
+      setSuccessToast(`Tamu ${inserted.nama_tamu} berhasil didaftarkan!`);
       setTimeout(() => setSuccessToast(''), 3000);
     } catch (err) {
       console.error('Failed to register visitor:', err.message);
@@ -184,11 +177,20 @@ export default function LogTamu() {
     }
   };
 
+  // Logika Filter Pencarian
+  const filteredTamu = tamuList.filter(tamu => {
+    const searchLower = searchTerm.toLowerCase();
+    return (
+      tamu.nama.toLowerCase().includes(searchLower) ||
+      tamu.unit.toLowerCase().includes(searchLower) ||
+      tamu.keperluan.toLowerCase().includes(searchLower)
+    );
+  });
+
   return (
     <div className="space-y-6 animate-fade-up relative">
-      
       {/* Controls Row */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 w-full">
         <button
           onClick={() => setModalOpen(true)}
           className="btn-primary py-2.5 px-4 text-xs font-bold"
@@ -197,26 +199,33 @@ export default function LogTamu() {
           <span>Daftarkan Tamu</span>
         </button>
 
-        <button
-          onClick={handleScanClick}
-          className="btn-ghost py-2.5 px-4 text-xs font-bold"
-        >
-          <QrCode size={14} className="stroke-[2.5]" />
-          <span>Scan QR</span>
-        </button>
+        {/* Input Pencarian */}
+        <div className="relative ml-auto w-full max-w-xs flex items-center">
+          <span className="absolute left-3 flex items-center pointer-events-none text-muted z-10">
+            <Search size={14} />
+          </span>
+          <input
+            type="text"
+            placeholder="Cari nama, unit, atau keperluan..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="input-modern py-2.5 pr-4 text-xs font-semibold w-full"
+            style={{ paddingLeft: '2.25rem' }}
+          />
+        </div>
       </div>
 
       {/* Table Section */}
       <div className="card-section p-6 overflow-hidden">
         <h3 className="text-xs font-bold text-ink uppercase tracking-wider mb-5">
-          Log Tamu — QR Code
+          Log Tamu
         </h3>
 
         <div className="table-wrap">
           <table className="table-modern">
             <thead>
               <tr>
-                <th className="w-16 text-center">QR</th>
+                <th className="w-12 text-center">No.</th>
                 <th>Nama Tamu</th>
                 <th>Tujuan Unit</th>
                 <th>Masuk</th>
@@ -227,42 +236,48 @@ export default function LogTamu() {
               </tr>
             </thead>
             <tbody>
-              {tamuList.map((tamu) => (
-                <tr key={tamu.id}>
-                  <td className="flex justify-center">
-                    <div className="w-9 h-9 border border-soft rounded-xl flex items-center justify-center bg-[#FAF6F0] text-muted shadow-sm">
-                      <QrCode size={15} className="stroke-[1.5]" />
-                    </div>
-                  </td>
-                  <td className="font-bold text-ink">{tamu.nama}</td>
-                  <td>{tamu.unit}</td>
-                  <td className="font-bold text-ink">{tamu.masuk}</td>
-                  <td className="text-muted">{tamu.keluar}</td>
-                  <td className="text-muted">{tamu.keperluan}</td>
-                  <td>
-                    <span className={`badge-base ${
-                      tamu.status === 'Di Dalam'
-                        ? 'badge-mint'
-                        : 'badge-gray'
-                    }`}>
-                      {tamu.status}
-                    </span>
-                  </td>
-                  <td className="text-right">
-                    {tamu.status === 'Di Dalam' ? (
-                      <button
-                        onClick={() => handleCheckOut(tamu.id)}
-                        className="inline-flex items-center gap-1 text-[#E06E5D] hover:underline font-bold text-xs"
-                      >
-                        <LogOut size={12} />
-                        <span>Keluar</span>
-                      </button>
-                    ) : (
-                      <span className="text-muted font-semibold text-xs">-</span>
-                    )}
+              {filteredTamu.length > 0 ? (
+                filteredTamu.map((tamu, index) => (
+                  <tr key={tamu.id}>
+                    <td className="text-center text-muted font-semibold text-xs">
+                      {index + 1}
+                    </td>
+                    <td className="font-bold text-ink">{tamu.nama}</td>
+                    <td className="font-semibold text-ink">{tamu.unit}</td>
+                    <td className="font-bold text-ink">{tamu.masuk}</td>
+                    <td className="text-muted">{tamu.keluar}</td>
+                    <td className="text-muted">{tamu.keperluan}</td>
+                    <td>
+                      <span className={`badge-base ${
+                        tamu.status === 'Di Dalam'
+                          ? 'badge-mint'
+                          : 'badge-gray'
+                      }`}>
+                        {tamu.status}
+                      </span>
+                    </td>
+                    <td className="text-right">
+                      {tamu.status === 'Di Dalam' ? (
+                        <button
+                          onClick={() => handleCheckOut(tamu.id)}
+                          className="inline-flex items-center gap-1 text-[#E06E5D] hover:underline font-bold text-xs"
+                        >
+                          <LogOut size={12} />
+                          <span>Keluar</span>
+                        </button>
+                      ) : (
+                        <span className="text-muted font-semibold text-xs">-</span>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="8" className="text-center py-8 text-muted font-semibold text-xs">
+                    Tidak ada log tamu yang cocok dengan pencarian.
                   </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>
@@ -272,7 +287,6 @@ export default function LogTamu() {
       {modalOpen && (
         <div className="modal-overlay">
           <div className="modal-box">
-            {/* Header */}
             <div className="modal-header">
               <h3 className="text-xs font-bold text-ink uppercase tracking-wider">Daftarkan Tamu Baru</h3>
               <button
@@ -283,12 +297,9 @@ export default function LogTamu() {
               </button>
             </div>
 
-            {/* Form Body */}
             <form onSubmit={handleCreateTamu} className="modal-body space-y-4">
               <div>
-                <label className="label-modern">
-                  Nama Tamu
-                </label>
+                <label className="label-modern">Nama Tamu</label>
                 <input
                   type="text"
                   required
@@ -300,13 +311,11 @@ export default function LogTamu() {
               </div>
 
               <div>
-                <label className="label-modern">
-                  Tujuan Unit
-                </label>
+                <label className="label-modern">Tujuan Unit</label>
                 <input
                   type="text"
                   required
-                  placeholder="Contoh: 12A — Hendra G."
+                  placeholder="Contoh: C401"
                   value={tujuanUnit}
                   onChange={(e) => setTujuanUnit(e.target.value)}
                   className="input-modern font-semibold"
@@ -314,9 +323,7 @@ export default function LogTamu() {
               </div>
 
               <div>
-                <label className="label-modern">
-                  Keperluan
-                </label>
+                <label className="label-modern">Keperluan</label>
                 <select
                   value={keperluan}
                   onChange={(e) => setKeperluan(e.target.value)}
@@ -330,9 +337,7 @@ export default function LogTamu() {
               </div>
 
               <div>
-                <label className="label-modern">
-                  No. Kendaraan (opsional)
-                </label>
+                <label className="label-modern">No. Kendaraan (opsional)</label>
                 <input
                   type="text"
                   placeholder="Contoh: L 1234 AB"
@@ -342,14 +347,13 @@ export default function LogTamu() {
                 />
               </div>
 
-              {/* Footer */}
               <div className="flex flex-col gap-2 pt-3 border-t border-soft">
                 <button
                   type="submit"
                   className="w-full flex items-center justify-center gap-1.5 btn-primary py-3 rounded-xl text-xs font-bold"
                 >
-                  <Printer size={14} />
-                  <span>Daftarkan & Cetak QR</span>
+                  <UserPlus size={14} />
+                  <span>Daftarkan</span>
                 </button>
                 <button
                   type="button"
@@ -360,18 +364,6 @@ export default function LogTamu() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {/* Auto-Dismissing Info Toast */}
-      {showToast && (
-        <div className="toast-modern">
-          <div className="w-5 h-5 rounded-full bg-white/10 text-white flex items-center justify-center flex-shrink-0">
-            <Info size={14} />
-          </div>
-          <div>
-            <p className="text-xs font-bold">Fitur scan QR menggunakan kamera perangkat.</p>
           </div>
         </div>
       )}
