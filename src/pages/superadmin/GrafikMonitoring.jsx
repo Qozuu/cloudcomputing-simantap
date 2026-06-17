@@ -15,16 +15,12 @@ import {
 import {
   TrendingUp,
   TrendingDown,
-  Activity,
-  AlertTriangle,
-  FileDown,
-  CheckCircle
+  AlertTriangle
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
 export default function GrafikMonitoring() {
   const [timeFilter, setTimeFilter] = useState('6 Bulan Terakhir');
-  const [successToast, setSuccessToast] = useState('');
 
   const [monitoringData, setMonitoringData] = useState([]);
   const [pieData, setPieData] = useState([]);
@@ -50,7 +46,7 @@ export default function GrafikMonitoring() {
     { label: 'Pemeliharaan', rate: 93, progressClass: 'progress-pink' },
     { label: 'Keamanan', rate: 92, progressClass: 'progress-dark' },
     { label: 'Kebersihan', rate: 88, progressClass: 'progress-pink' },
-    { label: 'Management', rate: 100, progressClass: 'progress-mint' }
+    { label: 'Fasilitas', rate: 100, progressClass: 'progress-mint' }
   ]);
 
   const [kerusakanFasilitas, setKerusakanFasilitas] = useState([
@@ -237,7 +233,7 @@ export default function GrafikMonitoring() {
         const pemeliharaanRate = calcRate(divCounts.div_pemeliharaan?.hadir || 0, divCounts.div_pemeliharaan?.total || 0, 93);
         const keamananRate = calcRate(divCounts.div_keamanan?.hadir || 0, divCounts.div_keamanan?.total || 0, 92);
         const kebersihanRate = calcRate(divCounts.div_kebersihan?.hadir || 0, divCounts.div_kebersihan?.total || 0, 88);
-        const managementRate = calcRate(divCounts.management?.hadir || 0, divCounts.management?.total || 0, 100);
+        const managementRate = calcRate(divCounts.div_fasilitas?.hadir || 0, divCounts.div_fasilitas?.total || 0, 100);
 
         const avgRate = totalLogs > 0 ? ((totalHadirs / totalLogs) * 100).toFixed(1) + '%' : '91.4%';
 
@@ -246,7 +242,7 @@ export default function GrafikMonitoring() {
           { label: 'Pemeliharaan', rate: pemeliharaanRate, progressClass: 'progress-pink' },
           { label: 'Keamanan', rate: keamananRate, progressClass: 'progress-dark' },
           { label: 'Kebersihan', rate: kebersihanRate, progressClass: 'progress-pink' },
-          { label: 'Management', rate: managementRate, progressClass: 'progress-mint' }
+          { label: 'Fasilitas', rate: managementRate, progressClass: 'progress-mint' }
         ]);
 
         const totalPendJt = Math.round((sumIPL + sumParkir + sumFasilitas) / 1000000);
@@ -282,11 +278,6 @@ export default function GrafikMonitoring() {
     loadAllData();
   }, []);
 
-  const handleExport = () => {
-    setSuccessToast('Laporan_Monitoring_Grafik.pdf berhasil diunduh!');
-    setTimeout(() => setSuccessToast(''), 3000);
-  };
-
   const totalSumber = (sumberIPL + sumberParkir + sumberFasilitas) || 1;
   const pctIPL = Math.round((sumberIPL / totalSumber) * 100);
   const pctParkir = Math.round((sumberParkir / totalSumber) * 100);
@@ -294,7 +285,7 @@ export default function GrafikMonitoring() {
 
   return (
     <div className="space-y-6 animate-fade-up relative">
-      {/* Controls Header */}
+      {/* Controls Header (Tombol Export PDF sudah dihapus) */}
       <div className="card-section p-6 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-sm font-bold text-[#1E1E1E] uppercase tracking-wider font-serif">Grafik Monitoring Terintegrasi</h2>
@@ -310,17 +301,10 @@ export default function GrafikMonitoring() {
             <option value="6 Bulan Terakhir">6 Bulan Terakhir</option>
             <option value="1 Tahun Terakhir">1 Tahun Terakhir</option>
           </select>
-          <button
-            onClick={handleExport}
-            className="btn-ghost btn-sm"
-          >
-            <FileDown size={14} />
-            <span>Export PDF</span>
-          </button>
         </div>
       </div>
 
-      {/* KPI Stats Row (5 Cards) - 5-position rotation applied */}
+      {/* KPI Stats Row (5 Cards) */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         <div className="card-pink flex flex-col justify-between min-h-[110px]">
           <div>
@@ -397,7 +381,6 @@ export default function GrafikMonitoring() {
                 axisLine={false} 
                 tick={{ fontSize: 10, fontWeight: 'bold', fill: '#8A857F' }}
               />
-              {/* Financial Axis (Left) */}
               <YAxis 
                 yAxisId="financial" 
                 tickFormatter={(v) => `Rp ${v} Jt`}
@@ -405,7 +388,6 @@ export default function GrafikMonitoring() {
                 axisLine={false}
                 tick={{ fontSize: 10, fontWeight: 'bold', fill: '#1E1E1E' }}
               />
-              {/* Attendance Axis (Right) */}
               <YAxis 
                 yAxisId="percentage" 
                 orientation="right"
@@ -424,12 +406,11 @@ export default function GrafikMonitoring() {
               />
               <Legend verticalAlign="bottom" height={36} wrapperStyle={{ fontSize: '11px', fontWeight: 'bold', paddingTop: '10px' }} />
               
-              {/* Lines using premium pastel styles */}
               <Line 
                 name="Pendapatan" 
                 type="monotone" 
                 dataKey="Pendapatan" 
-                stroke="#B85040" // Pink
+                stroke="#B85040" 
                 strokeWidth={3} 
                 yAxisId="financial" 
                 connectNulls 
@@ -440,7 +421,7 @@ export default function GrafikMonitoring() {
                 name="Pengeluaran" 
                 type="monotone" 
                 dataKey="Pengeluaran" 
-                stroke="#A05820" // Yellow
+                stroke="#A05820" 
                 strokeWidth={2.5} 
                 yAxisId="financial" 
                 connectNulls 
@@ -450,7 +431,7 @@ export default function GrafikMonitoring() {
                 name="Laba Bersih" 
                 type="monotone" 
                 dataKey="Laba" 
-                stroke="#187050" // Mint
+                stroke="#187050" 
                 strokeWidth={2.5} 
                 yAxisId="financial" 
                 connectNulls 
@@ -460,7 +441,7 @@ export default function GrafikMonitoring() {
                 name="Kehadiran %" 
                 type="monotone" 
                 dataKey="Kehadiran" 
-                stroke="#4840B0" // Lavender
+                stroke="#4840B0" 
                 strokeWidth={2} 
                 strokeDasharray="5 5" 
                 yAxisId="percentage" 
@@ -636,17 +617,6 @@ export default function GrafikMonitoring() {
           ))}
         </div>
       </div>
-
-      {/* Success Toast */}
-      {successToast && (
-        <div className="toast-modern toast-success">
-          <CheckCircle size={16} />
-          <div>
-            <p className="text-[10px] text-white/70 font-semibold">Sukses</p>
-            <p className="text-xs font-bold leading-none mt-0.5">{successToast}</p>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

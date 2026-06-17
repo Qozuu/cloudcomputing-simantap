@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, X, Search } from 'lucide-react';
+import { Search } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
 export default function DataUnit() {
@@ -9,15 +9,6 @@ export default function DataUnit() {
   const [towerFilter, setTowerFilter] = useState('Semua');
   const [statusFilter, setStatusFilter] = useState('Semua');
   const [searchQuery, setSearchQuery] = useState('');
-  const [modalOpen, setModalOpen] = useState(false);
-
-  const [newUnit, setNewUnit] = useState({
-    noUnit: '',
-    tower: '',
-    floor: '',
-    size: '',
-    status: 'Kosong'
-  });
 
   const loadData = async () => {
     try {
@@ -45,9 +36,6 @@ export default function DataUnit() {
         .order('nama_tower');
       if (towerData) {
         setTowers(towerData);
-        if (towerData.length > 0 && !newUnit.tower) {
-          setNewUnit(prev => ({ ...prev, tower: towerData[0].nama_tower }));
-        }
       }
     } catch (err) {
       console.error('Error loading unit data:', err);
@@ -57,37 +45,6 @@ export default function DataUnit() {
   useEffect(() => {
     loadData();
   }, []);
-
-  const handleAddUnit = async (e) => {
-    e.preventDefault();
-    if (!newUnit.noUnit || !newUnit.floor || !newUnit.size) return;
-
-    const matchedTower = towers.find(t => t.nama_tower === newUnit.tower);
-    if (!matchedTower) return;
-
-    const formData = {
-      nomor_unit: newUnit.noUnit,
-      tower_id: matchedTower.id,
-      lantai: parseInt(newUnit.floor),
-      luas: parseInt(newUnit.size),
-      status: newUnit.status.toLowerCase(),
-      penghuni_id: null
-    };
-
-    try {
-      const { error } = await supabase
-        .from('unit')
-        .insert(formData);
-
-      if (error) throw error;
-
-      setModalOpen(false);
-      setNewUnit({ noUnit: '', tower: towers[0]?.nama_tower || '', floor: '', size: '', status: 'Kosong' });
-      loadData();
-    } catch (err) {
-      console.error('Error adding unit:', err.message);
-    }
-  };
 
   const filteredUnits = units.filter(unit => {
     const matchesTower = towerFilter === 'Semua' || unit.tower === towerFilter;
@@ -130,7 +87,7 @@ export default function DataUnit() {
             </select>
           </div>
 
-          {/* SEARCH BOX FIXED (Menggunakan Inline Style untuk memaksa posisi) */}
+          {/* SEARCH BOX FIXED */}
           <div className="relative flex items-center" style={{ minWidth: '240px' }}>
             <input
               type="text"
@@ -140,7 +97,7 @@ export default function DataUnit() {
               className="input-modern font-semibold w-full"
               style={{ 
                 paddingLeft: '16px', 
-                paddingRight: '40px', // Ruang agar teks tidak menimpa ikon
+                paddingRight: '40px', 
                 borderRadius: '99px' 
               }}
             />
@@ -149,21 +106,13 @@ export default function DataUnit() {
               size={16} 
               style={{ 
                 position: 'absolute', 
-                right: '15px',      // Ikon dikunci di kanan
-                left: 'auto',       // Menghapus paksa settingan CSS global
+                right: '15px',      
+                left: 'auto',       
                 pointerEvents: 'none' 
               }} 
             />
           </div>
         </div>
-
-        <button
-          onClick={() => setModalOpen(true)}
-          className="btn-primary py-2.5 px-4 text-xs font-bold"
-        >
-          <Plus size={14} />
-          <span>Tambah Unit</span>
-        </button>
       </div>
 
       {/* Table Section */}
@@ -179,7 +128,6 @@ export default function DataUnit() {
                 <th className="text-left">Penghuni</th>
                 <th className="text-left">Status</th>
                 <th className="text-left">IPL / Bulan</th>
-                {/* HEAD AKSI TENGAH */}
                 <th style={{ textAlign: 'center', width: '100px' }}>Aksi</th>
               </tr>
             </thead>
@@ -198,7 +146,6 @@ export default function DataUnit() {
                       </span>
                     </td>
                     <td className="text-ink font-bold font-mono">{row.ipl}</td>
-                    {/* ISI AKSI TENGAH */}
                     <td style={{ textAlign: 'center' }}>
                       <button 
                         className="text-ink hover:underline font-bold text-xs"
@@ -220,87 +167,6 @@ export default function DataUnit() {
           </table>
         </div>
       </div>
-
-      {/* Modal Add Unit tetap seperti kode asli Anda */}
-      {modalOpen && (
-        <div className="modal-overlay">
-          <div className="modal-box">
-            <div className="modal-header">
-              <h3 className="text-xs font-bold text-ink uppercase tracking-wider">Tambah Unit Apartemen</h3>
-              <button onClick={() => setModalOpen(false)} className="text-muted hover:text-ink transition">
-                <X size={18} />
-              </button>
-            </div>
-            <form onSubmit={handleAddUnit} className="modal-body space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="label-modern">No. Unit</label>
-                  <input
-                    type="text"
-                    required
-                    value={newUnit.noUnit}
-                    onChange={(e) => setNewUnit(prev => ({ ...prev, noUnit: e.target.value }))}
-                    className="input-modern font-semibold"
-                  />
-                </div>
-                <div>
-                  <label className="label-modern">Tower</label>
-                  <select
-                    value={newUnit.tower}
-                    onChange={(e) => setNewUnit(prev => ({ ...prev, tower: e.target.value }))}
-                    className="select-modern input-modern font-semibold"
-                  >
-                    {towers.map(t => (
-                      <option key={t.id} value={t.nama_tower}>{t.nama_tower}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="label-modern">Lantai</label>
-                  <input
-                    type="number"
-                    required
-                    value={newUnit.floor}
-                    onChange={(e) => setNewUnit(prev => ({ ...prev, floor: e.target.value }))}
-                    className="input-modern font-semibold"
-                  />
-                </div>
-                <div>
-                  <label className="label-modern">Luas (m²)</label>
-                  <input
-                    type="number"
-                    required
-                    value={newUnit.size}
-                    onChange={(e) => setNewUnit(prev => ({ ...prev, size: e.target.value }))}
-                    className="input-modern font-semibold"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="label-modern">Status Unit</label>
-                <select
-                  value={newUnit.status}
-                  onChange={(e) => setNewUnit(prev => ({ ...prev, status: e.target.value }))}
-                  className="select-modern input-modern font-semibold"
-                >
-                  <option value="Kosong">Kosong</option>
-                  <option value="Dihuni">Dihuni</option>
-                </select>
-              </div>
-              <div className="flex items-center gap-3 pt-3 border-t border-soft">
-                <button type="submit" className="flex-1 btn-primary justify-center py-2.5 rounded-xl text-xs font-bold">
-                  Tambah Unit
-                </button>
-                <button type="button" onClick={() => setModalOpen(false)} className="flex-1 btn-ghost justify-center py-2.5 rounded-xl text-xs font-bold border border-gray-200">
-                  Batal
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

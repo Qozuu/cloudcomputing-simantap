@@ -16,7 +16,7 @@ export default function AbsenKaryawan() {
 
         if (data) {
           setEmployees(data.map(item => {
-            let divName = 'Management';
+            let divName = 'Fasilitas';
             if (item.karyawan?.role === 'div_keuangan') divName = 'Keuangan';
             else if (item.karyawan?.role === 'div_pemeliharaan') divName = 'Pemeliharaan';
             else if (item.karyawan?.role === 'div_keamanan') divName = 'Keamanan';
@@ -60,7 +60,7 @@ export default function AbsenKaryawan() {
       case 'Pemeliharaan': return 'badge-yellow';
       case 'Keamanan': return 'badge-dark';
       case 'Kebersihan': return 'badge-mint';
-      case 'Management': return 'badge-gray';
+      case 'Fasilitas': return 'badge-gray';
       default: return 'badge-gray';
     }
   };
@@ -116,7 +116,7 @@ export default function AbsenKaryawan() {
               <option value="Pemeliharaan">Pemeliharaan</option>
               <option value="Keamanan">Keamanan</option>
               <option value="Kebersihan">Kebersihan</option>
-              <option value="Management">Management</option>
+              <option value="Fasilitas">Fasilitas</option>
             </select>
           </div>
         </div>

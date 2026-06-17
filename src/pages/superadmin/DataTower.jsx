@@ -1,21 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, X, Building2, Info, Edit3, CheckCircle, BarChart3, Users } from 'lucide-react';
+import { Building2, Info, BarChart3 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
 export default function DataTower() {
   const [towers, setTowers] = useState([]);
 
-  // Modal States
-  const [modalOpen, setModalOpen] = useState(false);
+  // Modal States (Hanya menyisakan Detail Modal)
   const [detailModalOpen, setDetailModalOpen] = useState(false);
-  const [editModalOpen, setEditModalOpen] = useState(false);
-
-  // Selected Tower State for Detail & Edit
   const [selectedTower, setSelectedTower] = useState(null);
-
-  // Form States
-  const [newTower, setNewTower] = useState({ name: '', floors: '', totalUnits: '', desc: '' });
-  const [editFormData, setEditFormData] = useState({ name: '', floors: '', totalUnits: '', desc: '' });
 
   const loadTowers = async () => {
     try {
@@ -27,7 +19,7 @@ export default function DataTower() {
       if (data) {
         const { data: allUnits } = await supabase
           .from('unit')
-          .select('tower_id, status, penghuni:users!penghuni_id(nama)');
+          .select('tower_id, status');
 
         setTowers(data.map(t => {
           const towerUnits = allUnits?.filter(u => u.tower_id === t.id) || [];
@@ -35,12 +27,6 @@ export default function DataTower() {
           const activeUnits = towerUnits.filter(u => u.status === 'dihuni' || u.status === 'Dihuni').length;
           const emptyUnits = totalUnits - activeUnits;
           const occupancy = totalUnits > 0 ? Math.round((activeUnits / totalUnits) * 100) : 0;
-          
-          const residentNames = towerUnits
-            .filter(u => u.penghuni?.nama)
-            .map(u => u.penghuni.nama)
-            .slice(0, 5)
-            .join(', ');
 
           return {
             id: t.id,
@@ -50,7 +36,6 @@ export default function DataTower() {
             activeUnits,
             occupancy,
             emptyUnits,
-            residents: residentNames || 'Belum ada penghuni terdaftar...',
             desc: t.alamat || 'Tidak ada keterangan tambahan.'
           };
         }));
@@ -64,91 +49,22 @@ export default function DataTower() {
     loadTowers();
   }, []);
 
-  // Handle Add Tower
-  const handleAddTower = async (e) => {
-    e.preventDefault();
-    if (!newTower.name || !newTower.floors) return;
-
-    const formData = {
-      nama_tower: newTower.name,
-      jumlah_lantai: parseInt(newTower.floors),
-      alamat: newTower.desc || 'Grand Surabaya Apartment'
-    };
-
-    try {
-      const { error } = await supabase
-        .from('tower')
-        .insert(formData);
-
-      if (error) throw error;
-
-      setModalOpen(false);
-      setNewTower({ name: '', floors: '', totalUnits: '', desc: '' });
-      loadTowers();
-    } catch (err) {
-      console.error('Error adding tower:', err.message);
-    }
-  };
-
   // Open Detail Modal
   const openDetail = (tower) => {
     setSelectedTower(tower);
     setDetailModalOpen(true);
   };
 
-  // Open Edit Modal
-  const openEdit = (tower) => {
-    setSelectedTower(tower);
-    setEditFormData({
-      name: tower.name,
-      floors: tower.floors,
-      totalUnits: tower.totalUnits,
-      desc: tower.desc || ''
-    });
-    setEditModalOpen(true);
-  };
-
-  // Handle Update/Save Edit Tower
-  const handleUpdateTower = async (e) => {
-    e.preventDefault();
-    if (!selectedTower) return;
-
-    const formData = {
-      nama_tower: editFormData.name,
-      jumlah_lantai: parseInt(editFormData.floors),
-      alamat: editFormData.desc
-    };
-
-    try {
-      const { error } = await supabase
-        .from('tower')
-        .update(formData)
-        .eq('id', selectedTower.id);
-
-      if (error) throw error;
-
-      setEditModalOpen(false);
-      loadTowers();
-    } catch (err) {
-      console.error('Error updating tower:', err.message);
-    }
-  };
-
   return (
     <div className="space-y-6 animate-fade-up">
-      {/* Header controls */}
+      {/* Header controls (Tombol Tambah Tower SUDAH DIHAPUS) */}
       <div className="card-section p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h2 className="text-base font-bold text-ink">Data Tower / Gedung</h2>
-          <p className="text-xs text-muted">Total {towers.length} Tower · {towers.reduce((a, b) => a + b.totalUnits, 0)} unit terintegrasi</p>
+          <p className="text-xs text-muted">
+            Total {towers.length} Tower · {towers.reduce((a, b) => a + b.totalUnits, 0)} unit terintegrasi
+          </p>
         </div>
-        <button
-          onClick={() => setModalOpen(true)}
-          className="btn-primary py-2.5 px-4 text-xs font-bold flex items-center gap-1.5"
-        >
-          <Plus size={14} />
-          <span>Tambah Tower</span>
-        </button>
       </div>
 
       {/* Tower Cards Grid */}
@@ -158,7 +74,7 @@ export default function DataTower() {
           const cardClass = sectionClasses[idx % 4];
           return (
             <div key={tower.id} className={`${cardClass} flex flex-col justify-between hover:translate-y-[-2px] transition duration-200`}>
-              {/* Header */}
+              {/* Card Header */}
               <div className="p-5 text-ink flex items-center justify-between border-b border-soft">
                 <div className="space-y-1">
                   <h3 className="text-sm font-bold text-[#1E1E1E]">{tower.name}</h3>
@@ -171,7 +87,7 @@ export default function DataTower() {
 
               {/* Card Body */}
               <div className="p-5 space-y-4">
-                <div className="grid grid-cols-3 gap-4 border-b border-soft pb-4 text-center">
+                <div className="grid grid-cols-3 gap-4 text-center">
                   <div>
                     <p className="text-[#8A857F] font-semibold text-xs mb-1.5">Unit Pembeli</p>
                     <p className="text-base font-extrabold text-[#1E1E1E]">{tower.activeUnits}</p>
@@ -185,28 +101,15 @@ export default function DataTower() {
                     <p className="text-base font-extrabold text-[#B85040]">{tower.emptyUnits}</p>
                   </div>
                 </div>
-
-                <div className="space-y-1">
-                  <p className="text-[#8A857F] font-semibold text-xs">Daftar Penghuni Utama</p>
-                  <p className="text-xs font-semibold text-muted truncate leading-relaxed">
-                    {tower.residents}
-                  </p>
-                </div>
               </div>
 
-              {/* Footer Buttons — Diperbaiki agar berfungsi */}
+              {/* Card Footer Buttons (Hanya menyisakan tombol Detail dengan lebar penuh W-FULL) */}
               <div className="border-t border-soft px-5 py-3.5 flex justify-between gap-3">
                 <button 
                   onClick={() => openDetail(tower)}
-                  className="flex-1 py-2 text-center text-xs font-bold btn-ghost justify-center rounded-xl transition duration-150 border border-gray-200 hover:bg-gray-50"
+                  className="w-full py-2 text-center text-xs font-bold btn-ghost justify-center rounded-xl transition duration-150 border border-gray-200 hover:bg-gray-50"
                 >
                   Detail
-                </button>
-                <button 
-                  onClick={() => openEdit(tower)}
-                  className="flex-1 py-2 text-center text-xs font-bold btn-ghost justify-center rounded-xl transition duration-150 border border-gray-200 hover:bg-gray-50"
-                >
-                  Edit
                 </button>
               </div>
             </div>
@@ -214,76 +117,7 @@ export default function DataTower() {
         })}
       </div>
 
-      {/* 1. Add Tower Modal */}
-      {modalOpen && (
-        <div className="modal-overlay">
-          <div className="modal-box">
-            <div className="modal-header">
-              <h3 className="text-xs font-bold text-ink uppercase tracking-wider">Tambah Tower / Gedung</h3>
-              <button onClick={() => setModalOpen(false)} className="text-muted hover:text-ink transition">
-                <X size={18} />
-              </button>
-            </div>
-            <form onSubmit={handleAddTower} className="modal-body space-y-4">
-              <div>
-                <label className="label-modern">Nama Tower</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Contoh: Tower D"
-                  value={newTower.name}
-                  onChange={(e) => setNewTower(prev => ({ ...prev, name: e.target.value }))}
-                  className="input-modern font-semibold"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="label-modern">Jumlah Lantai</label>
-                  <input
-                    type="number"
-                    required
-                    placeholder="Contoh: 20"
-                    value={newTower.floors}
-                    onChange={(e) => setNewTower(prev => ({ ...prev, floors: e.target.value }))}
-                    className="input-modern font-semibold"
-                  />
-                </div>
-                <div>
-                  <label className="label-modern">Jumlah Unit</label>
-                  <input
-                    type="number"
-                    required
-                    placeholder="Contoh: 160"
-                    value={newTower.totalUnits}
-                    onChange={(e) => setNewTower(prev => ({ ...prev, totalUnits: e.target.value }))}
-                    className="input-modern font-semibold"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="label-modern">Keterangan / Deskripsi</label>
-                <textarea
-                  placeholder="Keterangan lokasi tower atau fasilitas internal..."
-                  value={newTower.desc}
-                  onChange={(e) => setNewTower(prev => ({ ...prev, desc: e.target.value }))}
-                  rows={3}
-                  className="textarea-modern"
-                />
-              </div>
-              <div className="flex items-center gap-3 pt-3 border-t border-soft">
-                <button type="submit" className="flex-1 btn-primary justify-center py-2.5 rounded-xl text-xs font-bold">
-                  Tambah Tower
-                </button>
-                <button type="button" onClick={() => setModalOpen(false)} className="flex-1 btn-ghost justify-center py-2.5 rounded-xl text-xs font-bold">
-                  Batal
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* 2. Modal Detail Tower (Baru) */}
+      {/* Modal Detail Tower (Daftar Penghuni SUDAH DIHAPUS) */}
       {detailModalOpen && selectedTower && (
         <div className="modal-overlay">
           <div className="modal-box max-w-md">
@@ -293,7 +127,7 @@ export default function DataTower() {
                 <h3 className="text-xs font-bold text-ink uppercase tracking-wider">Rincian Informasi {selectedTower.name}</h3>
               </div>
               <button onClick={() => setDetailModalOpen(false)} className="text-muted hover:text-ink transition">
-                <X size={18} />
+                <span className="text-lg font-bold">×</span>
               </button>
             </div>
             <div className="modal-body space-y-5">
@@ -327,16 +161,6 @@ export default function DataTower() {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <div className="flex items-center gap-1.5 text-gray-500">
-                  <Users size={14} />
-                  <span className="text-[11px] font-bold uppercase tracking-wider">Daftar Penghuni Utama Terverifikasi</span>
-                </div>
-                <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
-                  <p className="text-xs text-ink font-semibold leading-relaxed">{selectedTower.residents}</p>
-                </div>
-              </div>
-
               <div className="pt-2">
                 <button 
                   type="button" 
@@ -347,74 +171,6 @@ export default function DataTower() {
                 </button>
               </div>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* 3. Modal Edit Tower (Baru) */}
-      {editModalOpen && selectedTower && (
-        <div className="modal-overlay">
-          <div className="modal-box">
-            <div className="modal-header">
-              <div className="flex items-center gap-2">
-                <Edit3 size={16} className="text-amber-500" />
-                <h3 className="text-xs font-bold text-ink uppercase tracking-wider">Ubah Struktur {selectedTower.name}</h3>
-              </div>
-              <button onClick={() => setEditModalOpen(false)} className="text-muted hover:text-ink transition">
-                <X size={18} />
-              </button>
-            </div>
-            <form onSubmit={handleUpdateTower} className="modal-body space-y-4">
-              <div>
-                <label className="label-modern">Nama Tower / Gedung</label>
-                <input
-                  type="text"
-                  required
-                  value={editFormData.name}
-                  onChange={(e) => setEditFormData(prev => ({ ...prev, name: e.target.value }))}
-                  className="input-modern font-semibold"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="label-modern">Jumlah Lantai</label>
-                  <input
-                    type="number"
-                    required
-                    value={editFormData.floors}
-                    onChange={(e) => setEditFormData(prev => ({ ...prev, floors: e.target.value }))}
-                    className="input-modern font-semibold"
-                  />
-                </div>
-                <div>
-                  <label className="label-modern">Total Kapasitas Unit</label>
-                  <input
-                    type="number"
-                    required
-                    value={editFormData.totalUnits}
-                    onChange={(e) => setEditFormData(prev => ({ ...prev, totalUnits: e.target.value }))}
-                    className="input-modern font-semibold"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="label-modern">Keterangan Wilayah / Catatan Tambahan</label>
-                <textarea
-                  value={editFormData.desc}
-                  onChange={(e) => setEditFormData(prev => ({ ...prev, desc: e.target.value }))}
-                  rows={3}
-                  className="textarea-modern"
-                />
-              </div>
-              <div className="flex items-center gap-3 pt-3 border-t border-soft">
-                <button type="submit" className="flex-1 btn-primary justify-center py-2.5 rounded-xl text-xs font-bold">
-                  Simpan Perubahan
-                </button>
-                <button type="button" onClick={() => setEditModalOpen(false)} className="flex-1 btn-ghost justify-center py-2.5 rounded-xl text-xs font-bold">
-                  Batal
-                </button>
-              </div>
-            </form>
           </div>
         </div>
       )}
