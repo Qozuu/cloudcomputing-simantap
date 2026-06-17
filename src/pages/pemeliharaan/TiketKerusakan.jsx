@@ -28,7 +28,7 @@ export default function TiketKerusakan() {
       try {
         setLoading(true);
 
-        // 1. Tarik data laporan dan relasi nomor unitnya
+        // 1. Tarik data laporan (DITAMBAHKAN field foto_url agar data link gambar ikut terbawa)
         const { data: ticketsData, error: ticketsError } = await supabase
           .from('laporan')
           .select('*, unit(nomor_unit, tower(nama_tower))')
@@ -36,13 +36,12 @@ export default function TiketKerusakan() {
 
         if (ticketsError) throw ticketsError;
 
-        // 2. Tarik data seluruh unit resmi (disesuaikan dengan skema DDL public.unit)
+        // 2. Tarik data seluruh unit resmi
         const { data: unitsData, error: unitsError } = await supabase
           .from('unit')
           .select('id, nomor_unit')
           .order('nomor_unit', { ascending: true });
 
-        // JIKA ERROR SAAT AMBIL UNIT, LANGSUNG MUNCULKAN ALERT DETEKTIF
         if (unitsError) {
           console.error("Gagal mengambil data unit dari database:", unitsError.message);
           alert("Gagal memuat daftar unit: " + unitsError.message + "\nPeriksa apakah RLS tabel 'unit' sudah di-enable access.");
@@ -55,7 +54,7 @@ export default function TiketKerusakan() {
           setAvailableUnits(unitsData);
         }
 
-        // Mapping data tiket untuk tampilan UI
+        // Mapping data tiket untuk tampilan UI (DITAMBAHKAN foto_url)
         if (ticketsData) {
           const mapped = ticketsData.map(ticket => ({
             id: String(ticket.id),
@@ -67,7 +66,8 @@ export default function TiketKerusakan() {
               year: 'numeric'
             }),
             status: ticket.status === 'selesai' || ticket.status === 'Selesai' ? 'Selesai' : 'Proses',
-            catatan_teknisi: ticket.catatan_teknisi || null
+            catatan_teknisi: ticket.catatan_teknisi || null,
+            foto_url: ticket.foto_url || null // Simpan URL foto di state agar bisa dirender
           }));
           setTickets(mapped);
         }
@@ -133,16 +133,15 @@ export default function TiketKerusakan() {
       
       const pelaporId = user.id;
 
-      // Ambil data kiriman sesuai format data public.laporan kamu
       const { data: insertedData, error: insertError } = await supabase
         .from('laporan')
         .insert({
           judul: newTitle,
           deskripsi: newTitle,
-          unit_id: newUnitId || null, // Jika kosong, otomatis masuk area umum (NULL diizinkan di skema DDL-mu)
+          unit_id: newUnitId || null,
           pelapor_id: pelaporId,
           kategori: newCategory,
-          status: 'menunggu' // Menggunakan DEFAULT 'menunggu' sesuai check constraint DDL kamu
+          status: 'menunggu'
         })
         .select()
         .maybeSingle();
@@ -164,7 +163,8 @@ export default function TiketKerusakan() {
           unit: newUnitId ? `Unit ${selectedUnitText}` : 'Umum/Area Publik',
           date: formattedDate,
           status: 'Proses',
-          catatan_teknisi: null
+          catatan_teknisi: null,
+          foto_url: null // Tiket manual via admin default-nya tidak ada lampiran foto
         };
 
         setTickets(prev => [newTicket, ...prev]);
@@ -294,14 +294,37 @@ export default function TiketKerusakan() {
 
             return (
               <div key={ticket.id} className={`${cardClass} rounded-2xl p-5 hover:shadow-md transition duration-200 flex flex-col justify-between gap-4`}>
-                <div className="flex items-start justify-between">
-                  <div>
-                    <span className="text-[10px] font-bold text-gray-400 block tracking-wider uppercase">{ticket.id}</span>
+                
+                {/* Bagian Konten Atas (Foto + Detail Judul) */}
+                <div className="flex items-start gap-4">
+                  
+                  {/* MODIFIKASI OPSI 1: RENDERING FOTO BUKTI FISIK LAPORAN */}
+                  {ticket.foto_url ? (
+                    <img 
+                      src={ticket.foto_url} 
+                      alt="Bukti" 
+                      className="w-16 h-16 rounded-xl object-cover border border-gray-200 bg-white shadow-sm cursor-zoom-in flex-shrink-0 transition hover:scale-105"
+                      onClick={() => window.open(ticket.foto_url, '_blank')}
+                      title="Klik untuk memperbesar"
+                    />
+                  ) : (
+                    <div className="w-16 h-16 rounded-xl bg-gray-200/50 border border-dashed border-gray-300 flex flex-col items-center justify-center text-center text-[9px] text-gray-400 font-bold flex-shrink-0 px-1 select-none">
+                      <span>No</span>
+                      <span>Photo</span>
+                    </div>
+                  )}
+
+                  {/* Judul Laporan */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] font-bold text-gray-400 block tracking-wider uppercase">{ticket.id}</span>
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${statusBadgeClass}`}>{ticket.status}</span>
+                    </div>
                     <h4 className="font-extrabold text-gray-900 text-base mt-1 line-clamp-2">{ticket.title}</h4>
                   </div>
-                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${statusBadgeClass}`}>{ticket.status}</span>
                 </div>
 
+                {/* Metadata Lokasi & Tanggal */}
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-gray-500 pb-2 border-b border-gray-900/5">
                   <div className="flex items-center gap-1.5 font-bold text-gray-800">
                     <svg className="w-4 h-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -317,7 +340,7 @@ export default function TiketKerusakan() {
                   </div>
                 </div>
 
-                {/* Tampilan Catatan */}
+                {/* Tampilan Catatan Teknisi */}
                 {isSelesai && ticket.catatan_teknisi && (
                   <div className="p-3 bg-white/80 rounded-xl border border-gray-200/60 text-[11px] text-gray-600 space-y-0.5 shadow-inner">
                     <span className="font-extrabold uppercase tracking-wider text-gray-400 block text-[9px]">Catatan Penyelesaian:</span>
@@ -325,6 +348,7 @@ export default function TiketKerusakan() {
                   </div>
                 )}
 
+                {/* Tombol Eksekusi Status */}
                 <div className="flex items-center justify-end mt-1">
                   <button
                     onClick={() => openMarkDoneModal(ticket.id)} 
