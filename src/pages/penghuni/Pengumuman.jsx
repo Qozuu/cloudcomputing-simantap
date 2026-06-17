@@ -14,29 +14,82 @@ export default function Pengumuman() {
     async function loadData() {
       try {
         setLoading(true);
-        // Mengambil data dari tabel 'informasi' sesuai dengan nama tabel database Anda
-        const { data, error } = await supabase
+
+        // 1. Dapatkan data user penghuni yang sedang login
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        if (authError) throw authError;
+
+        console.log("MATA-MATA 1 (ID User Login):", user?.id);
+
+        let userTower = 'Semua';
+
+        // 2. Ambil data tower si user dari tabel profiles
+        if (user) {
+          const { data: profile, error: profError } = await supabase
+            .from('profiles') // ◄ Kalo nama tabel profilmu bukan 'profiles' (misal 'users' atau 'penghuni'), ganti ini
+            .select('tower')
+            .eq('id', user.id)
+            .single();
+          
+          if (profError) {
+            console.error("MATA-MATA 2 (Gagal ambil profil):", profError.message);
+          } else {
+            console.log("MATA-MATA 3 (Data Profil ditemukan):", profile);
+            if (profile?.tower) userTower = profile.tower;
+          }
+        }
+
+        console.log("MATA-MATA 4 (Tower yang akan difilter):", userTower);
+
+        // 3. Ambil data dari tabel 'informasi' umum bawaan kamu
+        const { data: infoData, error: infoError } = await supabase
           .from('informasi')
           .select('*')
-          .eq('is_published', true)
-          .order('created_at', { ascending: false });
+          .eq('is_published', true);
         
-        if (error) throw error;
-        
-        const mapped = (data || []).map(item => ({
-          id: item.id,
-          category: item.kategori || 'Info',
-          title: item.judul || 'Pengumuman Resmi',
-          description: item.deskripsi || '',
-          date: new Date(item.created_at).toLocaleDateString('id-ID', { 
-            day: 'numeric', 
-            month: 'short', 
-            year: 'numeric' 
-          })
-        }));
-        setAnnouncements(mapped);
+        if (infoError) throw infoError;
+
+        // 4. Ambil data dari tabel 'notifications' rekap broadcast (Sesuai Skemamu)
+        const { data: notifData, error: notifError } = await supabase
+          .from('notifications')
+          .select('*')
+          .eq('is_active', true)
+          .or(`target_tower.eq.Semua Penghuni, target_tower.eq.${userTower}`);
+
+        if (notifError) {
+          console.error("MATA-MATA 5 (Gagal ambil tabel notifications):", notifError.message);
+        }
+
+        // 5. Gabungkan kedua data ke dalam satu list
+        const combined = [
+          ...(infoData || []).map(item => ({
+            id: `info-${item.id}`,
+            category: item.kategori || 'Info',
+            title: item.judul || 'Pengumuman Resmi',
+            description: item.deskripsi || '',
+            timestamp: new Date(item.created_at).getTime(),
+            date: new Date(item.created_at).toLocaleDateString('id-ID', { 
+              day: 'numeric', month: 'short', year: 'numeric' 
+            })
+          })),
+          ...(notifData || []).map(item => ({
+            id: `notif-${item.id}`,
+            category: item.priority || 'Darurat', 
+            title: item.title || 'Pesan Broadcast',
+            description: item.message || '',
+            timestamp: new Date(item.created_at).getTime(),
+            date: new Date(item.created_at).toLocaleDateString('id-ID', { 
+              day: 'numeric', month: 'short', year: 'numeric' 
+            })
+          }))
+        ];
+
+        // Urutkan dari yang paling baru
+        combined.sort((a, b) => b.timestamp - a.timestamp);
+        setAnnouncements(combined);
+
       } catch (err) {
-        console.error('Gagal memuat papan informasi/pengumuman:', err.message);
+        console.error('Gagal memuat papan informasi:', err.message);
       } finally {
         setLoading(false);
       }
@@ -44,7 +97,7 @@ export default function Pengumuman() {
     loadData();
   }, []);
 
-  // Styling badge yang disesuaikan dengan skema warna modern & bersih
+  // Styling badge
   const getBadgeStyles = (category) => {
     switch (category.toLowerCase()) {
       case 'darurat':
@@ -60,7 +113,6 @@ export default function Pengumuman() {
     }
   };
 
-  // Filter pencarian dengan proteksi case-insensitive agar tidak meleset saat demo
   const filteredAnnouncements = announcements.filter(item => {
     const matchSearch = 
       item.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -79,13 +131,10 @@ export default function Pengumuman() {
 
   return (
     <div className="space-y-6 animate-fade-up text-zinc-800">
-      
-      {/* Search & Filter Header Kontrol */}
+      {/* Search & Filter */}
       <div className="bg-white border border-zinc-100 p-5 rounded-2xl flex flex-col lg:flex-row gap-4 items-stretch lg:items-center justify-between shadow-sm">
-        
-        {/* Input Pencarian */}
         <div className="relative flex-1 max-w-md flex items-center">
-          <Search className="absolute left-3.5 text-zinc-450 pointer-events-none" size={15} />
+          <Search className="absolute left-3.5 text-zinc-400 pointer-events-none" size={15} />
           <input
             type="text"
             value={searchTerm}
@@ -95,7 +144,6 @@ export default function Pengumuman() {
           />
         </div>
 
-        {/* Filter Kategori Tabs */}
         <div className="flex flex-wrap gap-1.5">
           {categories.map((cat) => (
             <button
@@ -113,7 +161,7 @@ export default function Pengumuman() {
         </div>
       </div>
 
-      {/* Kontainer Utama List View Pengumuman */}
+      {/* List View */}
       <div className="bg-white border border-zinc-100 p-6 rounded-2xl shadow-sm">
         <h3 className="text-xs font-bold text-zinc-950 uppercase tracking-wider mb-5 flex items-center gap-1.5 border-b border-zinc-100 pb-3.5">
           <Bell size={15} className="text-zinc-500" />
@@ -122,11 +170,7 @@ export default function Pengumuman() {
 
         <div className="divide-y divide-zinc-100">
           {filteredAnnouncements.map((ann) => (
-            <div
-              key={ann.id}
-              className="py-4 first:pt-0 last:pb-0 flex flex-col md:flex-row items-start gap-3 md:gap-6"
-            >
-              {/* Kolom Kategori & Tanggal Rilis */}
+            <div key={ann.id} className="py-4 first:pt-0 last:pb-0 flex flex-col md:flex-row items-start gap-3 md:gap-6">
               <div className="flex-shrink-0 w-24 flex md:flex-col items-center md:items-start justify-between md:justify-start gap-2">
                 <span className={`inline-block text-[9px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider border ${getBadgeStyles(ann.category)}`}>
                   {ann.category}
@@ -136,7 +180,6 @@ export default function Pengumuman() {
                 </span>
               </div>
 
-              {/* Isi Konten Informasi */}
               <div className="space-y-1 flex-1 text-xs">
                 <h4 className="font-bold text-zinc-900 leading-snug tracking-wide">
                   {ann.title}
