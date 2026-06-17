@@ -18,7 +18,7 @@ const ROLE_CONFIG = {
   super_admin: {
     label:       'Super Admin',
     portal:      'Login Portal Super Admin',
-    description: 'Akses penuh ke seluruh sistem manajemen SiManTap.',
+    description: 'Akses monitoring dan pengawasan terintegrasi sistem SiManTap.',
     username:    'Teddy', // Disesuaikan dengan Budi Santoso (super_admin)
     color:       '#1C3657',
     colorLight:  '#EEF2F8',

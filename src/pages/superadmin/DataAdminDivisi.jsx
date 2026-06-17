@@ -1,18 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, X } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
 export default function DataAdminDivisi() {
   const [admins, setAdmins] = useState([]);
-
-  const [modalOpen, setModalOpen] = useState(false);
   const [successToast, setSuccessToast] = useState('');
-  const [newAdmin, setNewAdmin] = useState({
-    name: '',
-    division: 'Keuangan',
-    emailSuffix: '',
-    phone: ''
-  });
 
   const loadAdmins = async () => {
     try {
@@ -62,48 +53,6 @@ export default function DataAdminDivisi() {
     }
   };
 
-  const handleAddAdmin = async (e) => {
-    e.preventDefault();
-    if (!newAdmin.name || !newAdmin.phone || !newAdmin.emailSuffix) return;
-
-    const email = `${newAdmin.emailSuffix.toLowerCase()}@simantap.id`;
-    const defaultPassword = btoa(email);
-    const mappedRole = `div_${newAdmin.division.toLowerCase()}`;
-
-    try {
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-        email,
-        password: defaultPassword,
-        email_confirm: true
-      });
-
-      if (authError) throw authError;
-
-      const authUser = authData.user;
-
-      const { error: userError } = await supabase
-        .from('users')
-        .insert({
-          id: authUser.id,
-          nama: newAdmin.name,
-          email: email,
-          no_hp: newAdmin.phone,
-          role: mappedRole,
-          must_change_password: true
-        });
-
-      if (userError) throw userError;
-
-      setModalOpen(false);
-      showToast(`Admin "${newAdmin.name}" berhasil ditambahkan!`);
-      setNewAdmin({ name: '', division: 'Keuangan', emailSuffix: '', phone: '' });
-      loadAdmins();
-    } catch (err) {
-      console.error('Failed to add admin:', err.message);
-      alert(`Error: ${err.message}`);
-    }
-  };
-
   const showToast = (msg) => {
     setSuccessToast(msg);
     setTimeout(() => setSuccessToast(''), 3000);
@@ -111,19 +60,12 @@ export default function DataAdminDivisi() {
 
   return (
     <div className="space-y-6 animate-fade-up relative">
-      {/* Header section */}
+      {/* Header section (Tombol Tambah Admin SUDAH DIHAPUS) */}
       <div className="card-section p-6 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-base font-bold text-ink">Data Admin Divisi</h2>
           <p className="text-xs text-muted">Pengelolaan hak akses operator per divisi operasional</p>
         </div>
-        <button
-          onClick={() => setModalOpen(true)}
-          className="btn-primary py-2.5 px-4 text-xs font-bold"
-        >
-          <Plus size={14} />
-          <span>Tambah Admin</span>
-        </button>
       </div>
 
       {/* Table Section */}
@@ -170,98 +112,6 @@ export default function DataAdminDivisi() {
           </table>
         </div>
       </div>
-
-      {/* Tambah Admin Modal */}
-      {modalOpen && (
-        <div className="modal-overlay">
-          <div className="modal-box">
-            {/* Modal Header */}
-            <div className="modal-header">
-              <h3 className="text-xs font-bold text-ink uppercase tracking-wider">Tambah Admin Divisi</h3>
-              <button onClick={() => setModalOpen(false)} className="text-muted hover:text-ink transition">
-                <X size={18} />
-              </button>
-            </div>
-
-            {/* Modal Form */}
-            <form onSubmit={handleAddAdmin} className="modal-body space-y-4">
-              <div>
-                <label className="label-modern">Nama Lengkap</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Contoh: Rina Kurnia"
-                  value={newAdmin.name}
-                  onChange={(e) => setNewAdmin(prev => ({ ...prev, name: e.target.value }))}
-                  className="input-modern font-semibold"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="label-modern">Divisi</label>
-                  <select
-                    value={newAdmin.division}
-                    onChange={(e) => setNewAdmin(prev => ({ ...prev, division: e.target.value }))}
-                    className="select-modern input-modern font-semibold"
-                  >
-                    <option value="Keuangan">Keuangan</option>
-                    <option value="Pemeliharaan">Pemeliharaan</option>
-                    <option value="Keamanan">Keamanan</option>
-                    <option value="Kebersihan">Kebersihan</option>
-                    <option value="Fasilitas">Fasilitas</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="label-modern">No. Telepon</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Contoh: 081-2345-6789"
-                    value={newAdmin.phone}
-                    onChange={(e) => setNewAdmin(prev => ({ ...prev, phone: e.target.value }))}
-                    className="input-modern font-semibold"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="label-modern">Email Prefix</label>
-                <div className="flex items-center">
-                  <input
-                    type="text"
-                    required
-                    placeholder="Contoh: rina.k"
-                    value={newAdmin.emailSuffix}
-                    onChange={(e) => setNewAdmin(prev => ({ ...prev, emailSuffix: e.target.value }))}
-                    className="block w-full px-3.5 py-2.5 input-modern rounded-l-xl rounded-r-none font-semibold border-r-0"
-                  />
-                  <span className="bg-[#FAF6F0] border border-l-0 border-soft rounded-r-xl px-4 py-2.5 text-xs text-muted font-bold font-mono">
-                    @simantap.id
-                  </span>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex items-center gap-3 pt-3 border-t border-soft">
-                <button
-                  type="submit"
-                  className="flex-1 btn-primary justify-center py-2.5 rounded-xl text-xs font-bold"
-                >
-                  Tambah Admin
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setModalOpen(false)}
-                  className="flex-1 btn-ghost justify-center py-2.5 rounded-xl text-xs font-bold"
-                >
-                  Batal
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* Success Toast */}
       {successToast && (
