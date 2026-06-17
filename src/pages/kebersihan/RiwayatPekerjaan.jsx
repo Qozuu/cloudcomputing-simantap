@@ -12,85 +12,99 @@ export default function RiwayatPekerjaan() {
 
   const [toastVisible, setToastVisible] = useState(false);
 
-  const parseDuration = (waktuStr) => {
-    if (!waktuStr) return 0;
-    const parts = waktuStr.split('-');
-    if (parts.length !== 2) return 0;
-    const [start, end] = parts;
-    const [startH, startM] = start.split(':').map(Number);
-    const [endH, endM] = end.split(':').map(Number);
-    if (isNaN(startH) || isNaN(startM) || isNaN(endH) || isNaN(endM)) return 0;
-    const diffMinutes = (endH * 60 + endM) - (startH * 60 + startM);
-    return diffMinutes > 0 ? diffMinutes / 60 : 0;
-  };
-
+  // Fungsi format tanggal Indonesia
   const formatDateStr = (dateStr) => {
     if (!dateStr) return '—';
-    const parts = dateStr.split('-');
-    if (parts.length !== 3) return dateStr;
-    const year = parts[0];
-    const monthIdx = parseInt(parts[1]) - 1;
-    const day = parseInt(parts[2]);
-    const monthsIndo = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
-    return `${day} ${monthsIndo[monthIdx]} ${year}`;
+    try {
+      const dateObj = new Date(dateStr);
+      if (isNaN(dateObj.getTime())) return dateStr;
+      const monthsIndo = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+      return `${dateObj.getDate()} ${monthsIndo[dateObj.getMonth()]} ${dateObj.getFullYear()}`;
+    } catch (e) {
+      return dateStr;
+    }
   };
 
   const loadHistory = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
+      
+      // Ambil data murni dari tabel 'jadwal' tanpa join tabel users
+      const { data: dbData, error } = await supabase
         .from('jadwal')
-        .select('*, petugas:users(nama)')
+        .select('*')
         .eq('jenis', 'kebersihan')
-        .eq('status', 'selesai')
         .order('tanggal', { ascending: false });
 
       if (error) throw error;
 
-      if (data) {
-        let totalHrs = 0;
-        let validDurationCount = 0;
+      if (dbData) {
         const now = new Date();
-        const currentMonth = now.getMonth(); // 0-indexed
+        const currentMonth = now.getMonth(); 
         const currentYear = now.getFullYear();
 
         let monthlyCount = 0;
+        let totalHours = 0;
 
-        const mapped = data.map(item => {
+        const formattedData = dbData.map((item) => {
           const itemDate = item.tanggal ? new Date(item.tanggal) : null;
+          
+          // Hitung tugas bulan berjalan
           if (itemDate && itemDate.getMonth() === currentMonth && itemDate.getFullYear() === currentYear) {
             monthlyCount++;
           }
 
-          const hrs = parseDuration(item.waktu);
-          if (hrs > 0) {
-            totalHrs += hrs;
-            validDurationCount++;
+          // PARSING DATA MURNI DARI KOLOM CATATAN
+          let displayOfficer = 'Tim Lapangan';
+          let displayDuration = '5.0 jam';
+          let durationNum = 5.0;
+
+          if (item.catatan) {
+            // Jika formatnya pakai pemisah "|" (contoh: "06:00-11:00 | Tim A")
+            if (item.catatan.includes('|')) {
+              const parts = item.catatan.split('|');
+              displayOfficer = parts[1]?.trim() || displayOfficer; // Ambil nama tim setelah tanda "|"
+              
+              // Hitung durasi dari teks jam (sebelum tanda "|")
+              const jamParts = parts[0].trim().split('-');
+              if (jamParts.length === 2) {
+                const startH = parseInt(jamParts[0].split(':')[0]);
+                const endH = parseInt(jamParts[1].split(':')[0]);
+                if (!isNaN(endH) && !isNaN(startH) && endH > startH) {
+                  durationNum = endH - startH;
+                }
+              }
+            } else {
+              // Jika kolom catatan diisi murni nama tim saja tanpa jam
+              displayOfficer = item.catatan.trim();
+            }
           }
+          
+          displayDuration = `${durationNum}.0 jam`;
+          totalHours += durationNum;
 
           return {
-            id: `TGS-${String(item.id).padStart(4, '0')}`,
-            area: item.area || item.keterangan || 'Umum',
-            officer: item.petugas?.nama || '—',
-            service: item.keterangan || 'Deep cleaning',
+            id: `TGS-${String(item.id).substring(0, 4).toUpperCase()}`,
+            area: item.area || 'Area Kompleks',
+            officer: displayOfficer, // Mengambil isi teks dari kolom catatan
+            service: item.area ? `Pembersihan ${item.area}` : 'General Cleaning',
             date: formatDateStr(item.tanggal),
-            duration: hrs > 0 ? `${hrs.toFixed(1)} jam` : '—',
-            status: 'Selesai'
+            duration: displayDuration,
+            status: item.status ? (item.status.charAt(0).toUpperCase() + item.status.slice(1)) : 'Selesai'
           };
         });
 
-        setHistory(mapped);
-        
-        const avgHrs = validDurationCount > 0 ? (totalHrs / validDurationCount).toFixed(1) : '1.8';
+        const avgHrs = formattedData.length > 0 ? (totalHours / formattedData.length).toFixed(1) : '0.0';
 
+        setHistory(formattedData);
         setStats({
-          totalTasks: data.length,
+          totalTasks: formattedData.length,
           monthlyCompletion: monthlyCount,
           avgDuration: avgHrs
         });
       }
     } catch (err) {
-      console.error('Failed to load work history:', err.message);
+      console.error('Gagal memuat riwayat:', err.message);
     } finally {
       setLoading(false);
     }
@@ -101,130 +115,92 @@ export default function RiwayatPekerjaan() {
   }, []);
 
   const handleExport = () => {
+    if (history.length === 0) return;
+    const headers = ['ID Tugas', 'Area / Unit', 'Petugas / Tim', 'Layanan', 'Tanggal', 'Durasi', 'Status'];
+    const rows = history.map(row => [row.id, `"${row.area}"`, `"${row.officer}"`, `"${row.service}"`, row.date, row.duration, row.status]);
+    const csvContent = [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'Log_Riwayat_Kebersihan.csv');
+    link.click();
     setToastVisible(true);
-    setTimeout(() => {
-      setToastVisible(false);
-    }, 3000);
+    setTimeout(() => setToastVisible(false), 3000);
   };
 
-  if (loading) {
-    return <div className="p-6 text-muted text-sm">Memuat...</div>;
-  }
+  if (loading) return <div className="p-6 text-slate-500 text-sm animate-pulse">Menghubungkan ke tabel jadwal...</div>;
 
   return (
-    <div className="space-y-6 animate-fade-up relative">
-      {/* Page header summary cards */}
+    <div className="space-y-6">
+      {/* Top Cards Section */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-        <div className="card-lavender hover:translate-y-[-2px] transition duration-150 flex flex-col justify-between">
-          <div>
-            <div className="card-icon-lavender mb-3 shadow-sm">
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-              </svg>
-            </div>
-            <p className="text-[#8A857F] font-semibold text-xs uppercase tracking-wider">Total Pekerjaan</p>
-            <h4 className="text-[#4840B0] font-black text-2xl mt-2 mb-1">{stats.totalTasks} Tugas</h4>
-          </div>
-          <span className="text-[10px] text-[#8A857F] font-semibold mt-1">Sejak awal tahun operasional</span>
+        <div className="p-5 rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <p className="text-slate-400 font-bold text-[10px] uppercase tracking-wider">Total Tugas Terdata</p>
+          <h4 className="text-purple-900 font-black text-2xl mt-1">{stats.totalTasks} Tugas</h4>
         </div>
-
-        <div className="card-mint hover:translate-y-[-2px] transition duration-150 flex flex-col justify-between">
-          <div>
-            <div className="card-icon-mint mb-3 shadow-sm">
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <p className="text-[#8A857F] font-semibold text-xs uppercase tracking-wider">Penyelesaian Bulan Ini</p>
-            <h4 className="text-[#187050] font-black text-2xl mt-2 mb-1">{stats.monthlyCompletion} Tugas</h4>
-          </div>
-          <span className="text-[10px] text-[#8A857F] font-semibold mt-1">100% tingkat kepuasan</span>
+        <div className="p-5 rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <p className="text-slate-400 font-bold text-[10px] uppercase tracking-wider">Penyelesaian Bulan Ini</p>
+          <h4 className="text-emerald-900 font-black text-2xl mt-1">{stats.monthlyCompletion} Tugas</h4>
         </div>
-
-        <div className="card-pink hover:translate-y-[-2px] transition duration-150 flex flex-col justify-between">
-          <div>
-            <div className="card-icon-pink mb-3 shadow-sm">
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <p className="text-[#8A857F] font-semibold text-xs uppercase tracking-wider">Waktu Rata-Rata Kerja</p>
-            <h4 className="text-[#C05040] font-black text-2xl mt-2 mb-1">{stats.avgDuration} Jam</h4>
-          </div>
-          <span className="text-[10px] text-[#8A857F] font-semibold mt-1">Efisiensi standar operasional</span>
+        <div className="p-5 rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <p className="text-slate-400 font-bold text-[10px] uppercase tracking-wider">Rata-Rata Jam Kerja</p>
+          <h4 className="text-rose-900 font-black text-2xl mt-1">{stats.avgDuration} Jam</h4>
         </div>
       </div>
 
-      {/* Main card section */}
-      <div className="card-section p-6 overflow-hidden">
-        <div className="flex items-center justify-between pb-5 border-b border-soft mb-6">
+      {/* Table Section */}
+      <div className="p-6 bg-white border border-slate-200 rounded-2xl shadow-sm">
+        <div className="flex items-center justify-between pb-5 border-b border-slate-100 mb-6">
           <div>
-            <h2 className="text-base font-extrabold text-ink">Riwayat Pekerjaan Selesai</h2>
-            <p className="text-xs text-muted">Log riwayat tugas kebersihan terverifikasi</p>
+            <h2 className="text-base font-black text-slate-900">Riwayat Pekerjaan Selesai</h2>
+            <p className="text-xs text-slate-400 mt-0.5">Menampilkan data tim petugas langsung dari log catatan jadwal</p>
           </div>
-          <button
-            onClick={handleExport}
-            className="btn-primary py-2.5 px-4 text-xs font-bold flex items-center gap-2"
-          >
-            {/* Download Icon */}
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
-            <span>Export</span>
+          <button onClick={handleExport} className="bg-slate-900 text-white py-2 px-4 rounded-xl text-xs font-bold flex items-center gap-2 hover:bg-slate-800 transition shadow-sm">
+            Export Log (.csv)
           </button>
         </div>
 
-        {/* Responsive Table */}
-        <div className="table-wrap">
-          <table className="table-modern">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs whitespace-nowrap">
             <thead>
-              <tr>
-                <th>ID Tugas</th>
-                <th>Area / Unit</th>
-                <th>Petugas</th>
-                <th>Layanan</th>
-                <th>Tanggal</th>
-                <th>Durasi</th>
-                <th>Status</th>
+              <tr className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider border-b border-slate-200 text-[10px]">
+                <th className="p-3.5">ID Tugas</th>
+                <th className="p-3.5">Area / Unit</th>
+                <th className="p-3.5">Petugas / Tim</th>
+                <th className="p-3.5">Layanan</th>
+                <th className="p-3.5">Tanggal</th>
+                <th className="p-3.5">Durasi Shift</th>
+                <th className="p-3.5">Status</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-slate-100">
               {history.map((row) => (
-                <tr key={row.id}>
-                  <td className="font-mono text-muted font-semibold">{row.id}</td>
-                  <td className="font-bold text-ink">{row.area}</td>
-                  <td>{row.officer}</td>
-                  <td className="text-ink font-medium">{row.service}</td>
-                  <td className="text-muted">{row.date}</td>
-                  <td className="font-mono text-muted">{row.duration}</td>
-                  <td>
-                    <span className="badge-base badge-mint">
-                      <svg className="w-3 h-3 text-[#187050]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                      </svg>
+                <tr key={row.id} className="hover:bg-slate-50/50 transition-colors">
+                  <td className="p-3.5 font-mono text-slate-400 font-semibold">{row.id}</td>
+                  <td className="p-3.5 font-black text-slate-900">{row.area}</td>
+                  <td className="p-3.5 font-bold text-purple-700">{row.officer}</td>
+                  <td className="p-3.5 text-slate-600 font-medium">{row.service}</td>
+                  <td className="p-3.5 text-slate-500 font-medium">{row.date}</td>
+                  <td className="p-3.5 font-mono text-slate-900 font-bold">{row.duration}</td>
+                  <td className="p-3.5">
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
                       {row.status}
                     </span>
                   </td>
                 </tr>
               ))}
+              {history.length === 0 && (
+                <tr>
+                  <td colSpan="7" className="p-8 text-center text-slate-400 font-semibold">
+                    Belum ada data pekerjaan kebersihan di database.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
       </div>
-
-      {/* Success Toast */}
-      {toastVisible && (
-        <div className="toast-modern toast-success">
-          <div className="w-5 h-5 rounded-full bg-white/20 text-white flex items-center justify-center flex-shrink-0">
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-            </svg>
-          </div>
-          <div>
-            <p className="text-xs font-bold">Data.xlsx berhasil diunduh!</p>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

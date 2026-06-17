@@ -5,50 +5,61 @@ export default function PermintaanCleaning() {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // State hanya untuk Modal Detail Deskripsi
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
-  const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
-  const [schedulingId, setSchedulingId] = useState(null);
-  const [scheduleDate, setScheduleDate] = useState('22 Apr');
-  const [scheduleTime, setScheduleTime] = useState('09:00');
-  const [successToast, setSuccessToast] = useState('');
 
+  // Fungsi Ambil Data dari Database
   const loadRequests = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
+      const { data: resData, error: resError } = await supabase
         .from('reservasi')
-        .select('*, penghuni:users(nama), fasilitas(nama)')
+        .select('*')
         .order('created_at', { ascending: false });
+        
+      if (resError) throw resError;
 
-      if (error) throw error;
+      const { data: fasData } = await supabase.from('fasilitas').select('id, nama');
+      const { data: usrData } = await supabase.from('users').select('id, nama');
 
-      if (data) {
-        setRequests(data.map(item => {
+      if (resData) {
+        const formattedData = resData.map(item => {
+          const facilitiesMatch = fasData?.find(f => f.id === item.fasilitas_id);
+          const usersMatch = usrData?.find(u => u.id === item.penghuni_id);
+
           const reqDateObj = new Date(item.created_at);
           const reqDateFormatted = `${reqDateObj.getDate()} ${reqDateObj.toLocaleDateString('id-ID', { month: 'short' })}`;
 
+          // Membaca tanggal dan jam operasional langsung dari database
           const schDate = item.tanggal ? new Date(item.tanggal).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }) : '';
-          const schTime = item.jam_mulai ? item.jam_mulai.substring(0, 5) : '';
-          const scheduleFormatted = item.status && item.status.toLowerCase() === 'disetujui' && schDate && schTime ? `${schDate} ${schTime}` : '—';
-
-          const s = (item.status || '').toLowerCase();
-          const statusMapped = s === 'disetujui' ? 'Terjadwal' : (s === 'selesai' ? 'Selesai' : 'Menunggu');
+          const schTimeStart = item.jam_mulai ? item.jam_mulai.substring(0, 5) : '';
+          const schTimeEnd = item.jam_selesai ? item.jam_selesai.substring(0, 5) : '';
+          const scheduleFormatted = schDate && schTimeStart ? `${schDate} (${schTimeStart} - ${schTimeEnd})` : '—';
+          
+          // Membaca status asli dari database dan memetakan ke warna badge UI
+          let statusMapped = 'Menunggu'; 
+          if (item.status?.toLowerCase() === 'disetujui') statusMapped = 'Terjadwal';
+          if (item.status?.toLowerCase() === 'dibatalkan' || item.status?.toLowerCase() === 'ditolak') {
+            statusMapped = 'Selesai';
+          }
 
           return {
             id: item.id,
-            unit: item.unit_no || item.nomor_unit || 'N/A',
-            name: item.penghuni?.nama || 'Warga',
-            service: item.fasilitas?.nama || 'Cleaning',
+            unit: 'Fasilitas Publik',
+            name: usersMatch?.nama || 'Penghuni / Staf',
+            service: facilitiesMatch?.nama || 'Cleaning Area',
             reqDate: reqDateFormatted,
             schedule: scheduleFormatted,
-            status: statusMapped,
-            description: item.keterangan || item.deskripsi || 'Tidak ada keterangan tambahan.'
+            status: statusMapped, 
+            description: item.catatan || 'Mohon lakukan pembersihan menyeluruh pada area cakupan.'
           };
-        }));
+        });
+
+        setRequests(formattedData);
       }
     } catch (err) {
-      console.error('Failed to load cleaning requests:', err.message);
+      console.error('Error loading data:', err.message);
     } finally {
       setLoading(false);
     }
@@ -60,182 +71,95 @@ export default function PermintaanCleaning() {
 
   const getStatusBadge = (status) => {
     switch (status) {
-      case 'Terjadwal':
+      case 'Terjadwal': 
+        return <span className="px-2.5 py-1 text-[11px] font-bold rounded-full bg-purple-50 text-purple-700 border border-purple-200">Terjadwal</span>;
+      case 'Menunggu': 
+        return <span className="px-2.5 py-1 text-[11px] font-bold rounded-full bg-rose-50 text-rose-700 border border-rose-200">Menunggu</span>;
+      case 'Selesai': 
         return (
-          <span className="badge-base badge-lavender">
-            Terjadwal
-          </span>
-        );
-      case 'Menunggu':
-        return (
-          <span className="badge-base badge-pink">
-            Menunggu
-          </span>
-        );
-      case 'Selesai':
-        return (
-          <span className="badge-base badge-mint">
-            <svg className="w-3 h-3 text-[#187050]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+            <svg className="w-3 h-3 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
             </svg>
             Selesai
           </span>
         );
-      default:
+      default: 
         return null;
     }
   };
 
-  const handleOpenDetail = (req) => {
-    setSelectedRequest(req);
-    setDetailModalOpen(true);
-  };
-
-  const handleOpenSchedule = (id) => {
-    setSchedulingId(id);
-    setScheduleModalOpen(true);
-  };
-
-  const handleScheduleSubmit = async (e) => {
-    e.preventDefault();
-    if (!schedulingId) return;
-
-    try {
-      const day = scheduleDate.split(' ')[0];
-      const scheduleFormattedDate = `2026-04-${day.padStart(2, '0')}`;
-
-      const { error } = await supabase
-        .from('reservasi')
-        .update({
-          status: 'disetujui',
-          tanggal: scheduleFormattedDate,
-          jam_mulai: scheduleTime
-        })
-        .eq('id', schedulingId);
-
-      if (error) throw error;
-
-      const targetReq = requests.find(r => r.id === schedulingId);
-      setScheduleModalOpen(false);
-      setSuccessToast(`Permintaan cleaning ${targetReq ? targetReq.name : ''} berhasil dijadwalkan!`);
-      setTimeout(() => setSuccessToast(''), 3000);
-      loadRequests();
-    } catch (err) {
-      console.error('Failed to schedule cleaning request:', err.message);
-    }
-  };
-
-  const waitingCount = requests.filter(r => r.status === 'Menunggu').length;
-
-  if (loading) {
-    return <div className="p-6 text-muted text-sm">Memuat...</div>;
-  }
+  if (loading) return <div className="p-6 text-slate-500 font-medium text-sm animate-pulse">Memuat log operasional...</div>;
 
   return (
-    <div className="space-y-6 animate-fade-up relative">
+    <div className="space-y-6 relative">
       {/* Overview Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-        <div className="card-pink hover:translate-y-[-2px] transition duration-150 flex flex-col justify-between">
+        <div className="p-5 rounded-2xl border border-slate-200 bg-white shadow-sm flex flex-col justify-between">
           <div>
-            <div className="card-icon-pink mb-3 shadow-sm">
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
+            <div className="w-9 h-9 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center mb-3">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             </div>
-            <p className="text-[#8A857F] font-semibold text-xs uppercase tracking-wider">Menunggu Respons</p>
-            <h4 className="text-[#C05040] font-black text-2xl mt-2 mb-1">{waitingCount} Permintaan</h4>
+            <p className="text-slate-400 font-bold text-[10px] uppercase tracking-wider">Menunggu Respons</p>
+            <h4 className="text-slate-900 font-black text-2xl mt-1">{requests.filter(r => r.status === 'Menunggu').length} Permintaan</h4>
           </div>
-          <span className="text-[10px] text-[#8A857F] font-semibold mt-1">Perlu segera dijadwalkan</span>
         </div>
-
-        <div className="card-yellow hover:translate-y-[-2px] transition duration-150 flex flex-col justify-between">
+        <div className="p-5 rounded-2xl border border-slate-200 bg-white shadow-sm flex flex-col justify-between">
           <div>
-            <div className="card-icon-yellow mb-3 shadow-sm">
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
+            <div className="w-9 h-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center mb-3">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
             </div>
-            <p className="text-[#8A857F] font-semibold text-xs uppercase tracking-wider">Terjadwal</p>
-            <h4 className="text-[#A05820] font-black text-2xl mt-2 mb-1">
-              {requests.filter(r => r.status === 'Terjadwal').length} Unit
-            </h4>
+            <p className="text-slate-400 font-bold text-[10px] uppercase tracking-wider">Terjadwal</p>
+            <h4 className="text-slate-900 font-black text-2xl mt-1">{requests.filter(r => r.status === 'Terjadwal').length} Tugas</h4>
           </div>
-          <span className="text-[10px] text-[#8A857F] font-semibold mt-1">Siap dikerjakan petugas</span>
         </div>
-
-        <div className="card-lavender hover:translate-y-[-2px] transition duration-150 flex flex-col justify-between">
+        <div className="p-5 rounded-2xl border border-slate-200 bg-white shadow-sm flex flex-col justify-between">
           <div>
-            <div className="card-icon-lavender mb-3 shadow-sm">
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-              </svg>
+            <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-3">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
             </div>
-            <p className="text-[#8A857F] font-semibold text-xs uppercase tracking-wider">Selesai Hari Ini</p>
-            <h4 className="text-[#4840B0] font-black text-2xl mt-2 mb-1">
-              {requests.filter(r => r.status === 'Selesai').length} Unit
-            </h4>
+            <p className="text-slate-400 font-bold text-[10px] uppercase tracking-wider">Selesai Steril</p>
+            <h4 className="text-slate-900 font-black text-2xl mt-1">{requests.filter(r => r.status === 'Selesai').length} Sesi</h4>
           </div>
-          <span className="text-[10px] text-[#8A857F] font-semibold mt-1">Penyelesaian yang solid</span>
         </div>
       </div>
 
-      {/* Main card section */}
-      <div className="card-section p-6 overflow-hidden">
-        <div className="flex items-center justify-between pb-5 border-b border-soft mb-6">
-          <div className="flex items-center gap-3">
-            <h2 className="text-base font-extrabold text-ink">Permintaan Cleaning Service</h2>
-            {waitingCount > 0 && (
-              <span className="badge-base badge-pink">
-                {waitingCount} menunggu
-              </span>
-            )}
-          </div>
-          <p className="text-xs text-muted">Manajemen laundry, cuci sofa, & unit cleaning</p>
+      {/* Main Table Card */}
+      <div className="p-6 bg-white border border-slate-200 rounded-2xl shadow-sm">
+        <div className="pb-5 border-b border-slate-100 mb-6">
+          <h2 className="text-base font-black text-slate-900">Log Monitoring Sanitasi & Pembersihan Fasilitas</h2>
+          <p className="text-xs text-slate-400 mt-0.5">Riwayat penggunaan dan jadwal sterilisasi berkala area publik</p>
         </div>
 
-        {/* Responsive Table */}
-        <div className="table-wrap">
-          <table className="table-modern">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs whitespace-nowrap">
             <thead>
-              <tr>
-                <th>Unit</th>
-                <th>Nama</th>
-                <th>Layanan</th>
-                <th>Tgl Permintaan</th>
-                <th>Jadwal</th>
-                <th>Status</th>
-                <th className="text-right">Aksi</th>
+              <tr className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider border-b border-slate-200 text-[10px]">
+                <th className="p-3.5">Zonasi</th>
+                <th className="p-3.5">Pelapor / Pemesan</th>
+                <th className="p-3.5">Area Fasilitas</th>
+                <th className="p-3.5">Waktu Masuk</th>
+                <th className="p-3.5">Rencana Kerja (Durasi)</th>
+                <th className="p-3.5">Status Alokasi</th>
+                <th className="p-3.5 text-right">Informasi</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-slate-100">
               {requests.map((req) => (
-                <tr key={req.id}>
-                  <td className="font-bold text-ink">{req.unit}</td>
-                  <td>{req.name}</td>
-                  <td className="font-semibold text-ink">{req.service}</td>
-                  <td className="text-muted">{req.reqDate}</td>
-                  <td>
-                    <span className={req.schedule === '—' ? 'text-muted font-normal' : 'font-semibold text-ink'}>
-                      {req.schedule}
-                    </span>
-                  </td>
-                  <td>{getStatusBadge(req.status)}</td>
-                  <td className="text-right">
-                    {req.status === 'Menunggu' ? (
-                      <button
-                        onClick={() => handleOpenSchedule(req.id)}
-                        className="text-ink hover:underline font-bold text-xs"
-                      >
-                        Jadwalkan
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => handleOpenDetail(req)}
-                        className="text-muted hover:text-ink hover:underline font-bold text-xs"
-                      >
-                        Detail
-                      </button>
-                    )}
+                <tr key={req.id} className="hover:bg-slate-50/50 transition-colors">
+                  <td className="p-3.5 font-bold text-slate-400">{req.unit}</td>
+                  <td className="p-3.5 font-semibold text-slate-700">{req.name}</td>
+                  <td className="p-3.5 font-black text-slate-900">{req.service}</td>
+                  <td className="p-3.5 text-slate-500 font-medium">{req.reqDate}</td>
+                  <td className="p-3.5 font-bold text-slate-900">{req.schedule}</td>
+                  <td className="p-3.5">{getStatusBadge(req.status)}</td>
+                  <td className="p-3.5 text-right">
+                    <button
+                      onClick={() => { setSelectedRequest(req); setDetailModalOpen(true); }}
+                      className="bg-slate-900 text-white px-3 py-1.5 rounded-xl font-bold text-[11px] hover:bg-slate-800 transition shadow-sm"
+                    >
+                      Lihat Deskripsi
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -246,143 +170,29 @@ export default function PermintaanCleaning() {
 
       {/* DETAIL MODAL */}
       {detailModalOpen && selectedRequest && (
-        <div className="modal-overlay">
-          <div className="modal-box">
-            {/* Header */}
-            <div className="modal-header">
-              <h3 className="text-xs font-bold text-ink uppercase tracking-wider">Detail Permintaan Cleaning</h3>
-              <button onClick={() => setDetailModalOpen(false)} className="text-muted hover:text-ink transition">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl border border-slate-100">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+              <h3 className="text-xs font-black text-slate-400 uppercase tracking-wider">Detail Informasi Lapangan</h3>
+              <button onClick={() => setDetailModalOpen(false)} className="text-slate-400 hover:text-slate-600"><svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg></button>
             </div>
-
-            {/* Info Body */}
-            <div className="modal-body space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4 text-xs">
                 <div>
-                  <span className="label-modern mb-0.5">Penghuni</span>
-                  <p className="text-xs font-bold text-ink">{selectedRequest.name} (Unit {selectedRequest.unit})</p>
+                  <span className="text-slate-400 block text-[10px] uppercase font-bold">Pelapor</span>
+                  <p className="font-black text-slate-900 mt-0.5">{selectedRequest.name}</p>
                 </div>
                 <div>
-                  <span className="label-modern mb-0.5">Layanan</span>
-                  <p className="text-xs font-bold text-ink">{selectedRequest.service}</p>
+                  <span className="text-slate-400 block text-[10px] uppercase font-bold">Fasilitas</span>
+                  <p className="font-black text-slate-900 mt-0.5">{selectedRequest.service}</p>
                 </div>
               </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <span className="label-modern mb-0.5">Tgl Masuk</span>
-                  <p className="text-xs font-semibold text-muted">{selectedRequest.reqDate}</p>
-                </div>
-                <div>
-                  <span className="label-modern mb-0.5">Jadwal Tugas</span>
-                  <p className="text-xs font-semibold text-muted">{selectedRequest.schedule}</p>
-                </div>
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                <span className="text-slate-900 font-black block text-[10px] uppercase mb-1">Catatan Tambahan</span>
+                <p className="text-xs font-medium text-slate-600 leading-relaxed">{selectedRequest.description}</p>
               </div>
-
-              <div>
-                <span className="label-modern mb-0.5">Status Pekerjaan</span>
-                <div className="mt-1">{getStatusBadge(selectedRequest.status)}</div>
-              </div>
-
-              <div className="bg-[#FAF6F0] p-4 rounded-2xl border border-soft">
-                <span className="label-modern mb-1.5">Deskripsi Permintaan</span>
-                <p className="text-xs font-medium text-ink leading-relaxed">{selectedRequest.description}</p>
-              </div>
-
-              <div className="pt-3 border-t border-soft flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setDetailModalOpen(false)}
-                  className="flex-1 btn-primary justify-center py-2.5 rounded-xl text-xs font-bold"
-                >
-                  Tutup Detail
-                </button>
-              </div>
+              <button type="button" onClick={() => setDetailModalOpen(false)} className="w-full bg-slate-900 text-white py-2.5 rounded-xl text-xs font-bold hover:bg-slate-800 transition">Tutup</button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* SCHEDULE MODAL */}
-      {scheduleModalOpen && (
-        <div className="modal-overlay">
-          <div className="modal-box">
-            {/* Header */}
-            <div className="modal-header">
-              <h3 className="text-xs font-bold text-ink uppercase tracking-wider">Tentukan Jadwal Cleaning</h3>
-              <button onClick={() => setScheduleModalOpen(false)} className="text-muted hover:text-ink transition">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            {/* Form */}
-            <form onSubmit={handleScheduleSubmit} className="modal-body space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="label-modern">Tanggal</label>
-                  <select
-                    value={scheduleDate}
-                    onChange={(e) => setScheduleDate(e.target.value)}
-                    className="select-modern input-modern font-semibold"
-                  >
-                    <option value="22 Apr">22 Apr</option>
-                    <option value="23 Apr">23 Apr</option>
-                    <option value="24 Apr">24 Apr</option>
-                    <option value="25 Apr">25 Apr</option>
-                    <option value="26 Apr">26 Apr</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="label-modern">Jam Kerja</label>
-                  <select
-                    value={scheduleTime}
-                    onChange={(e) => setScheduleTime(e.target.value)}
-                    className="select-modern input-modern font-semibold"
-                  >
-                    <option value="09:00">09:00</option>
-                    <option value="11:00">11:00</option>
-                    <option value="13:00">13:00</option>
-                    <option value="14:00">14:00</option>
-                    <option value="15:00">15:00</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3 pt-3 border-t border-soft">
-                <button
-                  type="submit"
-                  className="flex-1 btn-primary justify-center py-2.5 rounded-xl text-xs font-bold"
-                >
-                  <span>✓ Konfirmasi Jadwal</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setScheduleModalOpen(false)}
-                  className="flex-1 btn-ghost justify-center py-2.5 rounded-xl text-xs font-bold"
-                >
-                  Batal
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Success Toast */}
-      {successToast && (
-        <div className="toast-modern toast-success">
-          <div className="w-5 h-5 rounded-full bg-white/20 text-white flex items-center justify-center flex-shrink-0">
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-            </svg>
-          </div>
-          <div>
-            <p className="text-xs font-bold">{successToast}</p>
           </div>
         </div>
       )}
