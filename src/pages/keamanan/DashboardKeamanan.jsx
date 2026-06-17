@@ -52,9 +52,11 @@ export default function DashboardKeamanan() {
     async function loadData() {
       try {
         // 1. Fetch visitors di_dalam
+        // 1. Fetch visitors di_dalam
+        // GANTI POTONGAN QUERY DI CODENYA MENJADI SEPERTI INI:
         const { data: visitors } = await supabase
           .from('visitor')
-          .select('*, unit_tujuan:unit(nomor_unit, tower(nama_tower))')
+          .select('*, unit_tujuan:unit(nomor_unit)') // Fokus ambil nomor_unit saja dulu
           .is('waktu_keluar', null)
           .order('waktu_masuk', { ascending: false })
           .limit(5);
@@ -63,11 +65,15 @@ export default function DashboardKeamanan() {
           const tamuFormatted = visitors.map(v => {
             const masukDate = new Date(v.waktu_masuk);
             const timeStr = masukDate.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+            
+            // LOG UNTUK CHECK DATA DI CONSOLE
+            console.log("Isi v.unit_tujuan:", v.unit_tujuan);
+
             return {
               id: v.id,
               name: v.nama_tamu,
-              unit: v.unit_tujuan?.nomor_unit || '—',
-              host: v.unit_tujuan?.tower?.nama_tower || '—',
+              unit: v.unit_tujuan?.nomor_unit || '—', // Ini akan mengambil "C401"
+              host: '—', // Set strip dulu atau hapus jika tower belum siap
               time: `Masuk ${timeStr}`,
               type: v.keperluan || 'Tamu pribadi'
             };
@@ -226,7 +232,7 @@ export default function DashboardKeamanan() {
                     {tamu.name}
                   </p>
                   <p className="text-[11px] text-muted font-medium leading-none">
-                    Unit {tamu.unit} - {tamu.host} · <span className="text-ink font-semibold">{tamu.time}</span> · {tamu.type}
+                    Unit <span className="text-ink font-semibold">{tamu.unit}</span> · {tamu.time} · {tamu.type}
                   </p>
                 </div>
               </div>

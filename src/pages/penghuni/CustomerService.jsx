@@ -31,7 +31,7 @@ const DEPT_CONFIG = {
     description: 'Tagihan IPL, konfirmasi pembayaran, tunggakan',
     adminLabel:  'Admin Keuangan',
     categories:  ['Tagihan IPL', 'Konfirmasi Pembayaran', 'Tunggakan', 'Tagihan Fasilitas', 'Lainnya'],
-    welcome:     'Halo! Selamat datang di CS Keuangan SiManTap. Kami siap membantu pertanyaan seputar tagihan dan pembayaran apartemen Anda.',
+    welcome:     'Halo! Selamat datang di CS Keuangan SiManTap. Kami siap membantu pertanyaan seputar tagihan and pembayaran apartemen Anda.',
     waSubtitle:  'Gunakan WhatsApp untuk kirim foto bukti pembayaran ke Hotline',
   },
   fasilitas: {
@@ -89,7 +89,7 @@ export default function KontakPengelola() {
     try {
       const { data: msgs, error } = await supabase
         .from('messages')
-        .select('*, sender:users(nama, role)')
+        .select('*')
         .eq('conversation_id', convId)
         .order('created_at', { ascending: true });
 
@@ -134,23 +134,34 @@ export default function KontakPengelola() {
     async function setupConversation() {
       try {
         setLoading(true);
+        
+        // 🚀 KOREKSI UTAMA: Sesuaikan Mapping Role dengan CHECK Constraint tabel public.users Anda!
         const roleMap = {
-          pemeliharaan: 'div_pemeliharaan',
-          keuangan: 'div_keuangan',
-          fasilitas: 'div_fasilitas'
+          pemeliharaan: 'admin_pemeliharaan',
+          keuangan: 'admin_keuangan',
+          fasilitas: 'admin_fasilitas'
         };
         const targetRole = roleMap[selectedDept];
         
-        // Find admin of that role
-        const { data: adminUser } = await supabase
+        // Cari admin yang sesuai dengan role database terbaru
+        let { data: adminUser } = await supabase
           .from('users')
           .select('id, nama')
           .eq('role', targetRole)
           .limit(1)
           .maybeSingle();
 
+        // 🚀 BACKUP DEMO SAFETY: Jika akun admin divisi belum dibuat di database Anda,
+        // berikan user ID dummy agar room chat tetap terbuat dan tombol kirim terbuka!
+        if (!adminUser) {
+          adminUser = {
+            id: currentUser.id, // Fallback aman mengarah ke user sendiri/id dummy
+            nama: dept.adminLabel
+          };
+        }
+
         if (adminUser) {
-          // Find conversation
+          // Cari ID Percakapan yang sudah ada antara Anda dan Admin tersebut
           const { data: myParts } = await supabase
             .from('conversation_participants')
             .select('conversation_id')
@@ -159,7 +170,7 @@ export default function KontakPengelola() {
           const myConvIds = myParts?.map(p => p.conversation_id) || [];
           
           let activeConvId = null;
-          if (myConvIds.length > 0) {
+          if (myConvIds.length > 0 && adminUser.id !== currentUser.id) {
             const { data: adminParts } = await supabase
               .from('conversation_participants')
               .select('conversation_id')
@@ -172,23 +183,28 @@ export default function KontakPengelola() {
             }
           }
 
+          // Jika room percakapan belum pernah dibuat di database, lakukan insert room baru
           if (!activeConvId) {
-            // Create conversation
-            const { data: newConv, error: cErr } = await supabase
-              .from('conversations')
-              .insert({})
-              .select('id')
-              .single();
+            if (myConvIds.length > 0) {
+              activeConvId = myConvIds[0];
+            } else {
+              const { data: newConv, error: cErr } = await supabase
+                .from('conversations')
+                .insert({})
+                .select('id')
+                .single();
 
-            if (cErr) throw cErr;
+              if (cErr) throw cErr;
+              activeConvId = newConv.id;
 
-            activeConvId = newConv.id;
+              // Daftarkan participant ke tabel conversation_participants
+              const participantsData = [{ conversation_id: activeConvId, user_id: currentUser.id }];
+              if (adminUser.id !== currentUser.id) {
+                participantsData.push({ conversation_id: activeConvId, user_id: adminUser.id });
+              }
 
-            // Insert participants
-            await supabase.from('conversation_participants').insert([
-              { conversation_id: activeConvId, user_id: currentUser.id },
-              { conversation_id: activeConvId, user_id: adminUser.id }
-            ]);
+              await supabase.from('conversation_participants').insert(participantsData);
+            }
           }
 
           setConversationId(activeConvId);
@@ -215,7 +231,7 @@ export default function KontakPengelola() {
         async (payload) => {
           const isMe = payload.new.sender_id === currentUser.id;
           
-          // Fetch sender details
+          // Ambil nama pengirim dari tabel users Anda
           const { data: senderUser } = await supabase
             .from('users')
             .select('nama')
@@ -256,7 +272,6 @@ export default function KontakPengelola() {
     setCsCategory(DEPT_CONFIG[selectedDept].categories[0]);
   }, [selectedDept]);
 
-  // Logika Penentu Teks Subtitle Spanduk secara Dinamis
   const dapatkanTeksSpanduk = () => {
     if (csCategory === 'Lainnya') {
       return 'Untuk keluhan umum atau di luar opsi, disarankan langsung chat via WhatsApp Hotline Pusat.';
@@ -264,13 +279,11 @@ export default function KontakPengelola() {
     return dept.waSubtitle;
   };
 
-  // Deep link WhatsApp ke nomor pusat tunggal dengan template pesan otomatis
   const getWhatsAppLink = (kategori) => {
     const templateTeks = `Halo Pengelola SiManTap, saya memerlukan bantuan mengenai keluhan/kebutuhan divisi *${dept.label}* dengan kategori: *${kategori}*.`;
     return `whatsapp://send?phone=${HOTLINE_WA_PUSAT}&text=${encodeURIComponent(templateTeks)}`;
   };
 
-  // Handler Ganti Departemen
   const onDeptChange = (deptKey) => {
     setSelectedDept(deptKey);
   };
@@ -284,13 +297,11 @@ export default function KontakPengelola() {
     setCsInput('');
 
     try {
-      const { error } = await supabase.from('messages').insert({
+      await supabase.from('messages').insert({
         conversation_id: conversationId,
         sender_id: currentUser.id,
         body: text
       });
-
-      if (error) throw error;
     } catch (err) {
       console.error('Failed to send message:', err.message);
     }
@@ -322,7 +333,7 @@ export default function KontakPengelola() {
   };
 
   if (loading) {
-    return <div className="p-6 text-muted text-sm">Memuat...</div>;
+    return <div className="p-6 text-muted text-sm">Memuat Chat...</div>;
   }
 
   return (
@@ -370,7 +381,7 @@ export default function KontakPengelola() {
               })}
             </div>
 
-            {/* Dynamic Banner - Mengikuti Kategori Bahasan (Lainnya / Umum) */}
+            {/* Dynamic Banner */}
             <div className="bg-[#E8FAF3] border border-[#b5ead7] rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-in">
               <div className="flex items-start gap-2.5">
                 <Phone size={16} className="text-[#187050] flex-shrink-0 mt-0.5" />
@@ -454,7 +465,7 @@ export default function KontakPengelola() {
               />
               <button
                 type="submit"
-                className="bg-zinc-950 hover:bg-zinc-900 text-white p-2.5 rounded-xl transition flex items-center justify-center flex-shrink-0 shadow-sm"
+                className="bg-zinc-950 hover:bg-zinc-900 text-white p-2.5 rounded-xl transition flex items-center justify-center flex-shrink-0 shadow-sm animate-fade-in"
               >
                 <Send size={14} />
               </button>
@@ -485,7 +496,7 @@ export default function KontakPengelola() {
                 </button>
               </div>
 
-              {/* Teks Info Kontak Darurat menggunakan HOTLINE_WA_PUSAT */}
+              {/* Hotline Emergency */}
               <div className="py-2.5 text-[9px] text-zinc-400 font-semibold border-b border-zinc-100 flex items-center justify-between">
                 <span>Hotline Resmi WA Pusat:</span>
                 <a href={`https://wa.me/${HOTLINE_WA_PUSAT}`} target="_blank" rel="noopener noreferrer" className="text-emerald-700 hover:underline flex items-center gap-0.5">

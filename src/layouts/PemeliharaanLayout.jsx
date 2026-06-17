@@ -21,7 +21,11 @@ export default function PemeliharaanLayout() {
   const [userProfile, setUserProfile] = useState(null);
   const [showLogout, setShowLogout] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false); // State pengontrol drawer mobile
+  
+  // 🔥 State Baru untuk Menyimpan Jumlah Tiket Aktif dari Supabase
+  const [activeTicketsCount, setActiveTicketsCount] = useState(0);
 
+  // Hook Efek Bersama untuk Profile & Hitung Notifikasi Tiket Dinamis
   useEffect(() => {
     async function fetchProfile() {
       try {
@@ -41,7 +45,37 @@ export default function PemeliharaanLayout() {
         console.error("Gagal mengambil data profil pemeliharaan:", error);
       }
     }
+
+    // 🔥 Fungsi Ambil Jumlah Tiket (Hanya count baris agar super cepat)
+    async function fetchActiveTicketsCount() {
+      try {
+        const { count, error } = await supabase
+          .from('laporan')
+          .select('*', { count: 'exact', head: true })
+          .neq('status', 'selesai'); // Menghitung status 'menunggu' & 'diproses' (bukan 'selesai')
+
+        if (error) throw error;
+        if (count !== null) setActiveTicketsCount(count);
+      } catch (err) {
+        console.error("Gagal menghitung badge laporan kerusakan:", err.message);
+      }
+    }
+
     fetchProfile();
+    fetchActiveTicketsCount();
+
+    // 🔥 REALTIME ENGINE: Dengarkan perubahan tabel laporan dari database langsung
+    const laporanChannel = supabase
+      .channel('realtime-laporan-sidebar')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'laporan' }, () => {
+        fetchActiveTicketsCount(); // Jalankan ulang hitungan jika ada data insert/update/delete
+      })
+      .subscribe();
+
+    // Hapus langganan realtime saat halaman ditutup/pindah layout
+    return () => {
+      supabase.removeChannel(laporanChannel);
+    };
   }, []);
 
   const getNama = () => userProfile?.nama || 'Admin Pemeliharaan';
@@ -79,7 +113,7 @@ export default function PemeliharaanLayout() {
   // Active state checker
   const isActive = (path) => currentPath === path;
 
-  // Sidebar menu items menggunakan Lucide Icons
+  // 🛠️ MENU ITEMS: Sekarang nilai badge langsung membaca state dinamis activeTicketsCount
   const menuItems = [
     {
       name: 'Dashboard Tiket',
@@ -89,7 +123,7 @@ export default function PemeliharaanLayout() {
     {
       name: 'Tiket Kerusakan',
       path: '/pemeliharaan/tiket',
-      badge: 8,
+      badge: activeTicketsCount, // Diambil otomatis dari database!
       icon: Wrench
     },
     {
@@ -100,7 +134,7 @@ export default function PemeliharaanLayout() {
     {
       name: 'CS Live Chat',
       path: '/pemeliharaan/chat',
-      badge: 3,
+      badge: 3, // Masih statis bawaan tokomu (bisa diubah nanti)
       icon: MessageSquare
     },
     {
@@ -158,7 +192,7 @@ export default function PemeliharaanLayout() {
                   >
                     <IconComponent size={16} />
                     <span className="flex-1">{item.name}</span>
-                    {item.badge && (
+                    {item.badge > 0 && (
                       <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${
                         active ? 'bg-white/20 text-white' : 'bg-red-100 text-red-600'
                       }`}>
@@ -227,8 +261,8 @@ export default function PemeliharaanLayout() {
                     >
                       <IconComponent size={16} />
                       <span>{item.name}</span>
-                      {item.badge && (
-                        <span className="sidebar-badge">{item.badge}</span>
+                      {item.badge > 0 && (
+                        <span className="sidebar-badge bg-red-500 text-white font-extrabold">{item.badge}</span>
                       )}
                     </Link>
                   );

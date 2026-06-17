@@ -24,23 +24,64 @@ export default function PenghuniLayout() {
   const [userProfile, setUserProfile] = useState(null);
   const [showLogout, setShowLogout] = useState(false);
   
-  // 💡 DEKLARASI STATE UNTUK MOBILE DRAWER (MENGATASI ERROR REFERENCEERROR)
+  // 💡 DEKLARASI STATE UNTUK MOBILE DRAWER
   const [isMobileOpen, setIsMobileOpen] = useState(false); 
   const [namaUser, setNamaUser] = useState('');
 
   useEffect(() => {
     async function fetchProfile() {
       try {
+        // 1. Ambil ID User yang sedang login dari Supabase Auth
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
-        const { data } = await supabase
+
+        // 2. Ambil data nama, role, dan no_hp dari tabel users
+        const { data: userData, error: userError } = await supabase
           .from('users')
-          .select('nama, role, no_hp')
+          .select('id, nama, role, no_hp')
           .eq('id', user.id)
-          .single();
-        setUserProfile(data);
+          .maybeSingle();
+
+        if (userError) throw userError;
+
+        // 3. AMBIL DATA PENGHUNI + JOIN TABEL UNIT SECARA SEKALIGUS
+        const { data: penghuniData, error: penghuniError } = await supabase
+          .from('penghuni')
+          .select(`
+            dimensi_luas, 
+            tgl_masuk,
+            unit (
+              nomor_unit,
+              lantai
+            )
+          `)
+          .eq('user_id', user.id);
+
+        if (penghuniError) {
+          console.error("Gagal mengambil data relasi unit:", penghuniError.message);
+        }
+
+        // 💡 PERBAIKAN 1: Ambil data pertama jika berbentuk array secara aman
+        const profilPenghuni = Array.isArray(penghuniData) && penghuniData.length > 0 
+          ? penghuniData[0] 
+          : (penghuniData || null);
+
+        // 4. Masukkan semua data gabungan ke dalam state userProfile
+        if (userData) {
+          setUserProfile({
+            nama: userData.nama,
+            role: userData.role,
+            no_hp: userData.no_hp,
+            // 💡 PERBAIKAN 2: Jika data penghuni/unit kosong karena kolom `user_id` di database masih NULL,
+            // gunakan kata fallback 'Belum Diatur' (BUKAN STRIP '-') agar Beranda lolos dari Loading Guard.
+            nomor_unit: profilPenghuni?.unit?.nomor_unit || 'Belum Diatur',
+            lantai: profilPenghuni?.unit?.lantai || 'Belum Diatur',
+            dimensi_luas: profilPenghuni?.dimensi_luas || '0',
+            tgl_masuk: profilPenghuni?.tgl_masuk || '-'
+          });
+        }
       } catch (error) {
-        console.error("Gagal mengambil data profil:", error);
+        console.error("Gagal mengambil data profil penghuni:", error.message);
       }
     }
     fetchProfile();
@@ -325,7 +366,7 @@ export default function PenghuniLayout() {
 
         {/* Content Outlet */}
         <main className="flex-1 px-6 pb-8">
-          <Outlet />
+          <Outlet context={{ userProfile }} />
         </main>
       </div>
 

@@ -137,17 +137,16 @@ export default function PendapatanFasilitas() {
       {/* Filter Row */}
       <div className="card-section flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 p-4 rounded-2xl">
         <div className="flex flex-wrap items-center gap-3">
-          {/* Facility Filter selector */}
+          {/* Facility Filter selector - UBAH: Disesuaikan dengan pilihan di Divisi Fasilitas */}
           <select
             value={facilityFilter}
             onChange={(e) => setFacilityFilter(e.target.value)}
             className="input-modern select-modern w-auto inline-block py-2 text-xs font-bold"
           >
             <option value="Semua">Semua Fasilitas</option>
-            <option value="Aula Clubhouse">Aula Clubhouse</option>
-            <option value="Lapangan Tenis">Lapangan Tenis</option>
-            <option value="Area BBQ Rooftop">Area BBQ Rooftop</option>
-            <option value="Ruang Serbaguna">Ruang Serbaguna</option>
+            <option value="Fitness & Gym Center">Fitness & Gym Center</option>
+            <option value="Kolam Renang Olympic">Kolam Renang Olympic</option>
+            <option value="Ruang Pertemuan / Ballroom">Ruang Pertemuan / Ballroom</option>
           </select>
 
           {/* Kolom Pencarian dengan Fleksibilitas Struktur Mandiri */}
