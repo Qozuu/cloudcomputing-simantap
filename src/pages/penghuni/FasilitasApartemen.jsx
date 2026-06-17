@@ -19,15 +19,31 @@ export default function FasilitasApartemen() {
   const [bookingTime, setBookingTime] = useState('08:00 - 10:00');
   const [loading, setLoading] = useState(true);
   const [facilities, setFacilities] = useState([]);
+  const [idPenghuniSah, setIdPenghuniSah] = useState(null);
 
   useEffect(() => {
     async function loadData() {
       try {
         setLoading(true);
+        
+        // 1. Ambil info user login & cari ID internal penghuni yang sah
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: penghuniData } = await supabase
+            .from('penghuni')
+            .select('id')
+            .eq('user_id', user.id)
+            .maybeSingle();
+            
+          if (penghuniData) {
+            setIdPenghuniSah(penghuniData.id);
+          }
+        }
+
+        // 2. Ambil seluruh data fasilitas dari database
         const { data, error } = await supabase
           .from('fasilitas')
           .select('*')
-          .eq('is_active', true)
           .order('nama');
         
         if (error) throw error;
@@ -40,6 +56,7 @@ export default function FasilitasApartemen() {
             defaultImage = 'https://images.unsplash.com/photo-1431540015161-0bf868a2d407?auto=format&fit=crop&q=80&w=800';
           }
 
+          // Format harga tarif sesuai skema database
           const formattedPrice = fac.tarif === 0 || !fac.tarif
             ? 'Gratis'
             : new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(fac.tarif) + '/sesi';
@@ -51,15 +68,13 @@ export default function FasilitasApartemen() {
           return {
             id: fac.id,
             name: fac.nama,
-            status: fac.is_active ? 'Buka' : 'Maintenance',
+            isActive: fac.is_active, // Menggunakan properti boolean is_active asli dari SQL Anda
             location: fac.lokasi || 'Area Apartemen',
             hours: fac.jam_operasional || '06:00 - 21:00',
             capacity: `Maks. ${fac.kapasitas || 50} orang`,
             price: formattedPrice,
             priceRaw: rawPrice,
             slots: `${fac.kapasitas || 10}/${fac.kapasitas || 10}`,
-            slotsLeft: fac.kapasitas || 10,
-            slotsTotal: fac.kapasitas || 10,
             image: fac.foto_url || defaultImage,
             raw: fac
           };
@@ -76,7 +91,7 @@ export default function FasilitasApartemen() {
   }, []);
 
   const handleOpenBooking = (facility) => {
-    if (facility.status === 'Maintenance') return;
+    if (!facility.isActive) return;
     setSelectedFacility(facility);
     setBookingDate(new Date().toISOString().split('T')[0]);
     setModalOpen(true);
@@ -84,28 +99,30 @@ export default function FasilitasApartemen() {
 
   const handleBookingSubmit = async (e) => {
     e.preventDefault();
-    if (!selectedFacility) return;
+    if (!selectedFacility || !idPenghuniSah) {
+      alert('Data penghuni tidak ditemukan. Pastikan Anda terdaftar dengan benar.');
+      return;
+    }
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      // Memisahkan string sesi waktu menjadi format baku TIME (HH:MM)
+      const jamMulai = bookingTime.split(' - ')[0].trim();
+      const jamSelesai = bookingTime.split(' - ')[1].trim();
 
-      const jamMulai = bookingTime.split(' - ')[0];
-      const jamSelesai = bookingTime.split(' - ')[1];
-
+      // KOREKSI UTAMA: Menyesuaikan payload insert dengan skema SQL baru Anda
       const newReservasi = {
         fasilitas_id: selectedFacility.id,
-        penghuni_id: user.id,
+        penghuni_id: idPenghuniSah, // Menggunakan ID internal dari tabel penghuni (BUKAN user.id Auth)
         tanggal: bookingDate,
         jam_mulai: jamMulai,
         jam_selesai: jamSelesai,
-        catatan: '',
-        status: 'menunggu'
+        catatan: 'Reservasi via aplikasi penghuni',
+        status: 'menunggu' // Status awal wajib 'menunggu' sesuai CHECK constraint Anda
       };
 
       const { error } = await supabase
         .from('reservasi')
-        .insert(newReservasi);
+        .insert([newReservasi]);
 
       if (error) throw error;
 
@@ -114,95 +131,93 @@ export default function FasilitasApartemen() {
       setTimeout(() => setSuccessToast(''), 4000);
     } catch (err) {
       console.error('Gagal melakukan reservasi:', err.message);
+      alert(`Gagal membuat reservasi: ${err.message}`);
     }
   };
 
   if (loading) {
-    return <div className="p-6 text-muted text-sm">Memuat...</div>;
+    return <div className="p-6 text-zinc-500 text-sm font-semibold">Memuat Fasilitas SiManTap...</div>;
   }
 
   return (
-    <div className="space-y-6 animate-fade-up relative">
-      <div className="bg-[#FEF7EC] border border-soft rounded-2xl px-4 py-3 text-xs text-[#B06020] font-bold flex items-start gap-2.5 shadow-softer">
-        <AlertCircle size={15} className="flex-shrink-0 mt-0.5 text-[#B06020]" />
-        <p>Reservasi fasilitas akan dikonfirmasi Admin Fasilitas dalam 1-2 jam. Cek status di Beranda.</p>
+    <div className="space-y-6 animate-fade-up relative text-zinc-800">
+      <div className="bg-amber-50 border border-amber-100 rounded-2xl px-4 py-3 text-xs text-amber-800 font-bold flex items-start gap-2.5 shadow-sm">
+        <AlertCircle size={15} className="flex-shrink-0 mt-0.5 text-amber-600" />
+        <p>Reservasi fasilitas akan dikonfirmasi oleh Admin Fasilitas dalam beberapa saat. Anda bisa memantau statusnya langsung melalui dashboard.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-2">
         {facilities.map((fac) => {
-          const isMaintenance = fac.status === 'Maintenance';
+          const isMaintenance = !fac.isActive;
 
           return (
             <div
               key={fac.id}
               onClick={() => !isMaintenance && handleOpenBooking(fac)}
-              className={`card-section !p-0 flex flex-col justify-between overflow-hidden border border-soft rounded-2xl bg-white relative select-none style-bounce
+              className={`bg-white flex flex-col justify-between overflow-hidden border rounded-2xl relative select-none
                 ${!isMaintenance 
-                  ? 'cursor-pointer shadow-md hover:-translate-y-1.5 hover:shadow-xl hover:border-dark/10 active:translate-y-1 active:scale-[0.94] active:shadow-sm' 
-                  : 'cursor-not-allowed shadow-sm'
+                  ? 'cursor-pointer border-zinc-100 shadow-sm hover:-translate-y-1 hover:shadow-md transition-all duration-200' 
+                  : 'cursor-not-allowed border-zinc-200 shadow-none'
                 }
               `}
-              style={{
-                transition: 'all 300ms cubic-bezier(0.34, 1.56, 0.64, 1)'
-              }}
             >
               {isMaintenance && (
-                <div className="absolute inset-0 bg-white/70 backdrop-blur-[0.5px] z-10 pointer-events-none" />
+                <div className="absolute inset-0 bg-white/60 backdrop-blur-[0.5px] z-10 pointer-events-none" />
               )}
 
               {/* Atas: Gambar */}
-              <div className="relative h-44 w-full bg-soft">
+              <div className="relative h-44 w-full bg-zinc-100">
                 <img src={fac.image} alt={fac.name} className="w-full h-full object-cover" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
                 
-                <span className={`absolute top-4 right-4 badge-base font-black shadow-md z-20 ${
-                  !isMaintenance ? 'bg-[#B5EAD7] text-[#187050]' : 'bg-[#F9C3BA] text-[#C05040]'
+                <span className={`absolute top-4 right-4 text-[10px] font-black px-2.5 py-0.5 rounded-full shadow-sm z-20 uppercase tracking-wider ${
+                  fac.isActive ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
                 }`}>
-                  {fac.status.toUpperCase()}
+                  {fac.isActive ? 'Buka' : 'Maintenance'}
                 </span>
 
                 <div className="absolute bottom-4 left-4 text-white z-20">
-                  <h3 className="font-extrabold text-base leading-tight">{fac.name}</h3>
-                  <div className="flex items-center gap-1 text-[10px] font-bold uppercase opacity-90 mt-0.5">
+                  <h3 className="font-extrabold text-base leading-tight tracking-wide">{fac.name}</h3>
+                  <div className="flex items-center gap-1 text-[10px] font-bold uppercase opacity-90 mt-1">
                     <MapPin size={11} /> {fac.location}
                   </div>
                 </div>
               </div>
 
-              {/* Tengah: Info */}
-              <div className="p-5 space-y-3 border-b border-soft text-xs font-semibold text-ink relative z-0">
-                <div className="flex items-center gap-2 text-muted">
-                  <Clock size={13} className="text-muted flex-shrink-0" />
-                  <span className="text-ink">{fac.hours}</span>
+              {/* Tengah: Rincian Informasi */}
+              <div className="p-5 space-y-3 border-b border-zinc-50 text-xs font-semibold text-zinc-700 relative z-0">
+                <div className="flex items-center gap-2 text-zinc-400">
+                  <Clock size={13} className="flex-shrink-0" />
+                  <span className="text-zinc-600 font-medium">{fac.hours}</span>
                 </div>
-                <div className="flex items-center gap-2 text-muted">
-                  <Users size={13} className="text-muted flex-shrink-0" />
-                  <span className="text-ink">{fac.capacity}</span>
+                <div className="flex items-center gap-2 text-zinc-400">
+                  <Users size={13} className="flex-shrink-0" />
+                  <span className="text-zinc-600 font-medium">{fac.capacity}</span>
                 </div>
                 
-                <hr className="border-soft" />
+                <hr className="border-zinc-100" />
 
-                <div className="flex justify-between items-center pt-1.5">
+                <div className="flex justify-between items-center pt-1">
                   <div>
-                    <p className="text-[9px] font-bold text-muted uppercase tracking-widest leading-none">Harga</p>
-                    <p className={`text-xs font-extrabold mt-1 ${fac.price === 'Gratis' ? 'text-[#187050]' : 'text-[#B06020]'}`}>{fac.price}</p>
+                    <p className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest leading-none">Tarif Penggunaan</p>
+                    <p className={`text-xs font-extrabold mt-1.5 ${fac.price === 'Gratis' ? 'text-emerald-700' : 'text-amber-700'}`}>{fac.price}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-[9px] font-bold text-muted uppercase tracking-widest leading-none">Slot Sisa</p>
-                    <p className="text-xs font-extrabold text-ink mt-1">{fac.slots}</p>
+                    <p className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest leading-none">Ketersediaan</p>
+                    <p className="text-xs font-extrabold text-zinc-900 mt-1.5">Tersedia</p>
                   </div>
                 </div>
               </div>
 
-              {/* Bawah: Tombol Aksi */}
-              <div className="p-4 bg-[#F8F7F5] border-t border-soft relative z-20">
+              {/* Bawah: Tombol Trigger */}
+              <div className="p-4 bg-zinc-50 border-t border-zinc-100 relative z-20">
                 {!isMaintenance ? (
-                  <div className="btn-primary w-full justify-center text-xs flex items-center gap-1.5 pointer-events-none">
-                    <Plus size={14} /> <span>Reservasi Sekarang</span>
+                  <div className="w-full bg-zinc-900 hover:bg-zinc-800 text-white text-center py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-sm">
+                    <Plus size={14} /> <span>Booking Sekarang</span>
                   </div>
                 ) : (
-                  <button disabled className="w-full bg-gray-100 text-gray-400 py-2.5 rounded-xl text-xs font-bold cursor-not-allowed border border-dashed border-gray-200 flex items-center justify-center gap-1.5">
-                    <Ban size={13} /> <span>Fasilitas Sedang Ditutup</span>
+                  <button disabled className="w-full bg-zinc-100 text-zinc-450 py-2.5 rounded-xl text-xs font-bold cursor-not-allowed border border-dashed border-zinc-200 flex items-center justify-center gap-1.5">
+                    <Ban size={13} /> <span>Fasilitas Ditutup Sementara</span>
                   </button>
                 )}
               </div>
@@ -211,37 +226,65 @@ export default function FasilitasApartemen() {
         })}
       </div>
 
-      {/* MODAL RESERVASI */}
+      {/* MODAL TRANSAKSI RESERVASI */}
       {modalOpen && selectedFacility && (
-        <div className="modal-overlay">
-          <div className="fixed inset-0 bg-active/40 backdrop-blur-sm" onClick={() => setModalOpen(false)}></div>
-          <div className="modal-box max-w-sm relative z-50 animate-scale-in">
-            <div className="modal-header">
-              <h3 className="text-xs font-bold text-ink uppercase tracking-wider">Reservasi: {selectedFacility.name}</h3>
-              <button onClick={() => setModalOpen(false)} className="text-muted hover:text-ink transition"><X size={18} /></button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="fixed inset-0" onClick={() => setModalOpen(false)}></div>
+          <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-xl relative z-50 animate-scale-in space-y-4 border border-zinc-100">
+            <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
+              <h3 className="text-xs font-bold text-zinc-900 uppercase tracking-wider">Form Booking Fasilitas</h3>
+              <button onClick={() => setModalOpen(false)} className="text-zinc-400 hover:text-zinc-900 transition">
+                <X size={18} />
+              </button>
             </div>
-            <form onSubmit={handleBookingSubmit} className="modal-body space-y-4">
-              <div className="bg-app-bg p-4 rounded-2xl border border-soft text-xs font-semibold text-ink space-y-1">
-                <div className="flex justify-between"><span className="text-muted">Harga Sesi</span><span className="text-ink font-bold">{selectedFacility.priceRaw}</span></div>
-                <div className="flex justify-between"><span className="text-muted">Kapasitas Maks</span><span className="text-ink">{selectedFacility.capacity}</span></div>
+            
+            <form onSubmit={handleBookingSubmit} className="space-y-4 text-xs font-semibold">
+              <div className="bg-zinc-50 p-4 rounded-xl border border-zinc-100 space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-zinc-400 font-normal">Fasilitas</span>
+                  <span className="text-zinc-900 font-bold">{selectedFacility.name}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-zinc-400 font-normal">Tarif Dasar</span>
+                  <span className="text-zinc-900 font-bold">{selectedFacility.priceRaw}</span>
+                </div>
               </div>
+
               <div>
-                <label className="block text-[10px] font-bold text-muted uppercase tracking-widest mb-1.5">Tanggal Reservasi</label>
-                <input type="date" required value={bookingDate} onChange={(e) => setBookingDate(e.target.value)} className="input-modern" />
+                <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">Pilih Tanggal Penggunaan</label>
+                <input type="date" required value={bookingDate} onChange={(e) => setBookingDate(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-zinc-200 text-zinc-800 bg-white focus:outline-none focus:border-zinc-900 transition" />
               </div>
+
               <div>
-                <label className="block text-[10px] font-bold text-muted uppercase tracking-widest mb-1.5">Sesi Waktu</label>
-                <select value={bookingTime} onChange={(e) => setBookingTime(e.target.value)} className="input-modern select-modern" >
-                  <option value="08:00 - 10:00">Sesi 1: 08:00 - 10:00</option>
-                  <option value="10:00 - 12:00">Sesi 2: 10:00 - 12:00</option>
-                  <option value="13:00 - 15:00">Sesi 3: 13:00 - 15:00</option>
+                <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">Pilih Sesi Jam Operasional</label>
+                <select value={bookingTime} onChange={(e) => setBookingTime(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-zinc-200 text-zinc-800 bg-white focus:outline-none focus:border-zinc-900 transition" >
+                  <option value="08:00 - 10:00">Sesi 1: 08:00 - 10:00 WIB</option>
+                  <option value="10:00 - 12:00">Sesi 2: 10:00 - 12:00 WIB</option>
+                  <option value="13:00 - 15:00">Sesi 3: 13:00 - 15:00 WIB</option>
+                  <option value="15:00 - 17:00">Sesi 4: 15:00 - 17:00 WIB</option>
+                  <option value="18:00 - 20:00">Sesi 5: 18:00 - 20:00 WIB</option>
                 </select>
               </div>
-              <div className="flex gap-3 pt-3 border-t border-soft">
-                <button type="submit" className="flex-1 btn-primary py-2.5 px-4 text-xs">Konfirmasi Reservasi</button>
-                <button type="button" onClick={() => setModalOpen(false)} className="btn-ghost text-xs border-none">Batal</button>
+
+              <div className="flex gap-3 pt-3 border-t border-zinc-100">
+                <button type="submit" className="flex-1 bg-zinc-950 hover:bg-zinc-800 text-white py-2.5 px-4 rounded-xl font-bold transition shadow-sm text-center">
+                  Konfirmasi Booking
+                </button>
+                <button type="button" onClick={() => setModalOpen(false)} className="px-4 py-2.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 rounded-xl font-bold transition">
+                  Batal
+                </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notifikasi */}
+      {successToast && (
+        <div className="fixed bottom-5 right-5 z-50 bg-zinc-900 text-white px-4 py-3 rounded-xl shadow-lg flex items-center gap-2 animate-fade-in">
+          <div>
+            <p className="text-xs font-extrabold">Transaksi Berhasil</p>
+            <p className="text-[10px] text-zinc-400">{successToast}</p>
           </div>
         </div>
       )}

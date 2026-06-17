@@ -73,6 +73,7 @@ import KelolaPenghuniKeuangan from '../pages/keuangan/KelolaPenghuniKeuangan';
 import ProtectedRoute from '../components/shared/ProtectedRoute';
 import AttendanceGuard from '../components/shared/AttendanceGuard';
 import SharedAbsensiCheckIn from '../pages/shared/AbsensiCheckIn';
+import NotifikasiPage from '../pages/shared/NotifikasiPage';
 import Homepage from '../pages/superadmin/Homepage';
 import Dashboard from '../pages/superadmin/Dashboard';
 import DataTower from '../pages/superadmin/DataTower';
@@ -322,6 +323,10 @@ const router = createBrowserRouter([
   {
     path: '/absensi',
     element: <SharedAbsensiCheckIn />,
+  },
+  {
+    path: '/notifikasi',
+    element: <NotifikasiPage />,
   },
   {
     path: '/super-admin',
