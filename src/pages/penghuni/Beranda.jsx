@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom'; 
-import { CheckCircle2, AlertTriangle, Info } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, Info, BellRing } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
 export default function Beranda() {
   const navigate = useNavigate();
   
-  // 💡 AMBIL DATA DINAMIS DARI CONTEXT INDUK
+  // Ambil data dinamis dari context induk
   const { userProfile } = useOutletContext();
 
   const [loading, setLoading] = useState(true);
@@ -20,21 +20,19 @@ export default function Beranda() {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
 
-        // 1. Ambil data penghuni menggunakan filter array agar lebih toleran terhadap tipe data UUID
+        // 1. Ambil data penghuni berdasarkan user_id
         const { data: penghuniData, error: penghuniError } = await supabase
           .from('penghuni')
           .select('id')
-          .eq('user_id', user.id);
+          .eq('user_id', user.id)
+          .maybeSingle();
 
         if (penghuniError) {
-          console.error("Gagal memuat data penghuni di beranda:", penghuniError);
+          console.error("Gagal memuat data penghuni di beranda:", penghuniError.message);
         }
 
-        // Ambil objek pertama dari array data penghuni
-        const targetPenghuni = Array.isArray(penghuniData) ? penghuniData[0] : penghuniData;
-
-        if (targetPenghuni && targetPenghuni.id) {
-          const currentPenghuniId = targetPenghuni.id;
+        if (penghuniData && penghuniData.id) {
+          const currentPenghuniId = penghuniData.id;
           
           // 2. Ambil tagihan terbaru berdasarkan penghuni_id
           const { data: tagihanData } = await supabase
@@ -49,23 +47,33 @@ export default function Beranda() {
           }
         }
 
-        // 3. Ambil laporan aktif milik user
-        const { data: laporanData } = await supabase
+        // 3. Menggunakan filter pencarian laporan aktif milik penghuni yang sedang login
+        const { data: laporanData, error: laporanError } = await supabase
           .from('laporan')
           .select('*')
-          .eq('pelapor_id', user.id)
-          .neq('status', 'selesai');
+          .eq('pelapor_id', user.id);
 
-        // 4. Ambil pengumuman dari tabel informasi sesuai skema terbaru
-        const { data: pengumumanData } = await supabase
-          .from('informasi')
+        if (!laporanError && laporanData) {
+          // Filter data status non-selesai dan non-ditolak di sisi client
+          const laporanAktif = laporanData.filter(
+            item => item.status?.toLowerCase() !== 'selesai' && item.status?.toLowerCase() !== 'ditolak'
+          );
+          setLaporan(laporanAktif);
+        }
+
+        // 4. 🔥 PERBAIKAN: Mengambil data pengumuman dinamis dari tabel broadcast_pesan
+        const { data: broadcastData, error: broadcastError } = await supabase
+          .from('broadcast_pesan')
           .select('*')
-          .eq('is_published', true)
           .order('created_at', { ascending: false })
           .limit(3);
 
-        setLaporan(laporanData || []);
-        setPengumuman(pengumumanData || []);
+        if (broadcastError) {
+          console.error("Gagal memuat data broadcast pesan:", broadcastError.message);
+        } else {
+          setPengumuman(broadcastData || []);
+        }
+
       } catch (error) {
         console.error('Gagal memuat data beranda:', error.message);
       } finally {
@@ -79,15 +87,21 @@ export default function Beranda() {
     navigate(path);
   };
 
-  // 💡 PERBAIKAN UTAMA: Tambahkan validasi mendalam agar tidak merender halaman jika nomor_unit atau lantai masih berupa strip/kosong
-  if (
-    loading || 
-    !userProfile || 
-    !userProfile.nomor_unit || 
-    userProfile.nomor_unit === '-' || 
-    !userProfile.lantai || 
-    userProfile.lantai === '-'
-  ) {
+  // Fungsi pembantu styling badge berdasarkan tingkat prioritas broadcast
+  const getPriorityStyle = (prioritas) => {
+    switch (prioritas?.toLowerCase()) {
+      case 'darurat':
+        return 'bg-red-100 text-red-700 border border-red-200';
+      case 'peringatan':
+        return 'bg-amber-100 text-amber-700 border border-amber-200';
+      case 'info':
+      default:
+        return 'bg-blue-100 text-blue-700 border border-blue-200';
+    }
+  };
+
+  // Loading Guard
+  if (loading || !userProfile) {
     return (
       <div className="flex items-center justify-center min-h-[50vh] p-6 text-zinc-500 text-sm font-semibold bg-white border border-zinc-100 rounded-2xl shadow-sm">
         <span className="w-4 h-4 mr-2 rounded-full bg-zinc-400 animate-ping"></span>
@@ -95,11 +109,6 @@ export default function Beranda() {
       </div>
     );
   }
-
-  // Menggunakan tagihan.jumlah sesuai skema SQL
-  const formattedAmount = tagihan?.jumlah
-    ? new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(tagihan.jumlah)
-    : 'Rp 0';
 
   // Format tanggal periode tagihan
   const formatPeriode = (dateString) => {
@@ -114,21 +123,11 @@ export default function Beranda() {
       <div className="bg-white border border-zinc-100 p-6 rounded-2xl shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-extrabold text-zinc-900 flex items-center gap-1.5">
-            {/* 💡 MENGGUNAKAN DATA DINAMIS DARI CONTEXT */}
             <span>Halo, {userProfile?.nama || 'Penghuni'}!</span>
           </h2>
           <p className="text-xs text-zinc-500 font-medium mt-1">
-            {/* 💡 MENGGUNAKAN NOMOR UNIT DAN LANTAI DARI CONTEXT */}
-            Unit {userProfile.nomor_unit} · Lantai {userProfile.lantai} — Selamat datang di SiManTap
+            Unit {userProfile?.nomor_unit || 'Belum Diatur'} · Lantai {userProfile?.lantai || 'Belum Diatur'} — Selamat datang di SiManTap
           </p>
-        </div>
-        <div className="flex items-center gap-4 border-l border-zinc-100 pl-0 md:pl-6">
-          <div className="text-right">
-            <p className="text-lg font-extrabold text-zinc-900 leading-none">{formattedAmount}</p>
-            <p className="text-[10px] text-zinc-400 font-bold uppercase mt-1">
-              {tagihan ? `Tagihan ${formatPeriode(tagihan.periode)}` : 'Tidak Anda Tagihan Aktif'}
-            </p>
-          </div>
         </div>
       </div>
 
@@ -174,7 +173,7 @@ export default function Beranda() {
             <p className="text-lg font-black text-zinc-900 mt-1.5">{laporan.length} tiket</p>
           </div>
           <p className="text-xs text-amber-800 font-semibold flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-600 animate-pulse"></span>
+            {laporan.length > 0 && <span className="w-1.5 h-1.5 rounded-full bg-amber-600 animate-pulse"></span>}
             <span className="truncate max-w-[150px]">
               {laporan.length > 0 
                 ? `${laporan[0].judul} → ${laporan[0].status}` 
@@ -190,7 +189,7 @@ export default function Beranda() {
         >
           <div>
             <p className="text-[10px] font-semibold text-zinc-400 uppercase tracking-widest">Pengumuman</p>
-            <p className="text-lg font-black text-zinc-900 mt-1.5">{pengumuman.length} publikasi</p>
+            <p className="text-lg font-black text-zinc-900 mt-1.5">{pengumuman.length} pesan</p>
           </div>
           <p className="text-xs text-purple-700 font-semibold">Lihat informasi apartemen</p>
         </div>
@@ -208,11 +207,11 @@ export default function Beranda() {
         </div>
       </div>
 
-      {/* Pengumuman Terbaru */}
+      {/* Bagian Pengumuman Terbaru (Broadcast Pesan) */}
       <div className="bg-white border border-zinc-100 p-6 rounded-2xl shadow-sm">
         <h3 className="text-sm font-bold text-zinc-900 uppercase tracking-wider mb-5 flex items-center gap-1.5">
           <Info size={16} />
-          <span>Pengumuman Terbaru</span>
+          <span>Pengumuman Broadcast Terbaru</span>
         </h3>
 
         <div className="space-y-4">
@@ -222,22 +221,26 @@ export default function Beranda() {
               onClick={() => handleQuickRedirect('/penghuni/pengumuman')}
               className="group flex flex-col sm:flex-row items-start gap-4 p-4 hover:bg-zinc-50 rounded-xl transition duration-150 cursor-pointer border border-transparent hover:border-zinc-100"
             >
-              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-zinc-100 text-zinc-700">
-                {item.target_role === 'all' ? 'Umum' : 'Internal'}
+              <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${getPriorityStyle(item.prioritas)}`}>
+                {item.prioritas || 'Info'}
               </span>
-              <div className="space-y-1">
+              <div className="space-y-1-w-full">
                 <h4 className="text-sm font-bold text-zinc-900 group-hover:text-zinc-700 transition-colors leading-snug">
                   {item.judul}
                 </h4>
                 <p className="text-xs text-zinc-500 font-medium leading-relaxed line-clamp-2">
                   {item.isi}
                 </p>
+                <p className="text-[10px] text-zinc-400 font-normal pt-1">
+                  Diterbitkan pada: {new Date(item.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                </p>
               </div>
             </div>
           ))}
           {pengumuman.length === 0 && (
-            <div className="text-center py-4 text-xs font-semibold text-zinc-400">
-              Tidak ada pengumuman terbaru.
+            <div className="text-center py-6 text-xs font-semibold text-zinc-400 flex flex-col items-center justify-center gap-2">
+              <BellRing size={24} className="text-zinc-300 animate-bounce" />
+              <span>Belum ada pesan broadcast pengumuman untuk saat ini.</span>
             </div>
           )}
         </div>

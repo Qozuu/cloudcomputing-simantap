@@ -3,7 +3,6 @@ import {
   MapPin,
   Clock,
   Users,
-  CheckCircle2,
   AlertCircle,
   X,
   Plus,
@@ -19,25 +18,17 @@ export default function FasilitasApartemen() {
   const [bookingTime, setBookingTime] = useState('08:00 - 10:00');
   const [loading, setLoading] = useState(true);
   const [facilities, setFacilities] = useState([]);
-  const [idPenghuniSah, setIdPenghuniSah] = useState(null);
+  const [idUserSah, setIdUserSah] = useState(null);
 
   useEffect(() => {
     async function loadData() {
       try {
         setLoading(true);
         
-        // 1. Ambil info user login & cari ID internal penghuni yang sah
+        // 1. Ambil info user login langsung (untuk foreign key reservasi.penghuni_id -> users.id)
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
-          const { data: penghuniData } = await supabase
-            .from('penghuni')
-            .select('id')
-            .eq('user_id', user.id)
-            .maybeSingle();
-            
-          if (penghuniData) {
-            setIdPenghuniSah(penghuniData.id);
-          }
+          setIdUserSah(user.id);
         }
 
         // 2. Ambil seluruh data fasilitas dari database
@@ -56,25 +47,21 @@ export default function FasilitasApartemen() {
             defaultImage = 'https://images.unsplash.com/photo-1431540015161-0bf868a2d407?auto=format&fit=crop&q=80&w=800';
           }
 
-          // Format harga tarif sesuai skema database
-          const formattedPrice = fac.tarif === 0 || !fac.tarif
-            ? 'Gratis'
-            : new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(fac.tarif) + '/sesi';
-
-          const rawPrice = fac.tarif === 0 || !fac.tarif
-            ? 'Gratis'
-            : new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(fac.tarif);
+          // PERBAIKAN: Mengambil nilai dinamis langsung dari kolom 'harga_sewa' di database
+          const rawPrice = fac.harga_sewa; 
+          const isFree = !rawPrice || rawPrice === '0' || rawPrice.toLowerCase() === 'gratis';
+          const formattedPrice = isFree ? 'Gratis' : rawPrice;
 
           return {
             id: fac.id,
             name: fac.nama,
-            isActive: fac.is_active, // Menggunakan properti boolean is_active asli dari SQL Anda
+            statusDB: fac.status || 'Buka', // Menggunakan kolom status ('Buka', 'Tutup', 'Maintenance')
             location: fac.lokasi || 'Area Apartemen',
-            hours: fac.jam_operasional || '06:00 - 21:00',
-            capacity: `Maks. ${fac.kapasitas || 50} orang`,
-            price: formattedPrice,
-            priceRaw: rawPrice,
-            slots: `${fac.kapasitas || 10}/${fac.kapasitas || 10}`,
+            hours: fac.jam_operasional || '06:00 - 21:00', // Dioptimalkan untuk mengambil jam_operasional dari DB jika ada
+            capacity: `Maks. ${fac.kapasitas || 1} orang`,
+            price: formattedPrice, // Di-render di halaman card utama
+            priceRaw: formattedPrice, // Di-render di dalam modal transaksi
+            slots: `${fac.kapasitas || 1}/${fac.kapasitas || 1}`,
             image: fac.foto_url || defaultImage,
             raw: fac
           };
@@ -91,7 +78,7 @@ export default function FasilitasApartemen() {
   }, []);
 
   const handleOpenBooking = (facility) => {
-    if (!facility.isActive) return;
+    if (facility.statusDB !== 'Buka') return;
     setSelectedFacility(facility);
     setBookingDate(new Date().toISOString().split('T')[0]);
     setModalOpen(true);
@@ -99,25 +86,26 @@ export default function FasilitasApartemen() {
 
   const handleBookingSubmit = async (e) => {
     e.preventDefault();
-    if (!selectedFacility || !idPenghuniSah) {
-      alert('Data penghuni tidak ditemukan. Pastikan Anda terdaftar dengan benar.');
+    if (!selectedFacility || !idUserSah) {
+      alert('Data pengguna tidak ditemukan. Pastikan Anda telah login kembali.');
       return;
     }
 
     try {
-      // Memisahkan string sesi waktu menjadi format baku TIME (HH:MM)
-      const jamMulai = bookingTime.split(' - ')[0].trim();
-      const jamSelesai = bookingTime.split(' - ')[1].trim();
+      // Memisahkan string sesi waktu menjadi format baku TIME (HH:MM:SS) 
+      // agar lolos validasi tipe data 'time without time zone' di PostgreSQL
+      const jamMulai = bookingTime.split(' - ')[0].trim() + ':00';
+      const jamSelesai = bookingTime.split(' - ')[1].trim() + ':00';
 
-      // KOREKSI UTAMA: Menyesuaikan payload insert dengan skema SQL baru Anda
+      // SINKRONISASI PAYLOAD DENGAN STRUKTUR SQL RESERVASI BARU
       const newReservasi = {
         fasilitas_id: selectedFacility.id,
-        penghuni_id: idPenghuniSah, // Menggunakan ID internal dari tabel penghuni (BUKAN user.id Auth)
+        penghuni_id: idUserSah, // Menyasar relasi ke users.id sesuai fkey Anda
         tanggal: bookingDate,
         jam_mulai: jamMulai,
         jam_selesai: jamSelesai,
         catatan: 'Reservasi via aplikasi penghuni',
-        status: 'menunggu' // Status awal wajib 'menunggu' sesuai CHECK constraint Anda
+        status: 'menunggu' // Sesuai check constraint huruf kecil Anda
       };
 
       const { error } = await supabase
@@ -136,7 +124,12 @@ export default function FasilitasApartemen() {
   };
 
   if (loading) {
-    return <div className="p-6 text-zinc-500 text-sm font-semibold">Memuat Fasilitas SiManTap...</div>;
+    return (
+      <div className="flex items-center justify-center min-h-[40vh] p-6 text-zinc-500 text-sm font-semibold bg-white border border-zinc-100 rounded-2xl shadow-sm">
+        <span className="w-3 h-3 mr-2 rounded-full bg-zinc-400 animate-ping"></span>
+        Memuat Fasilitas SiManTap...
+      </div>
+    );
   }
 
   return (
@@ -148,7 +141,8 @@ export default function FasilitasApartemen() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-2">
         {facilities.map((fac) => {
-          const isMaintenance = !fac.isActive;
+          // Fasilitas dianggap tidak bisa dibooking jika statusnya bukan 'Buka'
+          const isMaintenance = fac.statusDB !== 'Buka';
 
           return (
             <div
@@ -171,9 +165,9 @@ export default function FasilitasApartemen() {
                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
                 
                 <span className={`absolute top-4 right-4 text-[10px] font-black px-2.5 py-0.5 rounded-full shadow-sm z-20 uppercase tracking-wider ${
-                  fac.isActive ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
+                  fac.statusDB === 'Buka' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
                 }`}>
-                  {fac.isActive ? 'Buka' : 'Maintenance'}
+                  {fac.statusDB}
                 </span>
 
                 <div className="absolute bottom-4 left-4 text-white z-20">
@@ -200,11 +194,11 @@ export default function FasilitasApartemen() {
                 <div className="flex justify-between items-center pt-1">
                   <div>
                     <p className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest leading-none">Tarif Penggunaan</p>
-                    <p className={`text-xs font-extrabold mt-1.5 ${fac.price === 'Gratis' ? 'text-emerald-700' : 'text-amber-700'}`}>{fac.price}</p>
+                    <p className="text-xs font-extrabold mt-1.5 text-emerald-700">{fac.price}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest leading-none">Ketersediaan</p>
-                    <p className="text-xs font-extrabold text-zinc-900 mt-1.5">Tersedia</p>
+                    <p className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest leading-none">Status</p>
+                    <p className={`text-xs font-extrabold mt-1.5 ${fac.statusDB === 'Buka' ? 'text-emerald-600' : 'text-red-600'}`}>{fac.statusDB}</p>
                   </div>
                 </div>
               </div>
@@ -216,7 +210,7 @@ export default function FasilitasApartemen() {
                     <Plus size={14} /> <span>Booking Sekarang</span>
                   </div>
                 ) : (
-                  <button disabled className="w-full bg-zinc-100 text-zinc-450 py-2.5 rounded-xl text-xs font-bold cursor-not-allowed border border-dashed border-zinc-200 flex items-center justify-center gap-1.5">
+                  <button disabled className="w-full bg-zinc-100 text-zinc-400 py-2.5 rounded-xl text-xs font-bold cursor-not-allowed border border-dashed border-zinc-200 flex items-center justify-center gap-1.5">
                     <Ban size={13} /> <span>Fasilitas Ditutup Sementara</span>
                   </button>
                 )}
@@ -245,8 +239,8 @@ export default function FasilitasApartemen() {
                   <span className="text-zinc-900 font-bold">{selectedFacility.name}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-zinc-400 font-normal">Tarif Dasar</span>
-                  <span className="text-zinc-900 font-bold">{selectedFacility.priceRaw}</span>
+                  <span className="text-zinc-400 font-normal">Tarif</span>
+                  <span className="text-zinc-900 font-bold text-emerald-700">{selectedFacility.priceRaw}</span>
                 </div>
               </div>
 

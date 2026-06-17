@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import LogoutModal from '../components/shared/LogoutModal';
-import NotificationBell from '../components/shared/NotificationBell';
 import {
   Home,
   CreditCard,
@@ -31,37 +30,39 @@ export default function PenghuniLayout() {
   useEffect(() => {
     async function fetchProfile() {
       try {
-        // 1. Ambil ID User yang sedang login dari Supabase Auth
+        // 1. Ambil data user yang sedang login dari Supabase Auth untuk mengamankan Email
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
 
-        // 2. Ambil data nama, role, dan no_hp dari tabel users
+        const userEmail = user.email;
+
+        // 2. Ambil data nama, role, dan no_hp dari tabel users berdasarkan email
         const { data: userData, error: userError } = await supabase
           .from('users')
           .select('id, nama, role, no_hp')
-          .eq('id', user.id)
+          .eq('email', userEmail)
           .maybeSingle();
 
         if (userError) throw userError;
 
-        // 3. AMBIL DATA PENGHUNI + JOIN TABEL UNIT SECARA SEKALIGUS
+        // 3. 🛠️ PERBAIKAN TOTAL: Kita hapus 'dimensi_luas' & 'tgl_masuk' yang bikin error database!
+        // Kita hanya mengambil unit_id secara aman untuk menyambungkan ke relasi tabel unit.
         const { data: penghuniData, error: penghuniError } = await supabase
           .from('penghuni')
           .select(`
-            dimensi_luas, 
-            tgl_masuk,
+            unit_id,
             unit (
               nomor_unit,
               lantai
             )
           `)
-          .eq('user_id', user.id);
+          .eq('email', userEmail);
 
         if (penghuniError) {
           console.error("Gagal mengambil data relasi unit:", penghuniError.message);
         }
 
-        // 💡 PERBAIKAN 1: Ambil data pertama jika berbentuk array secara aman
+        // Ambil data pertama jika berbentuk array secara aman
         const profilPenghuni = Array.isArray(penghuniData) && penghuniData.length > 0 
           ? penghuniData[0] 
           : (penghuniData || null);
@@ -72,12 +73,11 @@ export default function PenghuniLayout() {
             nama: userData.nama,
             role: userData.role,
             no_hp: userData.no_hp,
-            // 💡 PERBAIKAN 2: Jika data penghuni/unit kosong karena kolom `user_id` di database masih NULL,
-            // gunakan kata fallback 'Belum Diatur' (BUKAN STRIP '-') agar Beranda lolos dari Loading Guard.
+            // Jika relasi sukses, dia akan langsung memuat data asli, jika gagal baru memuat kata fallback
             nomor_unit: profilPenghuni?.unit?.nomor_unit || 'Belum Diatur',
             lantai: profilPenghuni?.unit?.lantai || 'Belum Diatur',
-            dimensi_luas: profilPenghuni?.dimensi_luas || '0',
-            tgl_masuk: profilPenghuni?.tgl_masuk || '-'
+            dimensi_luas: '0', // Di-hardcode aman agar tidak merusak halaman lain yang membutuhkan properti ini
+            tgl_masuk: '-'     // Di-hardcode aman agar tidak merusak halaman lain yang membutuhkan properti ini
           });
         }
       } catch (error) {
@@ -357,10 +357,18 @@ export default function PenghuniLayout() {
           </div>
           
           <div className="flex items-center gap-5">
+            {/* 🕒 TANGGAL SUDAH OTOMATIS REAL-TIME Sesuai Hari Ini */}
             <div className="text-right hidden sm:block">
-              <span className="text-xs font-semibold text-muted">Selasa, 16 Juni 2026</span>
+              <span className="text-xs font-semibold text-muted">
+                {new Intl.DateTimeFormat('id-ID', { 
+                  weekday: 'long', 
+                  day: 'numeric', 
+                  month: 'long', 
+                  year: 'numeric' 
+                }).format(new Date())}
+              </span>
             </div>
-            <NotificationBell />
+            {/* 🔴 Komponen NotificationBell sudah dihapus dari sini */}
           </div>
         </header>
 

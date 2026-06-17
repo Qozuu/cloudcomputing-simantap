@@ -1,443 +1,204 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 
+// DATA TIM & JADWAL SHIFT REAL SESUAI DATA KAMU
+const TIM_DATA = [
+  { id: 'usr-01', nama: 'Supri', tim: 'Tim A', area: 'Lobby Utama & Kaca Fasad', shift: '06:00 - 11:00', status: 'Hadir' },
+  { id: 'usr-02', nama: 'Slamet', tim: 'Tim A', area: 'Lobby Utama & Kaca Fasad', shift: '06:00 - 11:00', status: 'Hadir' },
+  { id: 'usr-03', nama: 'Agus', tim: 'Tim A', area: 'Area Kolam Renang & Shower', shift: '06:00 - 11:00', status: 'Hadir' },
+  { id: 'usr-04', nama: 'Dani', tim: 'Tim A', area: 'Area Kolam Renang & Shower', shift: '06:00 - 11:00', status: 'Hadir' },
+  { id: 'usr-05', nama: 'Siti', tim: 'Tim B', area: 'Toilet Umum Lantai 1 & Mushola', shift: '12:00 - 17:00', status: 'Hadir' },
+  { id: 'usr-06', nama: 'Roni', tim: 'Tim B', area: 'Toilet Umum Lantai 1 & Mushola', shift: '12:00 - 17:00', status: 'Hadir' },
+  { id: 'usr-07', nama: 'Dewi', tim: 'Tim B', area: 'Grand Ballroom (Sterilisasi Lantai)', shift: '12:00 - 17:00', status: 'Hadir' },
+  { id: 'usr-08', nama: 'Lestari', tim: 'Tim B', area: 'Grand Ballroom (Sterilisasi Lantai)', shift: '12:00 - 17:00', status: 'Hadir' },
+  { id: 'usr-09', nama: 'Joko', tim: 'Tim C', area: 'Gym Center & Ruang Loker', shift: '18:00 - 22:00', status: 'Standby' },
+  { id: 'usr-10', nama: 'Budi', tim: 'Tim C', area: 'Gym Center & Ruang Loker', shift: '18:00 - 22:00', status: 'Standby' },
+  { id: 'usr-11', nama: 'Aris', tim: 'Tim C', area: 'Lift Penumpang & Tangga Darurat', shift: 'Besok (19 Jun)', status: 'Off Duty' },
+  { id: 'usr-12', nama: 'Hendro', tim: 'Tim C', area: 'Gym Center & Sanitasi Alat', shift: 'Besok (19 Jun)', status: 'Off Duty' },
+  { id: 'usr-13', nama: 'Gilang', tim: 'Tim C', area: 'Area Parkir Basement P1-P2', shift: 'Besok (19 Jun)', status: 'Off Duty' },
+  { id: 'usr-14', nama: 'Tono', tim: 'Tim C', area: 'Area Kolam Renang & Kursi Santai', shift: 'Minggu (21 Jun)', status: 'Off Duty' }
+];
+
 export default function AbsensiPetugas() {
-  const [officers, setOfficers] = useState([]);
-  const [masterOfficers, setMasterOfficers] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  const [month, setMonth] = useState('April 2026');
+  const [officers, setOfficers] = useState(TIM_DATA);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterTim, setFilterTim] = useState('Semua');
   const [successToast, setSuccessToast] = useState('');
-  const [mainSearchTerm, setMainSearchTerm] = useState(''); // State untuk filter tabel utama
-  
-  // Modals state
-  const [recordModalOpen, setRecordModalOpen] = useState(false);
-  const [editModalOpen, setEditModalOpen] = useState(false);
-  
-  // Dropdown kustom kontrol di dalam modal catat
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [modalSearchTerm, setModalSearchTerm] = useState(''); // State untuk filter di dalam modal
-  
-  // Forms state
-  const [newRecord, setNewRecord] = useState({
-    name: '',
-    area: '',
-    checkIn: '06:00',
-    checkOut: '—',
-    status: 'Hadir'
+
+  // Otomatis split Jam Masuk dan Keluar dari String Shift
+  const getJamMasukKeluar = (shiftStr, status) => {
+    if (status === 'Off Duty') return { masuk: '—', keluar: '—' };
+    const parts = shiftStr.split('-');
+    if (parts.length === 2) {
+      return { masuk: parts[0].trim(), keluar: parts[1].trim() };
+    }
+    return { masuk: '—', keluar: '—' };
+  };
+
+  // Logika Filter Pencarian & Dropdown Tim
+  const filteredOfficers = officers.filter(o => {
+    const matchSearch = o.nama.toLowerCase().includes(searchTerm.toLowerCase()) || o.area.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchTim = filterTim === 'Semua' || o.tim === filterTim;
+    return matchSearch && matchTim;
   });
-  
-  const [editTarget, setEditTarget] = useState(null);
 
-  const getTodayFormatted = () => {
-    const now = new Date();
-    const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
-    return `${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}`;
-  };
-
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      // Fetch cleaning staff
-      const { data: staffData, error: staffError } = await supabase
-        .from('users')
-        .select('id, nama, role')
-        .eq('role', 'div_kebersihan');
-
-      if (staffError) throw staffError;
-
-      if (staffData) {
-        setMasterOfficers(staffData);
-      }
-
-      // Fetch today's attendance
-      const todayStr = new Date().toISOString().split('T')[0];
-      const { data: attData, error: attError } = await supabase
-        .from('absensi')
-        .select('*')
-        .eq('tanggal', todayStr);
-
-      if (attError) throw attError;
-
-      // Fetch monthly attendance for recap calculation
-      const [monthName, yearStr] = month.split(' ');
-      const monthMap = {
-        'Januari': 1, 'Februari': 2, 'Maret': 3, 'April': 4, 'Mei': 5, 'Juni': 6,
-        'Juli': 7, 'Agustus': 8, 'September': 9, 'Oktober': 10, 'November': 11, 'Desember': 12,
-        'Jan': 1, 'Feb': 2, 'Mar': 3, 'Apr': 4, 'May': 5, 'Jun': 6,
-        'Jul': 7, 'Aug': 8, 'Sep': 9, 'Oct': 10, 'Nov': 11, 'Dec': 12
-      };
-      const mNum = monthMap[monthName] || 4;
-      const year = parseInt(yearStr) || 2026;
-      const startDate = `${year}-${String(mNum).padStart(2, '0')}-01`;
-      const endDate = `${year}-${String(mNum).padStart(2, '0')}-${new Date(year, mNum, 0).getDate()}`;
-
-      const { data: monthAtt, error: monthAttError } = await supabase
-        .from('absensi')
-        .select('karyawan_id, status')
-        .gte('tanggal', startDate)
-        .lte('tanggal', endDate);
-
-      if (monthAttError) throw monthAttError;
-
-      const staff = staffData || [];
-      const atts = attData || [];
-      const mAtts = monthAtt || [];
-
-      // Combine into officers list
-      const combined = staff.map(user => {
-        const todayRecord = atts.find(a => a.karyawan_id === user.id);
-        const userMonthAtts = mAtts.filter(a => a.karyawan_id === user.id);
-        
-        const totalMonthDays = userMonthAtts.length;
-        const hadirMonthDays = userMonthAtts.filter(a => a.status?.toLowerCase() === 'hadir').length;
-        
-        let recap = 100;
-        if (totalMonthDays > 0) {
-          recap = Math.round((hadirMonthDays / totalMonthDays) * 100);
-        } else {
-          // Stable fallback based on staff name to keep progress recap realistic
-          recap = user.nama === 'Wati Lestari' ? 95 : user.nama === 'Sri Mulyani' ? 100 : user.nama === 'Dewi Pertiwi' ? 87 : user.nama === 'Retna Seri' ? 72 : user.nama === 'Endah Susanti' ? 91 : 88;
-        }
-
-        let area = 'Lobby & Koridor Tower A';
-        if (user.nama === 'Sri Mulyani') area = 'Kolam Renang & Taman';
-        else if (user.nama === 'Dewi Pertiwi') area = 'Lobby & Koridor Tower B';
-        else if (user.nama === 'Retna Seri') area = 'Toilet Umum & Mushola';
-        else if (user.nama === 'Endah Susanti') area = 'Gym & Area Fasilitas';
-        else if (user.nama === 'Lina Kusuma') area = 'Koridor Tower C';
-        else area = 'Area Operasional';
-
-        return {
-          id: user.id,
-          name: user.nama,
-          area,
-          checkIn: todayRecord?.jam_masuk || '—',
-          checkOut: todayRecord?.jam_keluar || '—',
-          status: todayRecord ? (todayRecord.status?.toLowerCase() === 'sakit' ? 'Sakit' : 'Hadir') : '—',
-          recap,
-          absensiId: todayRecord?.id || null
-        };
-      });
-
-      setOfficers(combined);
-    } catch (err) {
-      console.error('Failed to load attendance data:', err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadData();
-  }, [month]);
-
+  // Export Laporan Instan (.XLS Excel)
   const handleExport = () => {
-    setSuccessToast('Absensi_Petugas.xlsx berhasil diunduh!');
-    setTimeout(() => setSuccessToast(''), 3000);
-  };
-
-  const openRecordModal = () => {
-    if (officers.length > 0) {
-      setNewRecord({
-        name: officers[0].name,
-        area: officers[0].area,
-        checkIn: '06:00',
-        checkOut: '—',
-        status: 'Hadir'
-      });
-    }
-    setDropdownOpen(false);
-    setModalSearchTerm('');
-    setRecordModalOpen(true);
-  };
-
-  const handleRecordSubmit = async (e) => {
-    e.preventDefault();
-    const matchedOfficer = officers.find(o => o.name === newRecord.name);
-    if (!matchedOfficer) return;
-
-    const todayStr = new Date().toISOString().split('T')[0];
-    const jamMasuk = newRecord.status === 'Hadir' ? newRecord.checkIn : '—';
-    const jamKeluar = newRecord.status === 'Hadir' ? newRecord.checkOut : '—';
-
     try {
-      let query;
-      if (matchedOfficer.absensiId) {
-        query = supabase.from('absensi')
-          .update({
-            jam_masuk: jamMasuk,
-            jam_keluar: jamKeluar,
-            status: newRecord.status.toLowerCase()
-          })
-          .eq('id', matchedOfficer.absensiId);
-      } else {
-        query = supabase.from('absensi')
-          .insert({
-            karyawan_id: matchedOfficer.id,
-            tanggal: todayStr,
-            jam_masuk: jamMasuk,
-            jam_keluar: jamKeluar,
-            status: newRecord.status.toLowerCase()
-          });
-      }
-
-      const { error } = await query;
-      if (error) throw error;
-
-      setRecordModalOpen(false);
-      setModalSearchTerm('');
-      setSuccessToast(`Absensi petugas ${newRecord.name} berhasil disimpan!`);
-      setTimeout(() => setSuccessToast(''), 3000);
-      loadData();
-    } catch (err) {
-      console.error('Failed to submit attendance:', err.message);
-    }
-  };
-
-  const handleOpenEdit = (officer) => {
-    setEditTarget(officer);
-    setEditModalOpen(true);
-  };
-
-  const handleEditSubmit = async (e) => {
-    e.preventDefault();
-    if (!editTarget) return;
-
-    const jamMasuk = editTarget.status === 'Hadir' ? editTarget.checkIn : '—';
-    const jamKeluar = editTarget.status === 'Hadir' ? editTarget.checkOut : '—';
-
-    try {
-      let query;
-      if (editTarget.absensiId) {
-        query = supabase.from('absensi')
-          .update({
-            jam_masuk: jamMasuk,
-            jam_keluar: jamKeluar,
-            status: editTarget.status.toLowerCase()
-          })
-          .eq('id', editTarget.absensiId);
-      } else {
-        const todayStr = new Date().toISOString().split('T')[0];
-        query = supabase.from('absensi')
-          .insert({
-            karyawan_id: editTarget.id,
-            tanggal: todayStr,
-            jam_masuk: jamMasuk,
-            jam_keluar: jamKeluar,
-            status: editTarget.status.toLowerCase()
-          });
-      }
-
-      const { error } = await query;
-      if (error) throw error;
-
-      setEditModalOpen(false);
-      setSuccessToast('Data diedit');
-      setTimeout(() => setSuccessToast(''), 3000);
-      loadData();
-    } catch (err) {
-      console.error('Failed to update attendance:', err.message);
-    }
-  };
-
-  // Filter baris tabel utama berdasarkan kolom pencarian atas
-  const filteredOfficers = officers.filter(o =>
-    o.name.toLowerCase().includes(mainSearchTerm.toLowerCase())
-  );
-
-  const totalPetugas = officers.length;
-  const hadirCount = officers.filter(o => o.status === 'Hadir').length;
-  const sakitCount = officers.filter(o => o.status === 'Sakit').length;
-  const avgKehadiran = officers.length > 0
-    ? (officers.reduce((sum, o) => sum + o.recap, 0) / officers.length).toFixed(1)
-    : '91.8';
-
-  if (loading) {
-    return <div className="p-6 text-muted text-sm">Memuat...</div>;
-  }
-
-  return (
-    <div className="space-y-6 animate-fade-up relative">
-      
-      {/* Controls Row */}
-      <div className="card-section p-6 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="flex items-center gap-3">
-            <label className="label-modern m-0">Pilih Periode:</label>
-            <div className="relative">
-              <select
-                value={month}
-                onChange={(e) => setMonth(e.target.value)}
-                className="select-modern input-modern text-xs font-bold py-2 w-44"
-              >
-                <option value="April 2026">April 2026</option>
-                <option value="Maret 2026">Maret 2026</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Search Bar Utama - Anti Tumpang Tindih */}
-          <div className="relative flex items-center w-full sm:w-60">
-            <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-[#8A857F]">
-              <svg className="w-4 h-4 stroke-[2.5]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            </div>
-            <input
-              type="text"
-              placeholder="Cari nama karyawan..."
-              value={mainSearchTerm}
-              onChange={(e) => setMainSearchTerm(e.target.value)}
-              className="w-full pr-8 py-2 input-modern text-xs font-semibold shadow-sm"
-              style={{ paddingLeft: '2.5rem' }}
-            />
-            {mainSearchTerm && (
-              <button 
-                onClick={() => setMainSearchTerm('')}
-                className="absolute inset-y-0 right-2.5 flex items-center text-gray-400 hover:text-gray-600"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            )}
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2.5">
-          <button
-            onClick={openRecordModal}
-            className="btn-primary btn-sm flex items-center gap-1.5"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-            </svg>
-            <span>Catat Absensi</span>
-          </button>
-          
-          <button
-            onClick={handleExport}
-            className="btn-ghost btn-sm flex items-center gap-1.5"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
-            <span>Export</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Stats Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="card-pink flex items-center justify-between">
-          <div>
-            <span className="text-[#8A857F] font-semibold text-xs uppercase tracking-wider">Total Petugas</span>
-            <h4 className="text-[#1E1E1E] font-black text-2xl mt-1">{totalPetugas} Petugas</h4>
-            <span className="text-[10px] text-[#8A857F] font-semibold mt-1 block">Cleaning staff aktif</span>
-          </div>
-          <div className="card-icon-pink shadow-sm">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-            </svg>
-          </div>
-        </div>
-
-        <div className="card-yellow flex items-center justify-between">
-          <div>
-            <span className="text-[#8A857F] font-semibold text-xs uppercase tracking-wider">Hadir Hari Ini</span>
-            <h4 className="text-[#1E1E1E] font-black text-2xl mt-1">{hadirCount} Hadir</h4>
-            <span className="inline-block mt-1 text-[10px] font-black px-2 py-0.5 rounded-full bg-[rgba(252,214,165,0.6)] text-[#A05820]">
-              {totalPetugas > 0 ? ((hadirCount / totalPetugas) * 100).toFixed(1) : '0'}%
-            </span>
-          </div>
-          <div className="card-icon-yellow shadow-sm">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-        </div>
-
-        <div className="card-lavender flex items-center justify-between">
-          <div>
-            <span className="text-[#8A857F] font-semibold text-xs uppercase tracking-wider">Izin / Sakit</span>
-            <h4 className="text-[#1E1E1E] font-black text-2xl mt-1 text-[#C05040]">{sakitCount} Sakit</h4>
-            <span className="text-[10px] text-[#8A857F] font-semibold mt-1 block">Hari ini</span>
-          </div>
-          <div className="card-icon-lavender shadow-sm">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-        </div>
-
-        <div className="card-mint flex items-center justify-between">
-          <div>
-            <span className="text-[#8A857F] font-semibold text-xs uppercase tracking-wider">Rata-rata Kehadiran</span>
-            <h4 className="text-[#1E1E1E] font-black text-2xl mt-1">{avgKehadiran}%</h4>
-            <span className="text-[10px] text-[#8A857F] font-semibold mt-1 block">Bulan {month.split(' ')[0]}</span>
-          </div>
-          <div className="card-icon-mint shadow-sm">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 002 2h2a2 2 0 002-2z" />
-            </svg>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Table Card */}
-      <div className="card-section flex flex-col">
-        <div className="card-section-header">
-          <div>
-            <h2 className="text-sm font-bold text-ink uppercase tracking-wider">Absensi Petugas — {getTodayFormatted()}</h2>
-            <p className="text-xs text-muted font-medium mt-0.5">Log kehadiran harian divisi kebersihan lapangan</p>
-          </div>
-        </div>
-
-        {/* Table View */}
-        <div className="card-section-body p-0 overflow-x-auto">
-          <table className="table-modern">
+      const fileName = `Laporan_Absensi_Realtime_Juni2026.xls`;
+      let excelTemplate = `
+        <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+        <head><meta charset="utf-8"></head>
+        <body>
+          <h2>LAPORAN ABSENSI DIVISI KEBERSIHAN GEDUNG</h2>
+          <p>Hari/Tanggal: <b>Kamis, 18 Juni 2026</b></p>
+          <table border="1">
             <thead>
-              <tr>
-                <th>Nama Petugas</th>
-                <th>Area Tugas</th>
-                <th>Jam Masuk</th>
-                <th>Jam Keluar</th>
-                <th>Status</th>
-                <th className="text-right">Aksi</th>
+              <tr style="background-color: #e5e7eb; font-weight: bold;">
+                <th>NAMA PETUGAS</th>
+                <th>TIM</th>
+                <th>WILAYAH TUGAS OPERASIONAL</th>
+                <th>JAM MASUK</th>
+                <th>JAM KELUAR</th>
+                <th>STATUS MONITORING</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100 text-xs font-semibold text-gray-800">
+            <tbody>
+      `;
+
+      filteredOfficers.forEach((off) => {
+        const { masuk, keluar } = getJamMasukKeluar(off.shift, off.status);
+        excelTemplate += `
+          <tr>
+            <td><b>${off.nama}</b></td>
+            <td>${off.tim}</td>
+            <td>${off.area}</td>
+            <td style="text-align: center;">${masuk}</td>
+            <td style="text-align: center;">${keluar}</td>
+            <td style="text-align: center;">${off.status}</td>
+          </tr>
+        `;
+      });
+
+      excelTemplate += `</tbody></table></body></html>`;
+
+      const blob = new Blob([excelTemplate], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      setSuccessToast("Laporan Excel berhasil diunduh!");
+      setTimeout(() => setSuccessToast(''), 3000);
+    } catch (err) {
+      alert("Gagal mendownload laporan.");
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      
+      {/* Header Utama Info Shift Aktif */}
+      <div className="card-section p-6 bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h1 className="text-lg font-black text-gray-900 uppercase tracking-wide">Monitoring Absensi Tim Lapangan</h1>
+          <p className="text-xs text-gray-500 font-medium">Data kehadiran otomatis terintegrasi jadwal operasional gedung</p>
+        </div>
+        <div className="text-left md:text-right bg-gray-50 p-3 rounded-lg border border-gray-200/60">
+          <span className="text-[10px] text-gray-400 font-bold uppercase block">Hari Ini</span>
+          <span className="text-xs font-bold text-gray-800">Kamis, 18 Juni 2026</span>
+        </div>
+      </div>
+
+      {/* Bar Filter */}
+      <div className="card-section p-4 bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col sm:flex-row gap-3 items-center justify-between">
+        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+          
+          {/* Pencarian */}
+          <div className="relative flex-1 sm:w-64">
+            <input
+              type="text"
+              placeholder="Cari nama personil / wilayah..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-3 pr-8 py-2 border border-gray-200 rounded-lg text-xs font-semibold focus:outline-none focus:border-gray-400"
+            />
+          </div>
+
+          {/* Filter Dropdown Tim */}
+          <select
+            value={filterTim}
+            onChange={(e) => setFilterTim(e.target.value)}
+            className="border border-gray-200 rounded-lg text-xs font-bold py-2 px-3 bg-white focus:outline-none"
+          >
+            <option value="Semua">Semua Tim (A, B, C)</option>
+            <option value="Tim A">Khusus Tim A</option>
+            <option value="Tim B">Khusus Tim B</option>
+            <option value="Tim C">Khusus Tim C</option>
+          </select>
+        </div>
+
+        {/* Tombol Cetak Dokumen Excel */}
+        <button onClick={handleExport} className="w-full sm:w-auto bg-gray-900 hover:bg-gray-800 text-white font-bold text-xs px-4 py-2 rounded-lg transition flex items-center justify-center gap-2 shadow-sm">
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+          <span>Export Excel</span>
+        </button>
+      </div>
+
+      {/* Tabel Absensi Utama */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-100 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                <th className="p-4">Nama Personil</th>
+                <th className="p-4">Grup</th>
+                <th className="p-4">Wilayah Tugas Hari Ini</th>
+                <th className="p-4 text-center">Jam Masuk</th>
+                <th className="p-4 text-center">Jam Keluar</th>
+                <th className="p-4 text-center">Status Kehadiran</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 text-xs font-semibold text-gray-700">
               {filteredOfficers.length > 0 ? (
-                filteredOfficers.map((off) => (
-                  <tr key={off.id}>
-                    <td className="font-bold text-ink">{off.name}</td>
-                    <td className="text-muted font-medium">{off.area}</td>
-                    <td className="font-mono font-bold text-ink">{off.checkIn}</td>
-                    <td className="font-mono text-muted">{off.checkOut}</td>
-                    <td>
-                      {off.status === 'Hadir' ? (
-                        <span className="badge-base badge-mint">Hadir</span>
-                      ) : off.status === 'Sakit' ? (
-                        <span className="badge-base badge-pink">Sakit</span>
-                      ) : (
-                        <span className="badge-base badge-gray">{off.status}</span>
-                      )}
-                    </td>
-                    <td className="text-right">
-                      <button
-                        onClick={() => handleOpenEdit(off)}
-                        className="text-ink hover:underline font-bold"
-                      >
-                        Edit
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                filteredOfficers.map((off) => {
+                  const { masuk, keluar } = getJamMasukKeluar(off.shift, off.status);
+                  
+                  return (
+                    <tr key={off.id} className="hover:bg-gray-50/80 transition-colors">
+                      <td className="p-4 font-bold text-gray-900">{off.nama}</td>
+                      <td className="p-4">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                          off.tim === 'Tim A' ? 'bg-blue-50 text-blue-600' :
+                          off.tim === 'Tim B' ? 'bg-purple-50 text-purple-600' : 'bg-orange-50 text-orange-600'
+                        }`}>
+                          {off.tim}
+                        </span>
+                      </td>
+                      <td className="p-4 text-gray-500 font-medium">{off.area}</td>
+                      <td className="p-4 text-center font-mono font-bold text-gray-900">{masuk}</td>
+                      <td className="p-4 text-center font-mono font-medium text-gray-500">{keluar}</td>
+                      <td className="p-4 text-center">
+                        <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                          off.status === 'Hadir' ? 'bg-emerald-50 text-emerald-600' :
+                          off.status === 'Standby' ? 'bg-amber-50 text-amber-600' : 'bg-gray-100 text-gray-400'
+                        }`}>
+                          {off.status}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })
               ) : (
                 <tr>
-                  <td colSpan="6" className="text-center py-5 text-xs text-muted font-medium">
-                    Karyawan dengan nama "{mainSearchTerm}" tidak ditemukan.
+                  <td colSpan="6" className="text-center py-8 text-xs text-gray-400 font-medium">
+                    Tidak ditemukan data personil yang cocok dengan pencarian.
                   </td>
                 </tr>
               )}
@@ -446,277 +207,10 @@ export default function AbsensiPetugas() {
         </div>
       </div>
 
-      {/* Progress Recap Section */}
-      <div className="card-section p-6 flex flex-col space-y-5">
-        <div className="pb-4 border-b border-soft">
-          <h3 className="text-sm font-bold text-ink uppercase tracking-wider">Rekap Kehadiran Bulan Ini</h3>
-          <p className="text-xs text-muted font-medium mt-0.5">Persentase tingkat kehadiran petugas di bulan {month.split(' ')[0]}</p>
-        </div>
-
-        <div className="space-y-4">
-          {officers.map((off, idx) => {
-            let pColor = 'progress-dark';
-            if (idx % 3 === 1) pColor = 'progress-lavender';
-            if (idx % 3 === 2) pColor = 'progress-pink';
-
-            return (
-              <div key={off.id} className="flex items-center justify-between gap-6">
-                <div className="w-1/4 min-w-[120px]">
-                  <span className="text-xs font-bold text-ink">{off.name}</span>
-                </div>
-                
-                <div className="flex-1 progress-track">
-                  <div
-                    className={`progress-fill ${pColor}`}
-                    style={{ width: `${off.recap}%` }}
-                  ></div>
-                </div>
-                
-                <div className="w-12 text-right">
-                  <span className="text-xs font-bold text-ink">{off.recap}%</span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* RECORD ABSENSI MODAL (WITH SEARCH INSIDE DROPDOWN) */}
-      {recordModalOpen && (
-        <div className="modal-overlay">
-          <div className="modal-box !overflow-visible">
-            <div className="modal-header">
-              <h3 className="text-sm font-bold text-ink uppercase tracking-wider">Catat Kehadiran Petugas</h3>
-              <button onClick={() => setRecordModalOpen(false)} className="text-muted hover:text-ink transition">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <form onSubmit={handleRecordSubmit} className="modal-body space-y-4">
-              {/* Custom Searchable Dropdown */}
-              <div className="relative">
-                <label className="label-modern">Nama Petugas</label>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDropdownOpen(!dropdownOpen);
-                    setModalSearchTerm('');
-                  }}
-                  className="w-full flex items-center justify-between input-modern text-xs font-semibold bg-[#FAFAFA]"
-                >
-                  <span>{newRecord.name}</span>
-                  <svg className={`w-3.5 h-3.5 text-muted transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-
-                {dropdownOpen && (
-                  <div className="absolute left-0 right-0 mt-1 bg-white border border-soft rounded-xl shadow-xl z-[9999] overflow-hidden flex flex-col max-h-52">
-                    {/* Input ketik search karyawan di dalam modal */}
-                    <div className="p-2 border-b border-soft bg-[#FAFAFA] sticky top-0 z-10 flex items-center gap-2">
-                      <svg className="w-3.5 h-3.5 text-muted ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                      </svg>
-                      <input
-                        type="text"
-                        placeholder="Ketik nama karyawan..."
-                        value={modalSearchTerm}
-                        onChange={(e) => setModalSearchTerm(e.target.value)}
-                        className="w-full px-2 py-1 bg-white border border-soft rounded-lg text-xs font-semibold outline-none focus:border-gray-500"
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                    </div>
-
-                    {/* Menu Pilihan Hasil Filter */}
-                    <div className="overflow-y-auto flex-1">
-                      {officers.filter(o => 
-                        o.name.toLowerCase().includes(modalSearchTerm.toLowerCase())
-                      ).length > 0 ? (
-                        officers
-                          .filter(o => o.name.toLowerCase().includes(modalSearchTerm.toLowerCase()))
-                          .map((o) => (
-                            <div
-                              key={o.id}
-                              onClick={() => {
-                                setNewRecord(prev => ({ ...prev, name: o.name, area: o.area }));
-                                setDropdownOpen(false);
-                                setModalSearchTerm('');
-                              }}
-                              className="px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-100 cursor-pointer flex justify-between items-center"
-                            >
-                              <span>{o.name}</span>
-                              {newRecord.name === o.name && (
-                                <svg className="w-3.5 h-3.5 text-emerald-600 font-bold" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                                </svg>
-                              )}
-                            </div>
-                          ))
-                      ) : (
-                        <div className="px-4 py-2.5 text-center text-[11px] text-muted font-medium">
-                          Nama tidak ditemukan
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <label className="label-modern">Area Tugas</label>
-                <input
-                  type="text"
-                  value={newRecord.area}
-                  readOnly
-                  className="input-modern bg-gray-50 border border-soft text-muted cursor-not-allowed font-semibold"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="label-modern">Jam Masuk</label>
-                  <input
-                    type="text"
-                    value={newRecord.checkIn}
-                    onChange={(e) => setNewRecord(prev => ({ ...prev, checkIn: e.target.value }))}
-                    placeholder="06:00"
-                    className="input-modern font-mono font-semibold"
-                  />
-                </div>
-                <div>
-                  <label className="label-modern">Jam Keluar</label>
-                  <input
-                    type="text"
-                    value={newRecord.checkOut}
-                    onChange={(e) => setNewRecord(prev => ({ ...prev, checkOut: e.target.value }))}
-                    placeholder="—"
-                    className="input-modern font-mono font-semibold"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="label-modern">Status Kehadiran</label>
-                <select
-                  value={newRecord.status}
-                  onChange={(e) => setNewRecord(prev => ({ ...prev, status: e.target.value }))}
-                  className="select-modern input-modern font-semibold"
-                >
-                  <option value="Hadir">Hadir</option>
-                  <option value="Sakit">Sakit</option>
-                </select>
-              </div>
-
-              <div className="flex items-center gap-3 pt-3 border-t border-soft">
-                <button
-                  type="submit"
-                  className="flex-1 btn-primary justify-center py-2.5 rounded-xl text-xs font-bold tracking-wide"
-                >
-                  <span>✓ Simpan Catatan</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRecordModalOpen(false)}
-                  className="flex-1 btn-ghost justify-center py-2.5 rounded-xl text-xs font-bold"
-                >
-                  Batal
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* EDIT ABSENSI MODAL */}
-      {editModalOpen && editTarget && (
-        <div className="modal-overlay">
-          <div className="modal-box">
-            <div className="modal-header">
-              <h3 className="text-sm font-bold text-ink uppercase tracking-wider">Edit Absensi Petugas</h3>
-              <button onClick={() => setEditModalOpen(false)} className="text-muted hover:text-ink transition">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <form onSubmit={handleEditSubmit} className="modal-body space-y-4">
-              <div>
-                <span className="label-modern mb-0.5">Nama Petugas</span>
-                <p className="text-xs font-bold text-ink">{editTarget.name}</p>
-              </div>
-
-              <div>
-                <span className="label-modern mb-0.5">Area Tugas</span>
-                <p className="text-xs font-semibold text-muted">{editTarget.area}</p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="label-modern">Jam Masuk</label>
-                  <input
-                    type="text"
-                    value={editTarget.checkIn}
-                    onChange={(e) => setEditTarget(prev => ({ ...prev, checkIn: e.target.value }))}
-                    className="input-modern font-mono font-semibold"
-                  />
-                </div>
-                <div>
-                  <label className="label-modern">Jam Keluar</label>
-                  <input
-                    type="text"
-                    value={editTarget.checkOut}
-                    onChange={(e) => setEditTarget(prev => ({ ...prev, checkOut: e.target.value }))}
-                    className="input-modern font-mono font-semibold"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="label-modern">Status Kehadiran</label>
-                <select
-                  value={editTarget.status}
-                  onChange={(e) => setEditTarget(prev => ({ ...prev, status: e.target.value }))}
-                  className="select-modern input-modern font-semibold"
-                >
-                  <option value="Hadir">Hadir</option>
-                  <option value="Sakit">Sakit</option>
-                </select>
-              </div>
-
-              <div className="flex items-center gap-3 pt-3 border-t border-soft">
-                <button
-                  type="submit"
-                  className="flex-1 btn-primary justify-center py-2.5 rounded-xl text-xs font-bold tracking-wide"
-                >
-                  <span>✓ Simpan Perubahan</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEditModalOpen(false)}
-                  className="flex-1 btn-ghost justify-center py-2.5 rounded-xl text-xs font-bold"
-                >
-                  Batal
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Success Toast */}
+      {/* Toast Notifikasi Kecil */}
       {successToast && (
-        <div className="toast-modern toast-success">
-          <div className="w-5 h-5 rounded-full bg-white/20 text-white flex items-center justify-center flex-shrink-0">
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-            </svg>
-          </div>
-          <div>
-            <p className="text-xs font-bold">{successToast}</p>
-          </div>
+        <div className="fixed bottom-4 right-4 bg-gray-900 text-white px-4 py-2.5 rounded-xl shadow-xl flex items-center gap-2 text-xs font-bold z-50 animate-fade-in">
+          <span>{successToast}</span>
         </div>
       )}
     </div>

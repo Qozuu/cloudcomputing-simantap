@@ -14,6 +14,7 @@ export default function Pengumuman() {
     async function loadData() {
       try {
         setLoading(true);
+<<<<<<< HEAD
 
         // 1. Dapatkan data user penghuni yang sedang login
         const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -88,6 +89,31 @@ export default function Pengumuman() {
         combined.sort((a, b) => b.timestamp - a.timestamp);
         setAnnouncements(combined);
 
+=======
+        
+        // 🛠️ MEMPERBAIKI SOURCE: Mengambil langsung dari tabel 'broadcast_pesan'
+        const { data, error } = await supabase
+          .from('broadcast_pesan')
+          .select('*');
+        
+        if (error) throw error;
+        
+        // 🛠️ MENYESUAIKAN KOLOM: id, judul, isi (deskripsi), dan target/kategori
+        const mapped = (data || []).map(item => ({
+          id: item.id,
+          category: item.target || 'Info', // Menggunakan kolom 'target' sebagai pengelompokan kategori
+          title: item.judul || 'Pengumuman Resmi', // Menggunakan kolom 'judul'
+          description: item.isi || '', // Menggunakan kolom 'isi'
+          date: item.created_at 
+            ? new Date(item.created_at).toLocaleDateString('id-ID', { 
+                day: 'numeric', 
+                month: 'short', 
+                year: 'numeric' 
+              })
+            : 'Baru Saja'
+        }));
+        setAnnouncements(mapped);
+>>>>>>> bc552b99346d604c2d2e299dd1eace85ba4b18e5
       } catch (err) {
         console.error('Gagal memuat papan informasi:', err.message);
       } finally {
@@ -97,12 +123,17 @@ export default function Pengumuman() {
     loadData();
   }, []);
 
+<<<<<<< HEAD
   // Styling badge
+=======
+  // Styling badge kategori agar kontras dan mudah dibaca
+>>>>>>> bc552b99346d604c2d2e299dd1eace85ba4b18e5
   const getBadgeStyles = (category) => {
-    switch (category.toLowerCase()) {
+    switch (String(category).toLowerCase()) {
       case 'darurat':
         return 'bg-red-100 text-red-800 border-red-200';
       case 'info':
+      case 'semua penghuni': // Menangani jika teks target berisi 'Semua Penghuni'
         return 'bg-blue-100 text-blue-800 border-blue-200';
       case 'promo':
         return 'bg-amber-100 text-amber-800 border-amber-200';
@@ -113,21 +144,24 @@ export default function Pengumuman() {
     }
   };
 
+<<<<<<< HEAD
+=======
+  // Filter pencarian & kategori aman (Case-Insensitive)
+>>>>>>> bc552b99346d604c2d2e299dd1eace85ba4b18e5
   const filteredAnnouncements = announcements.filter(item => {
-    const matchSearch = 
-      item.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      item.description.toLowerCase().includes(searchTerm.toLowerCase());
+    const titleText = item.title ? String(item.title).toLowerCase() : '';
+    const descText = item.description ? String(item.description).toLowerCase() : '';
+    const searchLower = searchTerm.toLowerCase();
+
+    const matchSearch = titleText.includes(searchLower) || descText.includes(searchLower);
     
+    // Jika filter tab 'Semua' diklik, loloskan semua data. Jika tidak, samakan dengan kolom kategori/target.
     const matchCategory = 
       activeCategory === 'Semua' || 
-      item.category.toLowerCase() === activeCategory.toLowerCase();
+      String(item.category).toLowerCase().includes(activeCategory.toLowerCase());
       
     return matchSearch && matchCategory;
   });
-
-  if (loading) {
-    return <div className="p-6 text-zinc-500 text-sm font-semibold">Memuat Papan Informasi...</div>;
-  }
 
   return (
     <div className="space-y-6 animate-fade-up text-zinc-800">
@@ -148,6 +182,7 @@ export default function Pengumuman() {
           {categories.map((cat) => (
             <button
               key={cat}
+              type="button"
               onClick={() => setActiveCategory(cat)}
               className={`px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider transition border ${
                 activeCategory === cat
@@ -169,8 +204,21 @@ export default function Pengumuman() {
         </h3>
 
         <div className="divide-y divide-zinc-100">
+<<<<<<< HEAD
           {filteredAnnouncements.map((ann) => (
             <div key={ann.id} className="py-4 first:pt-0 last:pb-0 flex flex-col md:flex-row items-start gap-3 md:gap-6">
+=======
+          {loading ? (
+            <div className="text-center py-12 text-zinc-400 font-semibold text-xs animate-pulse">
+              Sedang mengunduh data pengumuman...
+            </div>
+          ) : filteredAnnouncements.map((ann) => (
+            <div
+              key={ann.id}
+              className="py-4 first:pt-0 last:pb-0 flex flex-col md:flex-row items-start gap-3 md:gap-6"
+            >
+              {/* Kolom Kategori/Target & Tanggal Rilis */}
+>>>>>>> bc552b99346d604c2d2e299dd1eace85ba4b18e5
               <div className="flex-shrink-0 w-24 flex md:flex-col items-center md:items-start justify-between md:justify-start gap-2">
                 <span className={`inline-block text-[9px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider border ${getBadgeStyles(ann.category)}`}>
                   {ann.category}
@@ -191,7 +239,7 @@ export default function Pengumuman() {
             </div>
           ))}
 
-          {filteredAnnouncements.length === 0 && (
+          {!loading && filteredAnnouncements.length === 0 && (
             <div className="text-center py-12 text-zinc-400 font-semibold text-xs border border-dashed border-zinc-200 rounded-xl bg-zinc-50/50">
               Tidak ada pengumuman resmi yang ditemukan.
             </div>

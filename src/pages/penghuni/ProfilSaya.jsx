@@ -45,7 +45,7 @@ export default function ProfilSaya() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // 1. Ambil data akun utama
+      // 1. Ambil data akun utama dari public.users
       const { data: userProfile, error: userError } = await supabase
         .from('users')
         .select('*')
@@ -54,7 +54,7 @@ export default function ProfilSaya() {
 
       if (userError) throw userError;
 
-      // 2. Ambil data profil hunian spesifik penghuni
+      // 2. Ambil data profil hunian spesifik penghuni dari public.penghuni
       const { data: dataHunian, error: hunianError } = await supabase
         .from('penghuni')
         .select('*, unit(nomor_unit, lantai, luas_m2, tower(nama_tower))')
@@ -64,25 +64,34 @@ export default function ProfilSaya() {
       if (hunianError) console.warn('Gagal memuat data hunian:', hunianError.message);
 
       const ktpVal = dataHunian?.no_ktp || '';
+      
+      // Memecah kembali string kontak_darurat (format: "Nama · NoTelp") jika tersedia
+      let emName = '';
+      let emPhone = '';
+      if (dataHunian?.kontak_darurat && dataHunian.kontak_darurat.includes(' · ')) {
+        const parts = dataHunian.kontak_darurat.split(' · ');
+        emName = parts[0];
+        emPhone = parts[1];
+      } else if (dataHunian?.kontak_darurat) {
+        emName = dataHunian.kontak_darurat;
+      }
 
       setProfile({
-        name: userProfile?.nama || 'Penghuni',
+        name: userProfile?.nama || dataHunian?.nama || 'Penghuni',
         ktp: formatKtpDisplay(ktpVal),
         rawKtp: ktpVal,
         phone: userProfile?.no_hp || '',
         email: userProfile?.email || '',
-        whatsapp: dataHunian?.no_wa || userProfile?.no_hp || '',
-        emergencyContact: dataHunian?.kontak_darurat_nama && dataHunian?.kontak_darurat_no
-          ? `${dataHunian.kontak_darurat_nama} · ${dataHunian.kontak_darurat_no}`
-          : 'Belum diatur',
-        emergencyName: dataHunian?.kontak_darurat_nama || '',
-        emergencyPhone: dataHunian?.kontak_darurat_no || '',
-        vehicle: dataHunian?.no_plat_kendaraan || '-',
+        whatsapp: dataHunian?.no_telepon || userProfile?.no_hp || '',
+        emergencyContact: dataHunian?.kontak_darurat || 'Belum diatur',
+        emergencyName: emName,
+        emergencyPhone: emPhone,
+        vehicle: dataHunian?.kendaraan || '-',
         unit: dataHunian?.unit?.nomor_unit || '-',
         tower: dataHunian?.unit?.tower?.nama_tower || '-',
         layer: dataHunian?.unit?.lantai ? `Lantai ${dataHunian.unit.lantai}` : '-',
         space: dataHunian?.unit?.luas_m2 ? `${dataHunian.unit.luas_m2} m²` : '42 m²',
-        joinDate: dataHunian?.tgl_masuk ? new Date(dataHunian.tgl_masuk).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '28 Mei 2026'
+        joinDate: dataHunian?.tgl_masuk ? new Date(dataHunian.tgl_masuk).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '21 Apr 2026'
       });
     } catch (err) {
       console.error('Gagal memuat profil:', err.message);
@@ -96,7 +105,6 @@ export default function ProfilSaya() {
   }, []);
 
   const handleOpenEdit = () => {
-    // KOREKSI: Gunakan selalu rawKtp agar field input tidak memuat karakter sensor 'xxxx'
     setTempProfile({ 
       name: profile.name,
       ktp: profile.rawKtp, 
@@ -116,33 +124,37 @@ export default function ProfilSaya() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // 1. Update data akun dasar di tabel users
+      // 1. Update data dasar di tabel 'users' (Email ditiadakan agar tidak bisa diubah mandiri)
       const { error: userError } = await supabase
         .from('users')
         .update({
           nama: tempProfile.name,
-          no_hp: tempProfile.phone,
-          email: tempProfile.email
+          no_hp: tempProfile.phone
         })
         .eq('id', user.id);
 
       if (userError) throw userError;
 
-      // 2. Update data pelengkap di tabel penghuni
+      // Menggabungkan nama dan nomor telepon darurat menjadi satu string sesuai skema kolom database
+      const gabungKontakDarurat = tempProfile.emergencyName && tempProfile.emergencyPhone
+        ? `${tempProfile.emergencyName} · ${tempProfile.emergencyPhone}`
+        : tempProfile.emergencyName || '';
+
+      // 2. Update data di tabel 'penghuni' menggunakan kolom yang VALID sesuai skema database-mu
       const { error: penghuniError } = await supabase
         .from('penghuni')
         .update({
+          nama: tempProfile.name,
           no_ktp: tempProfile.ktp,
-          no_wa: tempProfile.whatsapp,
-          no_plat_kendaraan: tempProfile.vehicle,
-          kontak_darurat_nama: tempProfile.emergencyName,
-          kontak_darurat_no: tempProfile.emergencyPhone
+          no_telepon: tempProfile.whatsapp, // Mencocokkan kolom no_telepon di skema db
+          kendaraan: tempProfile.vehicle,   // Mencocokkan kolom kendaraan di skema db
+          kontak_darurat: gabungKontakDarurat // Mencocokkan kolom kontak_darurat di skema db
         })
         .eq('user_id', user.id);
 
       if (penghuniError) throw penghuniError;
 
-      // Refresh data internal komponen dari server database
+      // Refresh data dari database
       await loadProfileData();
       
       setEditModalOpen(false);
@@ -339,11 +351,13 @@ export default function ProfilSaya() {
                 <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1">Alamat Email</label>
                 <input
                   type="email"
-                  required
+                  disabled
                   value={tempProfile.email}
-                  onChange={(e) => setTempProfile(prev => ({ ...prev, email: e.target.value }))}
-                  className="w-full px-3 py-2 rounded-xl border border-zinc-200 text-zinc-800 bg-white focus:outline-none focus:border-zinc-900 transition font-medium"
+                  className="w-full px-3 py-2 rounded-xl border border-zinc-100 text-zinc-400 bg-zinc-50 cursor-not-allowed font-medium"
                 />
+                <p className="text-[10px] text-zinc-400/80 mt-1 font-medium italic">
+                  * Email terikat akun keamanan. Hubungi pihak pengelola jika ingin ganti email.
+                </p>
               </div>
 
               <div>
