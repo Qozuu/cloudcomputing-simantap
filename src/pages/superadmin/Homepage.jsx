@@ -43,14 +43,15 @@ export default function Homepage() {
         // 2. Fetch Jumlah Penghuni Aktif (Dari tabel penghuni)
         const { count: usc } = await supabase
           .from('penghuni')
-          .select('id', { count: 'exact', head: true });
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'aktif');
         if (usc !== null) setUserCount(usc);
 
         // 3. Fetch Jumlah Karyawan (Semua user selain role 'penghuni' dan 'super_admin')
         const { count: kc } = await supabase
           .from('users')
           .select('id', { count: 'exact', head: true })
-          .not('role', 'in', '("penghuni","super_admin")');
+          .not('role', 'in', '(penghuni,super_admin)');
         const totalKaryawan = kc || 0;
         setKaryawanCount(totalKaryawan);
 
@@ -74,7 +75,7 @@ export default function Homepage() {
         const { count: tkt } = await supabase
           .from('laporan')
           .select('id', { count: 'exact', head: true })
-          .not('status', 'in', '("selesai","ditolak")');
+          .not('status', 'in', '(selesai,ditolak)');
         if (tkt !== null) setTiketCount(tkt);
 
         // 7. Fetch Absensi Hari Ini (Format Tanggal YYYY-MM-DD)
@@ -86,32 +87,24 @@ export default function Homepage() {
           .eq('status', 'hadir');
         setAbsenHariIni(`${totalHadir || 0}/${totalKaryawan}`);
 
-        // 8. Fetch 3 Pengumuman/Notifikasi Teraktif dari tabel notifications
-        const { data: dataNotif } = await supabase
-          .from('notifications')
+        // 8. Fetch 3 Pengumuman Terbaru dari tabel informasi (sumber: PusatInformasi.jsx)
+        const { data: dataInformasi } = await supabase
+          .from('informasi')
           .select('*')
-          .eq('is_active', true)
+          .eq('is_published', true)
           .order('created_at', { ascending: false })
           .limit(3);
 
-        if (dataNotif && dataNotif.length > 0) {
-          const mappedNotif = dataNotif.map(item => ({
-            category: item.category.charAt(0).toUpperCase() + item.category.slice(1), // Kapital huruf pertama
+        if (dataInformasi && dataInformasi.length > 0) {
+          const mappedInformasi = dataInformasi.map(item => ({
+            category: item.target_role.charAt(0).toUpperCase() + item.target_role.slice(1), // Kapital huruf pertama
             time: new Date(item.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }),
-            title: item.title,
-            desc: item.message
+            title: item.judul,
+            desc: item.isi
           }));
-          setAnnouncements(mappedNotif);
+          setAnnouncements(mappedInformasi);
         } else {
-          // Fallback data bawaan jika tabel notifications di database masih kosong
-          setAnnouncements([
-            {
-              category: 'Info',
-              time: 'Sistem',
-              title: 'Belum Ada Pengumuman Baru',
-              desc: 'Gunakan menu Pusat Informasi untuk membuat broadcast pesan baru kepada seluruh penghuni dan staf.'
-            }
-          ]);
+          setAnnouncements([]);
         }
 
       } catch (err) {

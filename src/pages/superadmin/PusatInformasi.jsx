@@ -1,30 +1,32 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Plus, X, Pencil, CheckCircle } from 'lucide-react';
+import { Search, Plus, X, CheckCircle, Eye } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
 export default function PusatInformasi() {
   const [posts, setPosts] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
 
-  const [filterCategory, setFilterCategory] = useState('Semua Kategori');
+  const [filterTarget, setFilterTarget] = useState('Semua Target');
   const [filterStatus, setFilterStatus] = useState('Semua Status');
   const [searchQuery, setSearchQuery] = useState('');
 
   const [createModalOpen, setCreateModalOpen] = useState(false);
-  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [successToast, setSuccessToast] = useState('');
   
   const [newPost, setNewPost] = useState({
     title: '',
-    category: 'Info',
-    target: 'Semua Penghuni',
-    subtitle: ''
+    target: 'all',
+    content: '',
+    isPublished: true // Default langsung ditayangkan
   });
 
-  const [editingPost, setEditingPost] = useState(null);
+  const [selectedPost, setSelectedPost] = useState(null);
 
+  // Ambil data singkron dengan skema tabel informasi
   const loadPosts = async () => {
     try {
+      // Ambil user yang sedang login
       const { data: { user } } = await supabase.auth.getUser();
       setCurrentUser(user);
 
@@ -39,21 +41,15 @@ export default function PusatInformasi() {
           const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
           const dateStr = `${bcDate.getDate()} ${months[bcDate.getMonth()]} ${bcDate.getFullYear()}`;
           
-          let targetVal = bc.target_role || 'Semua';
-
-          let statusVal = bc.status;
-          if (!statusVal) {
-            statusVal = bc.is_published ? 'Tayang' : 'Draf';
-          }
-
           return {
             id: bc.id,
             title: bc.judul || '',
-            subtitle: bc.isi || bc.deskripsi || '',
-            category: bc.kategori || bc.prioritas || 'Info',
-            target: targetVal,
+            subtitle: bc.isi || '',
+            target: bc.target_role || 'all',
             date: dateStr,
-            status: statusVal
+            isPublished: bc.is_published,
+            status: bc.is_published ? 'Tayang' : 'Draf',
+            createdBy: bc.dibuat_oleh
           };
         });
         setPosts(formatted);
@@ -67,90 +63,61 @@ export default function PusatInformasi() {
     loadPosts();
   }, []);
 
-  const getCategoryBadgeClass = (category) => {
-    switch (category) {
-      case 'Darurat': return 'badge-pink';
-      case 'Info': return 'badge-lavender';
-      case 'Promo': return 'badge-yellow';
-      case 'Peraturan': return 'badge-dark';
-      case 'Pemeliharaan': return 'badge-gray';
-      default: return 'badge-gray';
-    }
+  const getStatusBadgeClass = (isPublished) => {
+    return isPublished ? 'badge-mint' : 'badge-gray';
   };
 
-  const getStatusBadgeClass = (status) => {
-    switch (status) {
-      case 'Tayang': return 'badge-mint';
-      case 'Draf': return 'badge-gray';
-      case 'Arsip': return 'badge-yellow';
-      default: return 'badge-gray';
-    }
-  };
-
+  // LOGIKA UTAMA MENYIMPAN DATA (INSERT) SESUAI SKEMA SQL
   const handleCreateSubmit = async (e) => {
     e.preventDefault();
-    if (!newPost.title || !newPost.subtitle) return;
+    if (!newPost.title || !newPost.content) {
+      alert("Judul dan Isi Informasi tidak boleh kosong!");
+      return;
+    }
 
     try {
-      const targetLabel = (newPost.target === 'Semua Penghuni' || newPost.target === 'Semua') ? 'Semua' : newPost.target;
+      // Mengambil ID user saat ini
+      let creatorId = currentUser?.id;
+
+      // FALLBACK AMAN: Jika auth Supabase kosong/belum login di lokal, ambil ID user pertama dari DB agar tidak kena error NOT NULL
+      if (!creatorId) {
+        const { data: users } = await supabase.from('users').select('id').limit(1);
+        if (users && users.length > 0) {
+          creatorId = users[0].id;
+        } else {
+          alert("Gagal mempublikasikan: Tidak ada data pengguna (users) di database untuk mengisi kolom dibuat_oleh.");
+          return;
+        }
+      }
+
+      // Format data murni sesuai kolom tabel Informasi Supabase kamu
+      const dataInput = {
+        dibuat_oleh: creatorId, 
+        judul: newPost.title,
+        isi: newPost.content,
+        target_role: newPost.target,
+        is_published: newPost.isPublished
+      };
+
       const { error } = await supabase
         .from('informasi')
-        .insert({
-          judul: newPost.title,
-          isi: newPost.subtitle,
-          deskripsi: newPost.subtitle,
-          kategori: newPost.category,
-          prioritas: newPost.category,
-          target_role: targetLabel,
-          status: 'Tayang',
-          is_published: true,
-          dibuat_oleh: currentUser?.id
-        });
+        .insert(dataInput);
 
       if (error) throw error;
 
       setCreateModalOpen(false);
-      showToast(`Informasi "${newPost.title}" berhasil dipublikasikan!`);
-      setNewPost({ title: '', category: 'Info', target: 'Semua Penghuni', subtitle: '' });
-      loadPosts();
+      showToast(`Informasi "${newPost.title}" sukses diterbitkan ke database!`);
+      setNewPost({ title: '', target: 'all', content: '', isPublished: true });
+      loadPosts(); // Refresh tabel data
     } catch (err) {
-      console.error('Error creating post:', err);
+      console.error('Gagal Insert Supabase:', err);
+      alert(`Gagal Menyimpan! Pesan Error Database: ${err.message}`);
     }
   };
 
-  const handleEditOpen = (post) => {
-    setEditingPost({ ...post });
-    setEditModalOpen(true);
-  };
-
-  const handleEditSubmit = async (e) => {
-    e.preventDefault();
-    if (!editingPost || !editingPost.title || !editingPost.subtitle) return;
-
-    try {
-      const targetLabel = (editingPost.target === 'Semua Penghuni' || editingPost.target === 'Semua') ? 'Semua' : editingPost.target;
-      const { error } = await supabase
-        .from('informasi')
-        .update({
-          judul: editingPost.title,
-          isi: editingPost.subtitle,
-          deskripsi: editingPost.subtitle,
-          kategori: editingPost.category,
-          prioritas: editingPost.category,
-          target_role: targetLabel,
-          status: editingPost.status,
-          is_published: editingPost.status === 'Tayang'
-        })
-        .eq('id', editingPost.id);
-
-      if (error) throw error;
-
-      setEditModalOpen(false);
-      showToast(`Informasi "${editingPost.title}" berhasil diperbarui!`);
-      loadPosts();
-    } catch (err) {
-      console.error('Error updating post:', err);
-    }
+  const handleDetailOpen = (post) => {
+    setSelectedPost(post);
+    setDetailModalOpen(true);
   };
 
   const showToast = (msg) => {
@@ -158,14 +125,16 @@ export default function PusatInformasi() {
     setTimeout(() => setSuccessToast(''), 3000);
   };
 
-  // Filter Logic
+  // Logika Filter Sisi Klien
   const filteredPosts = posts.filter(post => {
-    const matchesCategory = filterCategory === 'Semua Kategori' || post.category === filterCategory;
-    const matchesStatus = filterStatus === 'Semua Status' || post.status === filterStatus;
+    const matchesTarget = filterTarget === 'Semua Target' || post.target === filterTarget;
+    const matchesStatus = filterStatus === 'Semua Status' || 
+                          (filterStatus === 'Tayang' && post.isPublished) || 
+                          (filterStatus === 'Draf' && !post.isPublished);
     const matchesSearch = 
       post.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       post.subtitle.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCategory && matchesStatus && matchesSearch;
+    return matchesTarget && matchesStatus && matchesSearch;
   });
 
   return (
@@ -174,18 +143,16 @@ export default function PusatInformasi() {
       <div className="card-section p-6 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex items-center gap-2">
-            <span className="text-[10px] font-bold text-[#8A857F] uppercase tracking-wider">Kategori:</span>
+            <span className="text-[10px] font-bold text-[#8A857F] uppercase tracking-wider">Target Role:</span>
             <select
-              value={filterCategory}
-              onChange={(e) => setFilterCategory(e.target.value)}
+              value={filterTarget}
+              onChange={(e) => setFilterTarget(e.target.value)}
               className="px-3 py-1.5 border border-[#EAE6E1] rounded-xl text-xs bg-[#FAF6F0] text-[#1E1E1E] font-bold focus:outline-none focus:border-[#1E1E1E]"
             >
-              <option value="Semua Kategori">Semua Kategori</option>
-              <option value="Darurat">Darurat</option>
-              <option value="Info">Info</option>
-              <option value="Promo">Promo</option>
-              <option value="Peraturan">Peraturan</option>
-              <option value="Pemeliharaan">Pemeliharaan</option>
+              <option value="Semua Target">Semua Target</option>
+              <option value="all">all (Semua)</option>
+              <option value="penghuni">penghuni</option>
+              <option value="teknisi">teknisi</option>
             </select>
           </div>
 
@@ -199,7 +166,6 @@ export default function PusatInformasi() {
               <option value="Semua Status">Semua Status</option>
               <option value="Tayang">Tayang</option>
               <option value="Draf">Draf</option>
-              <option value="Arsip">Arsip</option>
             </select>
           </div>
 
@@ -216,10 +182,7 @@ export default function PusatInformasi() {
           </div>
         </div>
 
-        <button
-          onClick={() => setCreateModalOpen(true)}
-          className="btn-primary btn-sm"
-        >
+        <button onClick={() => setCreateModalOpen(true)} className="btn-primary btn-sm">
           <Plus size={14} />
           <span>Buat Informasi Baru</span>
         </button>
@@ -231,16 +194,15 @@ export default function PusatInformasi() {
           <h3 className="text-sm font-bold text-[#1E1E1E] uppercase tracking-wider font-serif">
             Pusat Informasi & Pengumuman
           </h3>
-          <p className="text-xs text-[#8A857F] font-medium mt-0.5">Buat, draf, tayangkan, atau arsipkan info bulletin board untuk penghuni</p>
+          <p className="text-xs text-[#8A857F] font-medium mt-0.5">Daftar bulletin board informasi internal apartemen</p>
         </div>
 
         <div className="table-wrap">
           <table className="table-modern">
             <thead>
               <tr>
-                <th className="w-1/3">Judul</th>
-                <th>Kategori</th>
-                <th>Target</th>
+                <th className="w-1/2">Judul & Konten</th>
+                <th>Target Role</th>
                 <th>Tanggal</th>
                 <th>Status</th>
                 <th className="text-right">Aksi</th>
@@ -255,31 +217,31 @@ export default function PusatInformasi() {
                       <p className="text-xs text-[#8A857F] font-medium line-clamp-1">{post.subtitle}</p>
                     </td>
                     <td>
-                      <span className={`badge-base ${getCategoryBadgeClass(post.category)}`}>
-                        {post.category}
+                      <span className="badge-base badge-lavender">
+                        {post.target}
                       </span>
                     </td>
-                    <td className="text-[#1E1E1E]/80">{post.target}</td>
-                    <td className="text-[#8A857F]">{post.date}</td>
+                    <td className="text-[#8A857F] text-xs font-medium">{post.date}</td>
                     <td>
-                      <span className={`badge-base ${getStatusBadgeClass(post.status)}`}>
+                      <span className={`badge-base ${getStatusBadgeClass(post.isPublished)}`}>
                         {post.status}
                       </span>
                     </td>
                     <td className="text-right">
                       <button 
-                        onClick={() => handleEditOpen(post)}
-                        className="text-xs font-bold text-[#1E1E1E] hover:underline"
+                        onClick={() => handleDetailOpen(post)}
+                        className="text-xs font-bold text-[#8A857F] hover:text-[#1E1E1E] flex items-center gap-1 ml-auto bg-[#FAF6F0] border border-[#EAE6E1] px-3 py-1 rounded-xl transition"
                       >
-                        Edit
+                        <Eye size={12} />
+                        Detail
                       </button>
                     </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={6} className="p-10 text-center text-[#8A857F] font-bold">
-                    Tidak ada pengumuman bulletin board yang sesuai filter.
+                  <td colSpan={5} className="p-10 text-center text-[#8A857F] font-bold text-xs">
+                    Tidak ada pengumuman yang sesuai filter skema saat ini.
                   </td>
                 </tr>
               )}
@@ -288,50 +250,43 @@ export default function PusatInformasi() {
         </div>
       </div>
 
-      {/* CREATE MODAL */}
+      {/* MODAL: INPUT DATA BARU */}
       {createModalOpen && (
         <div className="modal-overlay">
           <div className="modal-box">
-            {/* Header */}
             <div className="modal-header">
               <div>
                 <h3 className="text-sm font-bold uppercase tracking-wider text-[#1E1E1E] font-serif">Buat Informasi Baru</h3>
-                <p className="text-[10px] text-[#8A857F] font-semibold mt-0.5">Tayangkan pengumuman baru</p>
+                <p className="text-[10px] text-[#8A857F] font-semibold mt-0.5">Kirim data informasi resmi ke database</p>
               </div>
               <button onClick={() => setCreateModalOpen(false)} className="text-[#8A857F] hover:text-[#1E1E1E] transition">
                 <X size={18} />
               </button>
             </div>
 
-            {/* Form */}
             <form onSubmit={handleCreateSubmit} className="modal-body space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="label-modern">Kategori</label>
-                  <select
-                    value={newPost.category}
-                    onChange={(e) => setNewPost(prev => ({ ...prev, category: e.target.value }))}
-                    className="input-modern select-modern"
-                  >
-                    <option value="Pengumuman">Pengumuman</option>
-                    <option value="Darurat">Darurat</option>
-                    <option value="Info">Info</option>
-                    <option value="Promo">Promo</option>
-                    <option value="Peraturan">Peraturan</option>
-                    <option value="Pemeliharaan">Pemeliharaan</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="label-modern">Target Penerima</label>
+                  <label className="label-modern">Target Pembaca (Role)</label>
                   <select
                     value={newPost.target}
                     onChange={(e) => setNewPost(prev => ({ ...prev, target: e.target.value }))}
                     className="input-modern select-modern"
                   >
-                    <option value="Semua Penghuni">Semua Penghuni</option>
-                    <option value="Tower A">Tower A</option>
-                    <option value="Tower B">Tower B</option>
-                    <option value="Tower C">Tower C</option>
+                    <option value="all">all (Semua)</option>
+                    <option value="penghuni">penghuni</option>
+                    <option value="teknisi">teknisi</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="label-modern">Status Publikasi</label>
+                  <select
+                    value={newPost.isPublished}
+                    onChange={(e) => setNewPost(prev => ({ ...prev, isPublished: e.target.value === 'true' }))}
+                    className="input-modern select-modern"
+                  >
+                    <option value="true">Langsung Tayang</option>
+                    <option value="false">Simpan Ke Draf</option>
                   </select>
                 </div>
               </div>
@@ -341,7 +296,7 @@ export default function PusatInformasi() {
                 <input
                   type="text"
                   required
-                  placeholder="Judul informasi/pengumuman"
+                  placeholder="Masukkan judul pengumuman..."
                   value={newPost.title}
                   onChange={(e) => setNewPost(prev => ({ ...prev, title: e.target.value }))}
                   className="input-modern"
@@ -349,30 +304,22 @@ export default function PusatInformasi() {
               </div>
 
               <div>
-                <label className="label-modern">Isi Informasi</label>
+                <label className="label-modern">Isi Pengumuman</label>
                 <textarea
-                  rows={4}
+                  rows={5}
                   required
-                  placeholder="Isi informasi pengumuman lengkap..."
-                  value={newPost.subtitle}
-                  onChange={(e) => setNewPost(prev => ({ ...prev, subtitle: e.target.value }))}
+                  placeholder="Tuliskan isi pengumuman lengkap disini..."
+                  value={newPost.content}
+                  onChange={(e) => setNewPost(prev => ({ ...prev, content: e.target.value }))}
                   className="textarea-modern resize-none"
                 />
               </div>
 
-              {/* Action Buttons */}
               <div className="flex items-center gap-3 pt-3 border-t border-[#EAE6E1]">
-                <button
-                  type="submit"
-                  className="btn-primary flex-1 justify-center"
-                >
+                <button type="submit" className="btn-primary flex-1 justify-center">
                   Publikasikan
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setCreateModalOpen(false)}
-                  className="btn-ghost"
-                >
+                <button type="button" onClick={() => setCreateModalOpen(false)} className="btn-ghost">
                   Batal
                 </button>
               </div>
@@ -381,109 +328,60 @@ export default function PusatInformasi() {
         </div>
       )}
 
-      {/* EDIT MODAL */}
-      {editModalOpen && editingPost && (
+      {/* MODAL: READ-ONLY DETAIL */}
+      {detailModalOpen && selectedPost && (
         <div className="modal-overlay">
           <div className="modal-box">
-            {/* Header */}
             <div className="modal-header">
               <div>
-                <h3 className="text-sm font-bold uppercase tracking-wider text-[#1E1E1E] font-serif">Edit Informasi</h3>
-                <p className="text-[10px] text-[#8A857F] font-semibold mt-0.5">Perbarui data pengumuman</p>
+                <h3 className="text-sm font-bold uppercase tracking-wider text-[#1E1E1E] font-serif">Detail Pengumuman Resmi</h3>
+                <p className="text-[10px] text-[#8A857F] font-semibold mt-0.5">Dibuat tanggal {selectedPost.date}</p>
               </div>
-              <button onClick={() => setEditModalOpen(false)} className="text-[#8A857F] hover:text-[#1E1E1E] transition">
+              <button onClick={() => setDetailModalOpen(false)} className="text-[#8A857F] hover:text-[#1E1E1E] transition">
                 <X size={18} />
               </button>
             </div>
 
-            {/* Form */}
-            <form onSubmit={handleEditSubmit} className="modal-body space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+            <div className="modal-body space-y-5">
+              <div className="flex items-center gap-4 bg-[#FAF6F0] p-3 rounded-xl border border-[#EAE6E1]">
                 <div>
-                  <label className="label-modern">Kategori</label>
-                  <select
-                    value={editingPost.category}
-                    onChange={(e) => setEditingPost(prev => ({ ...prev, category: e.target.value }))}
-                    className="input-modern select-modern"
-                  >
-                    <option value="Pengumuman">Pengumuman</option>
-                    <option value="Darurat">Darurat</option>
-                    <option value="Info">Info</option>
-                    <option value="Promo">Promo</option>
-                    <option value="Peraturan">Peraturan</option>
-                    <option value="Pemeliharaan">Pemeliharaan</option>
-                  </select>
+                  <p className="text-[10px] uppercase font-bold text-[#8A857F] tracking-wider">Penerima</p>
+                  <span className="badge-base inline-block mt-1 badge-lavender">
+                    {selectedPost.target}
+                  </span>
                 </div>
+                <div className="h-8 w-[1px] bg-[#EAE6E1]" />
                 <div>
-                  <label className="label-modern">Target Penerima</label>
-                  <select
-                    value={editingPost.target}
-                    onChange={(e) => setEditingPost(prev => ({ ...prev, target: e.target.value }))}
-                    className="input-modern select-modern"
-                  >
-                    <option value="Semua">Semua Penghuni</option>
-                    <option value="Tower A">Tower A</option>
-                    <option value="Tower B">Tower B</option>
-                    <option value="Tower C">Tower C</option>
-                  </select>
+                  <p className="text-[10px] uppercase font-bold text-[#8A857F] tracking-wider">Status Tayang</p>
+                  <span className={`badge-base inline-block mt-1 ${getStatusBadgeClass(selectedPost.isPublished)}`}>
+                    {selectedPost.status}
+                  </span>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="label-modern">Status Penayangan</label>
-                  <select
-                    value={editingPost.status}
-                    onChange={(e) => setEditingPost(prev => ({ ...prev, status: e.target.value }))}
-                    className="input-modern select-modern"
-                  >
-                    <option value="Tayang">Tayang</option>
-                    <option value="Draf">Draf</option>
-                    <option value="Arsip">Arsip</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="label-modern">Judul Informasi</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Judul informasi/pengumuman"
-                    value={editingPost.title}
-                    onChange={(e) => setEditingPost(prev => ({ ...prev, title: e.target.value }))}
-                    className="input-modern"
-                  />
-                </div>
+              <div className="space-y-1">
+                <h2 className="text-base font-black text-[#1E1E1E] leading-snug">
+                  {selectedPost.title}
+                </h2>
+                <div className="w-10 h-[2px] bg-[#1E1E1E]" />
               </div>
 
-              <div>
-                <label className="label-modern">Isi Informasi</label>
-                <textarea
-                  rows={4}
-                  required
-                  placeholder="Isi informasi pengumuman lengkap..."
-                  value={editingPost.subtitle}
-                  onChange={(e) => setEditingPost(prev => ({ ...prev, subtitle: e.target.value }))}
-                  className="textarea-modern resize-none"
-                />
+              <div className="bg-[#FAF6F0]/50 border border-[#EAE6E1] p-4 rounded-xl max-h-[250px] overflow-y-auto">
+                <p className="text-xs text-[#1E1E1E]/90 font-medium whitespace-pre-wrap leading-relaxed">
+                  {selectedPost.subtitle}
+                </p>
               </div>
 
-              {/* Action Buttons */}
-              <div className="flex items-center gap-3 pt-3 border-t border-[#EAE6E1]">
-                <button
-                  type="submit"
-                  className="btn-primary flex-1 justify-center"
-                >
-                  Simpan
-                </button>
+              <div className="pt-3 border-t border-[#EAE6E1] flex justify-end">
                 <button
                   type="button"
-                  onClick={() => setEditModalOpen(false)}
-                  className="btn-ghost"
+                  onClick={() => setDetailModalOpen(false)}
+                  className="btn-primary px-6 justify-center text-xs py-2"
                 >
-                  Batal
+                  Tutup
                 </button>
               </div>
-            </form>
+            </div>
           </div>
         </div>
       )}

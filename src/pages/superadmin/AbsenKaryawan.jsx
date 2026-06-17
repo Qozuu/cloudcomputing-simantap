@@ -5,7 +5,7 @@ import { supabase } from '../../lib/supabase';
 export default function AbsenKaryawan() {
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [period, setPeriod] = useState('Mei 2026'); // Disesuaikan dengan tahun target 2026
+  const [period, setPeriod] = useState('Mei 2026');
   const [divisionFilter, setDivisionFilter] = useState('Semua');
   const [successToast, setSuccessToast] = useState('');
   const [selectedEmployee, setSelectedEmployee] = useState(null);
@@ -18,47 +18,68 @@ export default function AbsenKaryawan() {
     year: 'numeric'
   });
 
-  useEffect(() => {
+ useEffect(() => {
     async function loadAttendance() {
       try {
         setLoading(true);
         const todayStr = new Date().toISOString().split('T')[0];
         
-        // Fetch data absensi hari ini dengan join tabel users
+        // Sekarang kueri join ini dijamin 100% tembus karena RLS SELECT users sudah dibuka!
         const { data, error } = await supabase
           .from('absensi')
-          .select('*, karyawan:users(nama, role)')
+          .select(`
+            id, 
+            tanggal, 
+            jam_masuk, 
+            jam_keluar, 
+            status, 
+            lokasi, 
+            karyawan_id,
+            users!absensi_karyawan_id_fkey (
+              nama, 
+              role
+            )
+          `)
           .eq('tanggal', todayStr);
 
         if (error) throw error;
 
         if (data) {
           setEmployees(data.map(item => {
-            // Pemetaan role database ke nama divisi UI
-            let divName = 'Fasilitas';
-            const role = item.karyawan?.role || '';
+            const userData = item.users; 
+            
+            // Konversi ke lowercase agar deteksi string role aman
+            const role = (userData?.role || '').toLowerCase();
+            let divName = 'Lainnya';
             
             if (role.includes('keuangan')) divName = 'Keuangan';
-            else if (role.includes('pemeliharaan')) divName = 'Pemeliharaan';
+            else if (role.includes('pemeliharaan') || role.includes('teknisi')) divName = 'Pemeliharaan';
             else if (role.includes('keamanan')) divName = 'Keamanan';
             else if (role.includes('kebersihan')) divName = 'Kebersihan';
             else if (role.includes('fasilitas')) divName = 'Fasilitas';
             else if (role.includes('sdm')) divName = 'SDM';
+            else if (role.includes('super_admin')) divName = 'Management';
 
             const dateObj = new Date(item.tanggal);
             const formattedDate = dateObj.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
 
+            let displayStatus = 'Tidak Hadir';
+            if (item.status === 'hadir') displayStatus = 'Hadir';
+            else if (item.status === 'izin') displayStatus = 'Izin';
+            else if (item.status === 'sakit') displayStatus = 'Sakit';
+            else if (item.status === 'alpha') displayStatus = 'Alpha';
+
             return {
               id: item.id,
-              name: item.karyawan?.nama || '—',
+              name: userData?.nama || 'Tanpa Nama', 
               division: divName,
-              checkIn: item.jam_masuk ? item.jam_masuk.substring(0, 5) : '—', // Potong format detik (HH:MM)
+              checkIn: item.jam_masuk ? item.jam_masuk.substring(0, 5) : '—',
               checkOut: item.jam_keluar ? item.jam_keluar.substring(0, 5) : '—',
-              status: item.status === 'hadir' ? 'Hadir' : 'Tidak Hadir',
+              status: displayStatus,
               date: formattedDate,
-              device: 'Android Device', // Fallback karena tidak ada di skema
+              device: 'Sistem Presensi Mobilitas', 
               location: item.lokasi || 'Area Apartemen',
-              notes: item.status === 'hadir' ? 'Tercatat di sistem' : (item.status || 'Izin')
+              notes: item.status === 'hadir' ? 'Tercatat aktif di sistem' : `Keterangan harian: ${item.status || 'Tanpa keterangan'}`
             };
           }));
         }
@@ -71,9 +92,9 @@ export default function AbsenKaryawan() {
     loadAttendance();
   }, []);
 
-  // Menghitung statistik KPI secara dinamis berdasarkan data yang di-fetch
+  // Menghitung statistik KPI secara dinamis berdasarkan data real dari tabel absensi
   const totalHadir = employees.filter(emp => emp.status === 'Hadir').length;
-  const totalTidakHadir = employees.filter(emp => emp.status === 'Tidak Hadir').length;
+  const totalTidakHadir = employees.filter(emp => emp.status !== 'Hadir').length;
 
   const getDivisionBadgeClass = (division) => {
     switch (division) {
@@ -89,7 +110,8 @@ export default function AbsenKaryawan() {
   const getStatusClass = (status) => {
     switch (status) {
       case 'Hadir': return 'badge-mint';
-      case 'Tidak Hadir': return 'badge-pink';
+      case 'Izin': case 'Sakit': return 'badge-yellow';
+      case 'Tidak Hadir': case 'Alpha': return 'badge-pink';
       default: return 'badge-gray';
     }
   };
@@ -122,7 +144,6 @@ export default function AbsenKaryawan() {
             >
               <option value="Mei 2026">Mei 2026</option>
               <option value="April 2026">April 2026</option>
-              <option value="Maret 2026">Maret 2026</option>
             </select>
           </div>
 
@@ -144,7 +165,7 @@ export default function AbsenKaryawan() {
         </div>
       </div>
 
-      {/* KPI Stats Row — Dinamis dari Supabase */}
+      {/* KPI Stats Row — Validasi Otomatis dari Supabase */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="card-pink flex flex-col justify-between min-h-[120px] hover:scale-[1.01] transition">
           <div className="flex justify-between items-start">
@@ -158,7 +179,7 @@ export default function AbsenKaryawan() {
 
         <div className="card-lavender flex flex-col justify-between min-h-[120px] hover:scale-[1.01] transition">
           <div className="flex justify-between items-start">
-            <span className="text-[#8A857F] font-semibold text-xs">Tidak Hadir / Izin</span>
+            <span className="text-[#8A857F] font-semibold text-xs">Absen / Izin / Sakit</span>
             <div className="card-icon-lavender !mb-0">
               <AlertCircle size={16} />
             </div>
@@ -174,7 +195,7 @@ export default function AbsenKaryawan() {
             <h3 className="text-sm font-bold text-[#1E1E1E] uppercase tracking-wider font-serif">
               Daftar Absensi — {formattedToday}
             </h3>
-            <p className="text-xs text-[#8A857F] font-medium">Data presensi harian karyawan terintegrasi basis data Supabase</p>
+            <p className="text-xs text-[#8A857F] font-medium">Data log presensi harian terintegrasi langsung dengan database public.absensi</p>
           </div>
         </div>
 
@@ -194,11 +215,11 @@ export default function AbsenKaryawan() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan="7" className="text-center py-4 text-xs text-[#8A857F]">Memuat log presensi staf...</td>
+                  <td colSpan="7" className="text-center py-4 text-xs text-[#8A857F]">Sinkronisasi data Supabase...</td>
                 </tr>
               ) : filteredEmployees.length === 0 ? (
                 <tr>
-                  <td colSpan="7" className="text-center py-4 text-xs text-[#8A857F]">Tidak ada data absensi untuk divisi ini hari ini.</td>
+                  <td colSpan="7" className="text-center py-4 text-xs text-[#8A857F]">Tidak ada data absensi yang tercatat untuk hari ini ({formattedToday}).</td>
                 </tr>
               ) : (
                 filteredEmployees.map((emp, idx) => (
@@ -233,14 +254,14 @@ export default function AbsenKaryawan() {
         </div>
       </div>
 
-      {/* POPUP MODAL MONITORING KEHADIRAN */}
+      {/* POPUP MODAL MONITORING KEHADIRAN (READ ONLY) */}
       {selectedEmployee && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 animate-fade-in p-4">
           <div className="bg-[#FAF6F0] border border-[#EAE6E1] rounded-2xl max-w-md w-full shadow-2xl p-6 relative animate-scale-up space-y-4">
             
             <div className="flex items-center justify-between border-b border-[#EAE6E1] pb-3">
               <div>
-                <h3 className="text-sm font-extrabold text-[#1E1E1E] tracking-tight">Detail Log Keaktifan Karyawan</h3>
+                <h3 className="text-sm font-extrabold text-[#1E1E1E] tracking-tight">Detail Log Keaktifan Staf</h3>
                 <p className="text-[11px] text-[#8A857F]">{selectedEmployee.date}</p>
               </div>
               <button 
@@ -254,7 +275,7 @@ export default function AbsenKaryawan() {
             <div className="bg-white p-4 rounded-xl border border-[#EAE6E1] flex items-center justify-between">
               <div>
                 <h4 className="text-sm font-bold text-[#1E1E1E]">{selectedEmployee.name}</h4>
-                <p className="text-xs text-[#8A857F] mt-0.5">Divisi: {selectedEmployee.division}</p>
+                <p className="text-xs text-[#8A857F] mt-0.5">Divisi Sistem: {selectedEmployee.division}</p>
               </div>
               <span className={`badge-base ${getStatusClass(selectedEmployee.status)}`}>
                 {selectedEmployee.status}
@@ -265,28 +286,28 @@ export default function AbsenKaryawan() {
               <div className="flex items-center gap-3 text-[#1E1E1E]">
                 <Clock size={14} className="text-[#8A857F] shrink-0" />
                 <div className="grid grid-cols-2 w-full bg-white px-3 py-2 rounded-lg border border-[#EAE6E1]">
-                  <div><span className="text-[#8A857F]">Masuk:</span> <strong className="font-mono">{selectedEmployee.checkIn}</strong></div>
-                  <div><span className="text-[#8A857F]">Keluar:</span> <strong className="font-mono">{selectedEmployee.checkOut}</strong></div>
+                  <div><span className="text-[#8A857F]">Jam Masuk:</span> <strong className="font-mono">{selectedEmployee.checkIn}</strong></div>
+                  <div><span className="text-[#8A857F]">Jam Keluar:</span> <strong className="font-mono">{selectedEmployee.checkOut}</strong></div>
                 </div>
               </div>
 
               <div className="flex items-center gap-3 text-[#1E1E1E]">
                 <Smartphone size={14} className="text-[#8A857F] shrink-0" />
                 <div className="w-full bg-white px-3 py-2 rounded-lg border border-[#EAE6E1]">
-                  <span className="text-[#8A857F]">Perangkat Absen:</span> <span className="font-medium">{selectedEmployee.device}</span>
+                  <span className="text-[#8A857F]">Metode Tracking:</span> <span className="font-medium">{selectedEmployee.device}</span>
                 </div>
               </div>
 
               <div className="flex items-center gap-3 text-[#1E1E1E]">
                 <MapPin size={14} className="text-[#8A857F] shrink-0" />
                 <div className="w-full bg-white px-3 py-2 rounded-lg border border-[#EAE6E1]">
-                  <span className="text-[#8A857F]">Titik Lokasi GPS:</span> <span className="font-medium">{selectedEmployee.location}</span>
+                  <span className="text-[#8A857F]">Koordinat / Lokasi:</span> <span className="font-medium">{selectedEmployee.location}</span>
                 </div>
               </div>
             </div>
 
             <div className="bg-white p-3 rounded-xl border border-[#EAE6E1] space-y-1">
-              <span className="text-[10px] font-bold text-[#8A857F] uppercase tracking-wider">Catatan Sistem / HRD:</span>
+              <span className="text-[10px] font-bold text-[#8A857F] uppercase tracking-wider">Log Audit Lapangan:</span>
               <p className="text-xs text-[#1E1E1E] font-medium italic">"{selectedEmployee.notes}"</p>
             </div>
 

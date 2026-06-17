@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase';
 
 export default function AuditLog() {
   const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
   
   // State untuk manajemen filter data
   const [selectedDivisi, setSelectedDivisi] = useState('');
@@ -12,11 +13,25 @@ export default function AuditLog() {
   useEffect(() => {
     async function loadLogs() {
       try {
+        setLoading(true);
+        
+        // Menyelaraskan query ke nama tabel & constraint foreign key yang benar
         const { data, error } = await supabase
           .from('audit_logs')
-          .select('*, user:users(nama, role)')
+          .select(`
+            id,
+            action,
+            module,
+            description,
+            created_at,
+            action_type,
+            users!audit_logs_user_id_fkey (
+              nama,
+              role
+            )
+          `)
           .order('created_at', { ascending: false })
-          .limit(50);
+          .limit(100);
 
         if (error) throw error;
 
@@ -24,59 +39,49 @@ export default function AuditLog() {
           setLogs(data.map(log => {
             const dateObj = new Date(log.created_at);
             const timeStr = dateObj.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            const dateStr = dateObj.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
             
             let divName = 'Sistem';
             let bgClass = 'bg-[#F2F2F2] text-[#555555]';
-            const role = log.user?.role || '';
             
-            if (role === 'div_keuangan') {
+            // Menyelaraskan dengan CHECK constraint asli tabel users ('admin_...')
+            const role = (log.users?.role || '').toLowerCase();
+            
+            if (role.includes('keuangan')) {
               divName = 'Keuangan';
               bgClass = 'bg-[#EEEDFB] text-[#4840B0]';
-            } else if (role === 'div_pemeliharaan') {
+            } else if (role.includes('pemeliharaan') || role.includes('teknisi')) {
               divName = 'Pemeliharaan';
               bgClass = 'bg-[#FEF7EC] text-[#A05820]';
-            } else if (role === 'div_keamanan') {
+            } else if (role.includes('keamanan')) {
               divName = 'Keamanan';
               bgClass = 'bg-[#E8FAF3] text-[#187050]';
-            } else if (role === 'div_kebersihan') {
+            } else if (role.includes('kebersihan')) {
               divName = 'Kebersihan';
               bgClass = 'bg-[#FEF0EE] text-[#C05040]';
-            } else if (role === 'div_fasilitas' || role === 'management') {
+            } else if (role.includes('fasilitas')) {
               divName = 'Fasilitas';
               bgClass = 'bg-[#EAF6F5] text-[#208078]';
             }
 
             return {
               id: log.id,
-              waktu: timeStr,
-              admin: log.user?.nama || 'Sistem',
+              waktu: `${dateStr} - ${timeStr}`,
+              admin: log.users?.nama || 'Sistem Otomatis',
               divisi: divName,
-              aksi: log.aksi || 'Aksi',
-              detail: log.detail || 'Detail',
-              ip: log.ip_address || '127.0.0.1',
+              aksi: log.action || log.action_type || 'Aktivitas',
+              detail: log.description || 'Tidak ada rincian deskripsi.',
+              modul: log.module || 'Umum',
               color: bgClass
             };
           }));
         } else {
-          // Mockup fallback jika data Supabase kosong
-          setLogs([
-            { id: 1, waktu: '09:42:13', admin: 'Rina K.', divisi: 'Keuangan', aksi: 'Generate Tagihan', detail: 'Tagihan IPL April 2026 – 440 unit', ip: '192.168.1.42', color: 'bg-[#EEEDFB] text-[#4840B0]' },
-            { id: 2, waktu: '09:15:07', admin: 'Doni P.', divisi: 'Pemeliharaan', aksi: 'Assign Teknisi', detail: 'TK-0088 → Pak Roni', ip: '192.168.1.35', color: 'bg-[#FEF7EC] text-[#A05820]' },
-            { id: 3, waktu: '08:55:44', admin: 'Agus W.', divisi: 'Keamanan', aksi: 'Broadcast Darurat', detail: 'Lift Tower B bermasalah', ip: '192.168.1.33', color: 'bg-[#E8FAF3] text-[#187050]' },
-            { id: 4, waktu: '08:30:00', admin: 'Sistem', divisi: 'Fasilitas', aksi: 'Auto Rekonsiliasi', detail: 'Midtrans payment gateway', ip: '127.0.0.1', color: 'bg-[#EAF6F5] text-[#208078]' },
-            { id: 5, waktu: '07:00:00', admin: 'Siti R.', divisi: 'Kebersihan', aksi: 'Update Jadwal', detail: 'Jadwal Minggu ke-14 2026', ip: '192.168.1.43', color: 'bg-[#FEF0EE] text-[#C05040]' },
-          ]);
+          setLogs([]);
         }
       } catch (err) {
         console.error('Error loading audit logs:', err);
-        // Mockup fallback jika terjadi kendala koneksi
-        setLogs([
-          { id: 1, waktu: '09:42:13', admin: 'Rina K.', divisi: 'Keuangan', aksi: 'Generate Tagihan', detail: 'Tagihan IPL April 2026 – 440 unit', ip: '192.168.1.42', color: 'bg-[#EEEDFB] text-[#4840B0]' },
-          { id: 2, waktu: '09:15:07', admin: 'Doni P.', divisi: 'Pemeliharaan', aksi: 'Assign Teknisi', detail: 'TK-0088 → Pak Roni', ip: '192.168.1.35', color: 'bg-[#FEF7EC] text-[#A05820]' },
-          { id: 3, waktu: '08:55:44', admin: 'Agus W.', divisi: 'Keamanan', aksi: 'Broadcast Darurat', detail: 'Lift Tower B bermasalah', ip: '192.168.1.33', color: 'bg-[#E8FAF3] text-[#187050]' },
-          { id: 4, waktu: '08:30:00', admin: 'Sistem', divisi: 'Fasilitas', aksi: 'Auto Rekonsiliasi', detail: 'Midtrans payment gateway', ip: '127.0.0.1', color: 'bg-[#EAF6F5] text-[#208078]' },
-          { id: 5, waktu: '07:00:00', admin: 'Siti R.', divisi: 'Kebersihan', aksi: 'Update Jadwal', detail: 'Jadwal Minggu ke-14 2026', ip: '192.168.1.43', color: 'bg-[#FEF0EE] text-[#C05040]' },
-        ]);
+      } finally {
+        setLoading(false);
       }
     }
     loadLogs();
@@ -90,6 +95,7 @@ export default function AuditLog() {
     const matchQuery = searchQuery === '' || 
       log.aksi.toLowerCase().includes(query) || 
       log.detail.toLowerCase().includes(query) ||
+      log.modul.toLowerCase().includes(query) ||
       log.admin.toLowerCase().includes(query);
 
     return matchDivisi && matchQuery;
@@ -98,7 +104,7 @@ export default function AuditLog() {
   return (
     <div className="space-y-6 animate-fade-up">
       {/* Bagian Filter Kontrol */}
-      <div className="card-section p-6">
+      <div className="card-section p-6 bg-white rounded-xl border border-gray-100 shadow-sm">
         <div className="flex flex-col md:flex-row md:items-center gap-4 justify-between">
           <div className="flex flex-wrap items-center gap-4">
             {/* Filter Operator / Divisi */}
@@ -107,7 +113,7 @@ export default function AuditLog() {
               <select 
                 value={selectedDivisi} 
                 onChange={(e) => setSelectedDivisi(e.target.value)}
-                className="bg-[#F8F7F5] border border-soft rounded-lg px-3 py-1.5 text-xs font-bold focus:outline-none"
+                className="bg-[#F8F7F5] border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-bold focus:outline-none"
               >
                 <option value="">Semua Divisi</option>
                 <option value="Keuangan">Keuangan</option>
@@ -125,10 +131,10 @@ export default function AuditLog() {
               </div>
               <input
                 type="text"
-                placeholder="Cari aksi, detail, admin..."
+                placeholder="Cari aksi, detail, admin, modul..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-[#F8F7F5] border border-soft rounded-xl py-2 pl-10 pr-4 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#EAE6E1] transition-all"
+                className="w-full bg-[#F8F7F5] border border-gray-200 rounded-xl py-2 pl-10 pr-4 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#EAE6E1] transition-all"
               />
             </div>
           </div>
@@ -136,44 +142,52 @@ export default function AuditLog() {
       </div>
 
       {/* Bagian Tabel Log */}
-      <div className="card-section !p-0 overflow-hidden shadow-sm border border-soft">
-        <div className="p-6 border-b border-soft">
+      <div className="card-section !p-0 overflow-hidden shadow-sm border border-gray-200 bg-white rounded-xl">
+        <div className="p-6 border-b border-gray-100">
            <h3 className="text-xs font-black text-[#1E1E1E] uppercase tracking-widest">Audit Log Aktivitas Sistem</h3>
            <p className="text-[10px] text-[#8A857F] font-medium mt-1 italic">Rekaman jejak digital dari perubahan data yang dilakukan oleh administrator</p>
         </div>
         
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
-            <thead className="bg-[#FAF9F7] border-b border-soft">
+            <thead className="bg-[#FAF9F7] border-b border-gray-100">
               <tr>
                 <th className="p-4 text-[10px] font-black text-[#8A857F] uppercase">Waktu</th>
-                <th className="p-4 text-[10px] font-black text-[#8A857F] uppercase">Admin</th>
+                <th className="p-4 text-[10px] font-black text-[#8A857F] uppercase">Admin / Operator</th>
                 <th className="p-4 text-[10px] font-black text-[#8A857F] uppercase">Divisi</th>
+                <th className="p-4 text-[10px] font-black text-[#8A857F] uppercase">Modul</th>
                 <th className="p-4 text-[10px] font-black text-[#8A857F] uppercase">Aksi</th>
-                <th className="p-4 text-[10px] font-black text-[#8A857F] uppercase">Detail</th>
-                <th className="p-4 text-[10px] font-black text-[#8A857F] uppercase">IP Address</th>
+                <th className="p-4 text-[10px] font-black text-[#8A857F] uppercase">Rincian Deskripsi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {filteredLogs.length > 0 ? (
+              {loading ? (
+                <tr>
+                  <td colSpan={6} className="p-12 text-center text-gray-400 font-medium text-xs animate-pulse">
+                    Menghubungkan ke database public.audit_logs...
+                  </td>
+                </tr>
+              ) : filteredLogs.length > 0 ? (
                 filteredLogs.map((log) => (
                   <tr key={log.id} className="hover:bg-[#FDFDFD] transition-colors group">
-                    <td className="p-4 text-xs font-bold text-[#1E1E1E] tabular-nums">{log.waktu}</td>
+                    <td className="p-4 text-xs font-bold text-[#1E1E1E] tabular-nums whitespace-nowrap">{log.waktu}</td>
                     <td className="p-4 text-xs font-extrabold text-[#1E1E1E]">{log.admin}</td>
                     <td className="p-4">
                       <span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider ${log.color}`}>
                         {log.divisi}
                       </span>
                     </td>
+                    <td className="p-4 text-xs font-bold text-gray-600">
+                      <span className="bg-gray-100 px-2 py-0.5 rounded text-[10px] text-gray-700">{log.modul}</span>
+                    </td>
                     <td className="p-4 text-xs font-bold text-[#1E1E1E]">{log.aksi}</td>
-                    <td className="p-4 text-xs text-[#8A857F] font-medium">{log.detail}</td>
-                    <td className="p-4 text-[10px] font-bold text-[#C8C2BC] font-mono group-hover:text-[#8A857F] transition-colors">{log.ip}</td>
+                    <td className="p-4 text-xs text-[#8A857F] font-medium max-w-xs break-words">{log.detail}</td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={6} className="p-12 text-center text-muted font-bold italic text-xs">
-                    Tidak ada riwayat aktivitas yang cocok dengan filter.
+                  <td colSpan={6} className="p-12 text-center text-gray-400 font-bold italic text-xs">
+                    Tidak ada riwayat aktivitas yang cocok dengan filter atau database kosong.
                   </td>
                 </tr>
               )}

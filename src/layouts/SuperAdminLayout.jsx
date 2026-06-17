@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import LogoutModal from '../components/shared/LogoutModal';
-import NotificationBell from '../components/shared/NotificationBell';
 import {
   Home,
   LayoutDashboard,
@@ -318,9 +317,6 @@ export default function SuperAdminLayout() {
             <div className="text-right hidden sm:block">
               <span className="text-xs font-semibold text-muted">Kamis, 28 Mei 2026</span>
             </div>
-            
-            {/* Notification Bell */}
-            <NotificationBell />
           </div>
         </header>
 
